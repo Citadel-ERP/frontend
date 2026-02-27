@@ -1,5 +1,5 @@
 // hr_employee_management/AddEmployeeScreen.tsx
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -104,7 +106,6 @@ const TimeInputField: React.FC<TimeInputProps> = ({ value, onChange, placeholder
     );
   }
 
-  // Fallback for native (simple text input)
   return (
     <TextInput
       style={styles.input}
@@ -131,8 +132,10 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [selectedReportingTag, setSelectedReportingTag] = useState<string>('');
   const [documents, setDocuments] = useState<Document[]>([]);
-
   const [showOfficePicker, setShowOfficePicker] = useState<boolean>(false);
+
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState<boolean>(false);
 
   // Step 1: Basic Information
   const [basicInfo, setBasicInfo] = useState<BasicInfoData>({
@@ -195,7 +198,24 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   }, []);
 
   useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     setShowOfficePicker(false);
+    // Scroll to top when step changes
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({ y: 0, animated: false });
+    }
   }, [currentStep]);
 
   // ==================== DATA FETCHING ====================
@@ -294,54 +314,55 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   }, []);
 
   const pickFromGallery = async () => {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    alert('Permission', 'Gallery access is required');
-    return;
-  }
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    allowsMultipleSelection: true,
-    quality: 0.8,
-  });
-  if (!result.canceled && result.assets) {
-    const newDocs: Document[] = result.assets.map(asset => ({
-      uri: asset.uri,
-      name: asset.fileName || `image_${Date.now()}.jpg`,
-      type: asset.mimeType || 'image/jpeg',
-      size: asset.fileSize,
-    }));
-    setDocuments(prev => [...prev, ...newDocs]);
-  }
-};
-const pickDocuments = async () => {
-  try {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: '*/*',
-      multiple: true,
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      alert('Permission', 'Gallery access is required');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.8,
     });
     if (!result.canceled && result.assets) {
-      const newDocuments: Document[] = result.assets.map(doc => ({
-        uri: doc.uri,
-        name: doc.name || 'Document',
-        type: doc.mimeType || 'application/octet-stream',
-        size: doc.size,
+      const newDocs: Document[] = result.assets.map(asset => ({
+        uri: asset.uri,
+        name: asset.fileName || `image_${Date.now()}.jpg`,
+        type: asset.mimeType || 'image/jpeg',
+        size: asset.fileSize,
       }));
-      setDocuments(prev => [...prev, ...newDocuments]);
+      setDocuments(prev => [...prev, ...newDocs]);
     }
-  } catch (error) {
-    console.error('Error picking documents:', error);
-    alert('Error', 'Failed to pick documents');
-  }
-};
+  };
 
-const showPickerOptions = () => {
-  alert('Upload Document', 'Choose source', [
-    { text: 'Gallery', onPress: pickFromGallery },
-    { text: 'Files', onPress: pickDocuments },
-    { text: 'Cancel', style: 'cancel' },
-  ]);
-};
+  const pickDocuments = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        multiple: true,
+      });
+      if (!result.canceled && result.assets) {
+        const newDocuments: Document[] = result.assets.map(doc => ({
+          uri: doc.uri,
+          name: doc.name || 'Document',
+          type: doc.mimeType || 'application/octet-stream',
+          size: doc.size,
+        }));
+        setDocuments(prev => [...prev, ...newDocuments]);
+      }
+    } catch (error) {
+      console.error('Error picking documents:', error);
+      alert('Error', 'Failed to pick documents');
+    }
+  };
+
+  const showPickerOptions = () => {
+    alert('Upload Document', 'Choose source', [
+      { text: 'Gallery', onPress: pickFromGallery },
+      { text: 'Files', onPress: pickDocuments },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
 
   const removeDocument = useCallback((index: number) => {
     setDocuments(prev => prev.filter((_, i) => i !== index));
@@ -429,6 +450,7 @@ const showPickerOptions = () => {
   };
 
   const handleNext = () => {
+    Keyboard.dismiss();
     setShowOfficePicker(false);
 
     let validationResult: StepValidationResult = { isValid: true };
@@ -457,6 +479,7 @@ const showPickerOptions = () => {
   };
 
   const handlePrevious = () => {
+    Keyboard.dismiss();
     setShowOfficePicker(false);
     if (currentStep > 1) {
       setCurrentStep(prev => prev - 1);
@@ -564,7 +587,7 @@ const showPickerOptions = () => {
         formData.append('reporting_tag_ids', selectedReportingTag);
       }
 
-      // Add documents - IMPROVED FOR WEB AND MOBILE
+      // Add documents
       if (documents.length > 0) {
         for (let index = 0; index < documents.length; index++) {
           const doc = documents[index];
@@ -572,45 +595,36 @@ const showPickerOptions = () => {
 
           try {
             if (Platform.OS === 'web') {
-              // For web, fetch the blob and create a File object
               const response = await fetch(doc.uri);
-              
+
               if (!response.ok) {
                 throw new Error(`Failed to fetch file: ${response.statusText}`);
               }
-              
+
               const blob = await response.blob();
               const file = new File([blob], doc.name || `document_${index}`, {
                 type: doc.type || 'application/octet-stream'
               });
-              
+
               formData.append(fieldName, file);
-              console.log(`Web file prepared: ${fieldName} - ${doc.name}`);
             } else {
-              // For mobile (iOS/Android)
               formData.append(fieldName, {
                 uri: doc.uri,
                 name: doc.name || `document_${index}`,
                 type: doc.type || 'application/octet-stream',
               } as any);
-              console.log(`Mobile file prepared: ${fieldName} - ${doc.name}`);
             }
           } catch (error) {
             console.error('Error fetching file for web upload:', error);
             alert('Error', `Failed to prepare file ${doc.name} for upload`);
             setSubmitting(false);
-
             return;
           }
         }
       }
 
-      // Add joining date
       formData.append('joining_date', new Date().toISOString().split('T')[0]);
 
-      console.log('Submitting employee data...');
-
-      // API call
       const response = await fetch(`${BACKEND_URL}/manager/addEmployee`, {
         method: 'POST',
         headers: Platform.OS === 'web' ? {} : {
@@ -619,27 +633,22 @@ const showPickerOptions = () => {
         body: formData,
       });
 
-      // CRITICAL: Check response status FIRST before parsing JSON
       if (!response.ok) {
-        // Parse error response
         const text = await response.text();
-          let errorMessage = 'Failed to create employee. Please try again.';
-          try {
-            const errorData = JSON.parse(text);
-            errorMessage = errorData.message || errorData.error || errorMessage;
-          } catch {
-            // Server returned HTML (500 page), use generic message
-            console.error('Server HTML error:', text.substring(0, 200));
-          }
-          alert('Error', errorMessage);
-          return;
+        let errorMessage = 'Failed to create employee. Please try again.';
+        try {
+          const errorData = JSON.parse(text);
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch {
+          console.error('Server HTML error:', text.substring(0, 200));
+        }
+        alert('Error', errorMessage);
+        return;
       }
 
-      // Only parse success response if response.ok is true
       const data = await response.json();
       console.log('Success response:', data);
 
-      // Success case - show alert with OK button and navigation callback
       alert(
         'Success',
         'Employee created successfully!',
@@ -647,8 +656,8 @@ const showPickerOptions = () => {
           {
             text: 'OK',
             onPress: () => {
-              onEmployeeAdded(); // Callback to refresh employee list
-              onBack(); // Navigate back to previous screen
+              onEmployeeAdded();
+              onBack();
             },
           },
         ]
@@ -657,7 +666,6 @@ const showPickerOptions = () => {
     } catch (error: any) {
       console.error('Error creating employee:', error);
       alert('Error', error.message || 'Failed to create employee');
-
     } finally {
       setSubmitting(false);
     }
@@ -712,175 +720,237 @@ const showPickerOptions = () => {
     </View>
   );
 
+  // ==================== FOOTER BUTTONS (rendered inside each ScrollView) ====================
+  const renderFooterButtons = () => (
+    <View style={{
+      flexDirection: 'row',
+      paddingHorizontal: 16,
+      paddingTop: 0,
+      paddingBottom: 16,
+      gap: 10,
+      backgroundColor: '#FFFFFF',
+      marginTop: -10,
+    }}>
+      {/* Cancel / Back — solid grey */}
+      <TouchableOpacity
+        style={{
+          flex: 1,
+          height: 52,
+          borderRadius: 12,
+          backgroundColor: '#D1D1D6',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        onPress={handlePrevious}
+        disabled={submitting}
+      >
+        <Text style={{ fontSize: 16, fontWeight: '600', color: '#3A3A3C' }}>
+          {currentStep === 1 ? 'Cancel' : 'Back'}
+        </Text>
+      </TouchableOpacity>
+
+      {/* Next / Create Employee — brand green */}
+      <TouchableOpacity
+        style={{
+          flex: 1,
+          height: 52,
+          borderRadius: 12,
+          backgroundColor: submitting ? '#7FB5A8' : WHATSAPP_COLORS.primary,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+        onPress={currentStep === 5 ? handleSubmit : handleNext}
+        disabled={submitting}
+      >
+        {submitting ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Text style={{ fontSize: 16, fontWeight: '600', color: '#FFFFFF' }}>
+            {currentStep === 5 ? 'Create Employee' : 'Next'}
+          </Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+
   // ==================== STEP RENDERERS ====================
   const renderStep1 = () => (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{ flex: 1 }}
-      keyboardVerticalOffset={100}
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
+      contentContainerStyle={{ paddingBottom: 0, backgroundColor: '#FFFFFF' }}
     >
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: Platform.OS === 'ios' ? 0 : 0 }}
-        style={{ flex: 1 }}
-      >
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>Basic Information</Text>
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>Basic Information</Text>
 
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Employee ID *</Text>
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Employee ID *</Text>
+          <TextInput
+            style={styles.input}
+            value={basicInfo.employee_id}
+            onChangeText={value => handleBasicInfoChange('employee_id', value)}
+            placeholder="Enter employee ID"
+            autoCapitalize="characters"
+            returnKeyType="next"
+          />
+        </View>
+
+        <View style={styles.row}>
+          <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+            <Text style={styles.label}>First Name *</Text>
             <TextInput
               style={styles.input}
-              value={basicInfo.employee_id}
-              onChangeText={value => handleBasicInfoChange('employee_id', value)}
-              placeholder="Enter employee ID"
-              autoCapitalize="characters"
+              value={basicInfo.first_name}
+              onChangeText={value => handleBasicInfoChange('first_name', value)}
+              placeholder="First name"
+              returnKeyType="next"
             />
           </View>
 
-          <View style={styles.row}>
-            <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-              <Text style={styles.label}>First Name *</Text>
-              <TextInput
-                style={styles.input}
-                value={basicInfo.first_name}
-                onChangeText={value => handleBasicInfoChange('first_name', value)}
-                placeholder="First name"
-              />
-            </View>
-
-            <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-              <Text style={styles.label}>Last Name</Text>
-              <TextInput
-                style={styles.input}
-                value={basicInfo.last_name}
-                onChangeText={value => handleBasicInfoChange('last_name', value)}
-                placeholder="Last name"
-              />
-            </View>
-          </View>
-
-          {/* Designation Field */}
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Designation</Text>
+          <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+            <Text style={styles.label}>Last Name</Text>
             <TextInput
               style={styles.input}
-              value={basicInfo.designation}
-              onChangeText={value => handleBasicInfoChange('designation', value)}
-              placeholder="e.g., Software Engineer, HR Manager"
+              value={basicInfo.last_name}
+              onChangeText={value => handleBasicInfoChange('last_name', value)}
+              placeholder="Last name"
+              returnKeyType="next"
             />
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={basicInfo.email}
-              onChangeText={value => handleBasicInfoChange('email', value)}
-              placeholder="employee@company.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-            <Text style={styles.helperText}>Either email or phone is required</Text>
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput
-              style={styles.input}
-              value={basicInfo.phone_number}
-              onChangeText={value => handleBasicInfoChange('phone_number', value)}
-              placeholder="+91 9876543210"
-              keyboardType="phone-pad"
-            />
-            <Text style={styles.helperText}>Either email or phone is required</Text>
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Default Password</Text>
-            <TextInput
-              style={styles.input}
-              value={basicInfo.employee_password}
-              onChangeText={value => handleBasicInfoChange('employee_password', value)}
-              placeholder="Enter password"
-              secureTextEntry
-            />
-            <Text style={styles.helperText}>Default: Citadel2025@</Text>
-          </View>
-
-          {/* Work Timing Section */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>Work Timing (Optional)</Text>
-            <View style={styles.row}>
-              <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-                <Text style={styles.label}>Login Time</Text>
-                <TimeInputField
-                  value={basicInfo.login_time}
-                  onChange={(time) => handleBasicInfoChange('login_time', time)}
-                  placeholder="HH:MM"
-                />
-              </View>
-
-              <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-                <Text style={styles.label}>Logout Time</Text>
-                <TimeInputField
-                  value={basicInfo.logout_time}
-                  onChange={(time) => handleBasicInfoChange('logout_time', time)}
-                  placeholder="HH:MM"
-                />
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12, marginTop: 20 }]}>Leave Allocation</Text>
-            <View style={styles.row}>
-              <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-                <Text style={styles.label}>Earned Leaves</Text>
-                <TextInput
-                  style={styles.input}
-                  value={basicInfo.earned_leaves}
-                  onChangeText={value => handleBasicInfoChange('earned_leaves', value)}
-                  keyboardType="numeric"
-                  placeholder="0"
-                  placeholderTextColor="#999"
-                />
-              </View>
-
-              <View style={[styles.formGroup, { flex: 1, marginHorizontal: 8 }]}>
-                <Text style={styles.label}>Sick Leaves</Text>
-                <TextInput
-                  style={styles.input}
-                  value={basicInfo.sick_leaves}
-                  onChangeText={value => handleBasicInfoChange('sick_leaves', value)}
-                  keyboardType="numeric"
-                  placeholder="0"
-                  placeholderTextColor="#999"
-                />
-              </View>
-
-              <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-                <Text style={styles.label}>Casual Leaves</Text>
-                <TextInput
-                  style={styles.input}
-                  value={basicInfo.casual_leaves}
-                  onChangeText={value => handleBasicInfoChange('casual_leaves', value)}
-                  keyboardType="numeric"
-                  placeholder="0"
-                  placeholderTextColor="#999"
-                />
-              </View>
-            </View>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Designation</Text>
+          <TextInput
+            style={styles.input}
+            value={basicInfo.designation}
+            onChangeText={value => handleBasicInfoChange('designation', value)}
+            placeholder="e.g., Software Engineer, HR Manager"
+            returnKeyType="next"
+          />
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={styles.input}
+            value={basicInfo.email}
+            onChangeText={value => handleBasicInfoChange('email', value)}
+            placeholder="employee@company.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            returnKeyType="next"
+          />
+          <Text style={styles.helperText}>Either email or phone is required</Text>
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Phone Number</Text>
+          <TextInput
+            style={styles.input}
+            value={basicInfo.phone_number}
+            onChangeText={value => handleBasicInfoChange('phone_number', value)}
+            placeholder="+91 9876543210"
+            keyboardType="phone-pad"
+            returnKeyType="next"
+          />
+          <Text style={styles.helperText}>Either email or phone is required</Text>
+        </View>
+
+        <View style={styles.formGroup}>
+          <Text style={styles.label}>Default Password</Text>
+          <TextInput
+            style={styles.input}
+            value={basicInfo.employee_password}
+            onChangeText={value => handleBasicInfoChange('employee_password', value)}
+            placeholder="Enter password"
+            secureTextEntry
+            returnKeyType="done"
+          />
+          <Text style={styles.helperText}>Default: Citadel2025@</Text>
+        </View>
+
+        {/* Work Timing Section — no nested <View style={styles.section}>, just a title + fields */}
+        <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12, marginTop: 12 }]}>
+          Work Timing (Optional)
+        </Text>
+        <View style={styles.row}>
+          <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+            <Text style={styles.label}>Login Time</Text>
+            <TimeInputField
+              value={basicInfo.login_time}
+              onChange={(time) => handleBasicInfoChange('login_time', time)}
+              placeholder="HH:MM"
+            />
+          </View>
+
+          <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+            <Text style={styles.label}>Logout Time</Text>
+            <TimeInputField
+              value={basicInfo.logout_time}
+              onChange={(time) => handleBasicInfoChange('logout_time', time)}
+              placeholder="HH:MM"
+            />
+          </View>
+        </View>
+
+        {/* Leave Allocation Section — same pattern, consistent marginTop */}
+        <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12, marginTop: 12 }]}>
+          Leave Allocation
+        </Text>
+        <View style={styles.row}>
+          <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+            <Text style={styles.label}>Earned Leaves</Text>
+            <TextInput
+              style={styles.input}
+              value={basicInfo.earned_leaves}
+              onChangeText={value => handleBasicInfoChange('earned_leaves', value)}
+              keyboardType="numeric"
+              placeholder="0"
+              placeholderTextColor="#999"
+              returnKeyType="next"
+            />
+          </View>
+
+          <View style={[styles.formGroup, { flex: 1, marginHorizontal: 8 }]}>
+            <Text style={styles.label}>Sick Leaves</Text>
+            <TextInput
+              style={styles.input}
+              value={basicInfo.sick_leaves}
+              onChangeText={value => handleBasicInfoChange('sick_leaves', value)}
+              keyboardType="numeric"
+              placeholder="0"
+              placeholderTextColor="#999"
+              returnKeyType="next"
+            />
+          </View>
+
+          <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+            <Text style={styles.label}>Casual Leaves</Text>
+            <TextInput
+              style={styles.input}
+              value={basicInfo.casual_leaves}
+              onChangeText={value => handleBasicInfoChange('casual_leaves', value)}
+              keyboardType="numeric"
+              placeholder="0"
+              placeholderTextColor="#999"
+              returnKeyType="done"
+            />
+          </View>
+        </View>
+      </View>
+      {renderFooterButtons()}
+    </ScrollView>
   );
 
   const renderStep2 = () => (
-    <ScrollView showsVerticalScrollIndicator={false}>
-
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="interactive"
+      contentContainerStyle={{ paddingBottom: 16, backgroundColor: '#FFFFFF' }}
+    >
       <View style={[styles.section, { marginTop: 10, zIndex: 10, position: 'relative' }]}>
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Office Assignment *
@@ -891,17 +961,17 @@ const showPickerOptions = () => {
         ) : (
           <View style={[styles.formGroup, { marginBottom: 20 }]}>
             <TouchableOpacity
-                style={[
-                  styles.input,
-                  {
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingVertical: 12
-                  }
-                ]}
-                onPress={() => setShowOfficePicker(!showOfficePicker)}
-              >
+              style={[
+                styles.input,
+                {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 12
+                }
+              ]}
+              onPress={() => setShowOfficePicker(!showOfficePicker)}
+            >
               <Text style={addressInfo.office_id ? {} : { color: '#999' }}>
                 {addressInfo.office_id
                   ? selectedOffice?.name || 'Select Office'
@@ -912,7 +982,7 @@ const showPickerOptions = () => {
 
             {showOfficePicker && (
               <View style={styles.officePickerContainer}>
-                <ScrollView>
+                <ScrollView keyboardShouldPersistTaps="handled">
                   {offices.map(office => (
                     <TouchableOpacity
                       key={office.id}
@@ -963,6 +1033,7 @@ const showPickerOptions = () => {
           </View>
         )}
       </View>
+
       <View style={styles.section}>
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Home Address *
@@ -977,6 +1048,7 @@ const showPickerOptions = () => {
             placeholder="Full address"
             multiline
             numberOfLines={3}
+            returnKeyType="next"
           />
         </View>
 
@@ -987,6 +1059,7 @@ const showPickerOptions = () => {
             value={addressInfo.home_address.street}
             onChangeText={value => handleAddressChange('home_address', 'street', value)}
             placeholder="Street name"
+            returnKeyType="next"
           />
         </View>
 
@@ -998,6 +1071,7 @@ const showPickerOptions = () => {
               value={addressInfo.home_address.city}
               onChangeText={value => handleAddressChange('home_address', 'city', value)}
               placeholder="City"
+              returnKeyType="next"
             />
           </View>
           <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
@@ -1007,6 +1081,7 @@ const showPickerOptions = () => {
               value={addressInfo.home_address.state}
               onChangeText={value => handleAddressChange('home_address', 'state', value)}
               placeholder="State"
+              returnKeyType="next"
             />
           </View>
         </View>
@@ -1020,6 +1095,7 @@ const showPickerOptions = () => {
               onChangeText={value => handleAddressChange('home_address', 'pin_code', value)}
               placeholder="Pin code"
               keyboardType="numeric"
+              returnKeyType="next"
             />
           </View>
           <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
@@ -1067,6 +1143,7 @@ const showPickerOptions = () => {
             value={addressInfo.current_address.street}
             onChangeText={value => handleAddressChange('current_address', 'street', value)}
             placeholder="Street name"
+            returnKeyType="next"
           />
         </View>
 
@@ -1078,6 +1155,7 @@ const showPickerOptions = () => {
               value={addressInfo.current_address.city}
               onChangeText={value => handleAddressChange('current_address', 'city', value)}
               placeholder="City"
+              returnKeyType="next"
             />
           </View>
           <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
@@ -1087,6 +1165,7 @@ const showPickerOptions = () => {
               value={addressInfo.current_address.state}
               onChangeText={value => handleAddressChange('current_address', 'state', value)}
               placeholder="State"
+              returnKeyType="next"
             />
           </View>
         </View>
@@ -1100,6 +1179,7 @@ const showPickerOptions = () => {
               onChangeText={value => handleAddressChange('current_address', 'pin_code', value)}
               placeholder="Pin code"
               keyboardType="numeric"
+              returnKeyType="done"
             />
           </View>
           <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
@@ -1113,13 +1193,16 @@ const showPickerOptions = () => {
           </View>
         </View>
       </View>
-
-
+      {renderFooterButtons()}
     </ScrollView>
   );
 
   const renderStep3 = () => (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingBottom: 16, backgroundColor: '#FFFFFF' }}
+    >
       <View style={styles.section}>
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Assign Tags *
@@ -1158,11 +1241,16 @@ const showPickerOptions = () => {
           </View>
         )}
       </View>
+      {renderFooterButtons()}
     </ScrollView>
   );
 
   const renderStep4 = () => (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingBottom: 16, backgroundColor: '#FFFFFF' }}
+    >
       <View style={styles.section}>
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Assign Reporting Tag *
@@ -1201,11 +1289,16 @@ const showPickerOptions = () => {
           </View>
         )}
       </View>
+      {renderFooterButtons()}
     </ScrollView>
   );
 
   const renderStep5 = () => (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingBottom: 16, backgroundColor: '#FFFFFF' }}
+    >
       <View style={styles.section}>
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Upload Documents (Optional)
@@ -1314,6 +1407,7 @@ const showPickerOptions = () => {
           <ReviewSection label="Documents:" value={`${documents.length} file(s)`} />
         </View>
       </View>
+      {renderFooterButtons()}
     </ScrollView>
   );
 
@@ -1336,60 +1430,53 @@ const showPickerOptions = () => {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1 }}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : StatusBar.currentHeight ?? 0}
     >
-      <ScrollView
-        style={styles.container}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ flexGrow: 1 }}
-      >
-        <Header
-          title="Add New Employee"
-          subtitle={`Step ${currentStep} of 5`}
-          onBack={handlePrevious}
-        />
+      {/* Fixed header area — collapses when keyboard is open */}
+      <View style={styles.container}>
+        {!keyboardVisible && (
+          <Header
+            title="Add New Employee"
+            subtitle={`Step ${currentStep} of 5`}
+            onBack={handlePrevious}
+          />
+        )}
 
-        <View style={styles.stepProgress}>
-          {renderStepIndicator()}
-        </View>
+        {/* Compact inline header shown when keyboard is visible */}
+        {keyboardVisible && (
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 16,
+            paddingTop: (StatusBar.currentHeight ?? 0) + (Platform.OS === 'ios' ? 44 : 8),
+            paddingBottom: 8,
+            backgroundColor: '#fff',
+            borderBottomWidth: 1,
+            borderBottomColor: '#eee',
+          }}>
+            <TouchableOpacity onPress={handlePrevious} style={{ marginRight: 12 }}>
+              <Ionicons name="chevron-back" size={24} color="#333" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: '#333', flex: 1 }}>
+              Add New Employee
+            </Text>
+            <Text style={{ fontSize: 13, color: '#666' }}>
+              Step {currentStep} of 5
+            </Text>
+          </View>
+        )}
 
-        <View style={styles.content}>
+        {renderStepIndicator()}
+
+        {/* Scrollable content — fills remaining space, buttons are inside the scroll */}
+        <View style={{ flex: 1 }}>
           {currentStep === 1 && renderStep1()}
           {currentStep === 2 && renderStep2()}
           {currentStep === 3 && renderStep3()}
           {currentStep === 4 && renderStep4()}
           {currentStep === 5 && renderStep5()}
         </View>
-
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[styles.footerButton, styles.secondaryButton]}
-            onPress={handlePrevious}
-            disabled={submitting}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {currentStep === 1 ? 'Cancel' : 'Back'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.footerButton,
-              styles.primaryButton,
-              submitting && styles.disabledButton
-            ]}
-            onPress={currentStep === 5 ? handleSubmit : handleNext}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.primaryButtonText}>
-                {currentStep === 5 ? 'Create Employee' : 'Next'}
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   );
 };
