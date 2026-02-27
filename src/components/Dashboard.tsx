@@ -32,6 +32,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 // Import all pages
 import Profile from './Profile';
+import PrivacyPolicy from './PrivacyPolicy'; 
 import HR from './hr/HR';
 import Cab from './cab/Cab';
 import Driver from './driver/Driver';
@@ -422,7 +423,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // Active page state for web layout
   const [activePage, setActivePage] = useState<ActivePage>('dashboard');
-
+  const [showPrivacy, setShowPrivacy] = useState(false);
   // Menu state
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [activeMenuItem, setActiveMenuItem] = useState('Dashboard');
@@ -568,7 +569,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         'settings': () => setShowSettings(true),
         'notifications': () => setShowNotifications(true),
         'validation': () => setShowValidation(true),
-        'privacy': () => Alert.alert('Coming Soon', 'Privacy Policy'),
+        'privacy': () => setShowPrivacy(true),
         'messages': () => setShowChat(true),
         'chat': () => setShowChat(true),
         'chatRoom': () => setShowChatRoom(true),
@@ -633,6 +634,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             setSmallTile2(data.small_tile_2);
             console.log('🎯 Small tile 2 set to:', data.small_tile_2);
           }
+          
 
           await AsyncStorage.setItem('user_data', JSON.stringify(transformedUserData));
           await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
@@ -1440,6 +1442,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setActiveMenuItem('Dashboard');
       setActiveNavItem('home');
       setShowAccess(false);
+      setShowPrivacy(false); 
     }
     // Reset profile modal state
     setProfileModalToOpen(null);
@@ -1536,6 +1539,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       'validation': 'validation',
       'notifications': 'notifications',
       'messages': 'messages',
+      'privacy': 'privacy',
       'logout': 'dashboard'
     };
 
@@ -1565,11 +1569,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           'driverManager': () => { },
           'hrManager': () => { },
           'hrEmployeeManager': () => { },
-          'privacy': () => Alert.alert('Coming Soon', 'Privacy Policy feature will be available soon!'),
-          // 'messages': () => Alert.alert('Coming Soon', 'Messages feature will be available soon!'),
+          'privacy': () => setShowPrivacy(true),
           'chat': () => { },
           'chatRoom': () => { },
-          // 'asset': () => setShowAsset(true),  // Add this
           'assets': () => setShowAsset(true),
         };
         mobileHandlers[targetPage]();
@@ -1752,6 +1754,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           initialModalToOpen={profileModalToOpen}
         />
       );
+    }
+    if (showPrivacy) {
+      return <PrivacyPolicy onBack={handleBackFromPage} isDark={isDark} />;
     }
 
     if (showHR) {
@@ -1963,6 +1968,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     size={24}
                     color={activePage === 'profile' ? currentColors.primaryBlue : theme.textSub}
                   />
+
+                  {/* {activePage === 'privacy' && (
+                    <PrivacyPolicy
+                      onBack={() => setActivePage('dashboard')}
+                      isDark={isDark}
+                    />
+                  )} */}
                   <Text style={[
                     styles.webNavText,
                     {
@@ -2190,12 +2202,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                       />
                     )}
                     {activePage === 'privacy' && (
-                      <View style={[styles.moduleContainer, { backgroundColor: theme.cardBg }]}>
-                        <Text style={[styles.privacyText, { color: theme.textMain }]}>
-                          Privacy Policy Content
-                        </Text>
-                      </View>
-                    )}
+                        <PrivacyPolicy
+                          onBack={() => setActivePage('dashboard')}
+                          isDark={isDark}
+                        />
+                      )}
                     {activePage === 'messages' && (
                       <CitadelHub
                         apiBaseUrl={BACKEND_URL}

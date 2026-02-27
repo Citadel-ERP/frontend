@@ -1604,9 +1604,34 @@ export const Chat: React.FC<ChatProps> = ({
       }
 
       // ── Text (default) ──
-      if (message.message_type === 'text') {
-        return <Text style={styles.messageText}>{message.content}</Text>;
-      }
+      // ── Text (default) ──
+if (message.message_type === 'text') {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = message.content.split(urlRegex);
+  const hasLinks = urlRegex.test(message.content);
+
+  if (!hasLinks) {
+    return <Text style={styles.messageText}>{message.content}</Text>;
+  }
+
+  return (
+    <Text style={styles.messageText}>
+      {parts.map((part, i) =>
+        /^https?:\/\//.test(part) ? (
+          <Text
+            key={i}
+            style={[styles.messageText, { color: '#0d6efd', textDecorationLine: 'underline' }]}
+            onPress={() => Linking.openURL(part).catch(() => Alert.alert('Error', 'Could not open link.'))}
+          >
+            {part}
+          </Text>
+        ) : (
+          <Text key={i}>{part}</Text>
+        )
+      )}
+    </Text>
+  );
+}
 
       return null;
     };
@@ -1907,11 +1932,14 @@ export const Chat: React.FC<ChatProps> = ({
 
   return (
     <ImageBackground
-      source={require('../../assets/whatsappBackground.jpg')}
-      style={styles.container}
-      imageStyle={{ opacity: 0.4 }}
-      resizeMode="cover"
-    >
+  source={require('../../assets/whatsappBackground.jpg')}
+  style={styles.container}
+  imageStyle={{ 
+    opacity: 0.4,
+    ...(Platform.OS === 'web' && { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' })
+  }}
+  resizeMode="cover"
+>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
       {/* Header */}
@@ -2075,12 +2103,16 @@ export const Chat: React.FC<ChatProps> = ({
               </View>
             ) : null
           }
-          style={[styles.messagesList, { marginBottom: bottomOffset + INPUT_CONTAINER_HEIGHT }]}
+          style={[styles.messagesList, { 
+    marginBottom: Platform.OS === 'web' ? 0 : bottomOffset + INPUT_CONTAINER_HEIGHT 
+  }]}
           contentContainerStyle={[
             styles.messagesContent,
             {
-              paddingBottom: INPUT_CONTAINER_HEIGHT + bottomOffset + 50,
-            },
+              paddingBottom: Platform.OS === 'web' 
+      ? 8 
+      : INPUT_CONTAINER_HEIGHT + bottomOffset + 50,
+  },
           ]}
           ListFooterComponent={
             isLoading || isSearching ? (
@@ -2162,14 +2194,18 @@ export const Chat: React.FC<ChatProps> = ({
       {/* Input Container */}
       {!isSearchMode && !isBlocked && (
         <View style={[
-          styles.inputContainer,
-          {
-            position: 'absolute',
-            bottom: bottomOffset,
-            left: 0,
-            right: 0,
-          }
-        ]}>
+            styles.inputContainer,
+            Platform.OS !== 'web' ? {
+              position: 'absolute',
+              bottom: bottomOffset,
+              left: 0,
+              right: 0,
+            } : {
+              position: 'relative',
+              borderTopWidth: 1,
+              borderTopColor: '#e9edef',
+            }
+          ]}>
           <View style={styles.inputRow}>
             <TouchableOpacity
               style={styles.inputIconBtn}
@@ -2544,7 +2580,7 @@ export const Chat: React.FC<ChatProps> = ({
 const muteSheetStyles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: '#ffffff', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 28 },
-  header: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#e9edef' },
+  header: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#e9edef',  marginTop: Platform.OS === 'web' ? 0 : (Platform.OS === 'ios' ? -80 : -50), },
   title: { fontSize: 16, fontWeight: '600', color: '#111b21', textAlign: 'center' },
   option: { paddingVertical: 16, paddingHorizontal: 20, borderBottomWidth: 0.5, borderBottomColor: '#e9edef' },
   optionText: { fontSize: 16, color: '#111b21' },
@@ -2553,9 +2589,15 @@ const muteSheetStyles = StyleSheet.create({
 });
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: '#efeae2',
-  },
+  flex: 1,
+  backgroundColor: '#efeae2',
+  ...(Platform.OS === 'web' && {
+    display: 'flex' as any,
+    flexDirection: 'column' as any,
+    height: '100%' as any,
+    overflow: 'hidden' as any,
+  }),
+},
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2651,9 +2693,15 @@ const styles = StyleSheet.create({
     color: '#111b21',
   },
   messagesList: {
-    flex: 1,
-    marginBottom: 50
-  },
+  flex: 1,
+  marginBottom: 50,
+  ...(Platform.OS === 'web' && {
+    flexGrow: 1,         
+    marginBottom: 0,
+    maxHeight: 'calc(100vh - 120px)' as any,
+    overflowY: 'auto' as any,
+  }),
+},
   messagesContent: {
     paddingHorizontal: 16,
     paddingTop: 8,
@@ -3088,12 +3136,18 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   inputContainer: {
-    backgroundColor: '#f0f2f5',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    zIndex: 2,
-    marginBottom: 0
-  },
+  backgroundColor: '#f0f2f5',
+  paddingHorizontal: 8,
+  paddingVertical: 8,
+  zIndex: 2,
+  marginBottom: 0,
+  ...(Platform.OS === 'web' && {
+    position: 'relative',  // override absolute for web
+    bottom: 'auto',
+    left: 'auto',
+    right: 'auto',
+  }),
+},
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3230,23 +3284,26 @@ const styles = StyleSheet.create({
     color: '#00a884',
   },
   modalOverlay: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    paddingTop: Platform.OS === 'ios' ? 80 : 60,
-    paddingRight: 8,
-  },
+  flex: 1,
+  backgroundColor: 'transparent',
+  justifyContent: 'flex-start',
+  alignItems: 'flex-end',
+  paddingTop: Platform.OS === 'web' ? 60 : (Platform.OS === 'ios' ? 80 : 60),
+  paddingRight: Platform.OS === 'web' ? 16 : 8,
+},
   modalContent: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    minWidth: 220,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
+  backgroundColor: '#ffffff',
+  borderRadius: 8,
+  minWidth: 220,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.25,
+  shadowRadius: 4,
+  elevation: 5,
+  ...(Platform.OS === 'web' && {
+    marginRight: 300,
+  }),
+},
   modalMenuItem: {
     paddingHorizontal: 16,
     paddingVertical: 12,

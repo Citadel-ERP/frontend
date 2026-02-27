@@ -66,14 +66,14 @@ interface AssetsProps {
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
 const C = {
-  bg:           '#F7F8FA',
+  bg:           '#ECE5DD',
   surface:      '#FFFFFF',
-  headerBg:     '#1A2332',
+  headerBg:     '#075E54',
   headerText:   '#FFFFFF',
-  accent:       '#2563EB',
-  accentLight:  '#EFF6FF',
-  success:      '#16A34A',
-  successLight: '#F0FDF4',
+  accent:       '#00A884',
+  accentLight:  '#DCF8C6',
+  success:      '#25D366',
+  successLight: '#E8FBF0',
   danger:       '#DC2626',
   dangerLight:  '#FEF2F2',
   warning:      '#D97706',
@@ -82,9 +82,9 @@ const C = {
   textSecondary:'#6B7280',
   textTertiary: '#9CA3AF',
   border:       '#E5E7EB',
-  borderFocus:  '#2563EB',
-  serialBadge:  '#F0F9FF',
-  serialText:   '#0369A1',
+  borderFocus:  '#00A884',
+  serialBadge:  '#E8F5E9',
+  serialText:   '#075E54',
 };
 
 // ─── Small reusable components ────────────────────────────────────────────────
@@ -515,7 +515,7 @@ const SerialPickerSheet: React.FC<{
               disabled={loading}
               style={{
                 flex: 2, padding: 14, borderRadius: 10,
-                backgroundColor: loading ? '#93C5FD' : C.accent,
+                backgroundColor: loading ? '#81C784' : C.accent,
                 alignItems: 'center', flexDirection: 'row',
                 justifyContent: 'center', gap: 8,
               }}
