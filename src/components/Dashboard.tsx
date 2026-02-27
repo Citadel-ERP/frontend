@@ -359,7 +359,6 @@ const COMPLETE_MODULE_MAP: Record<string, ActivePage> = {
   // Attendance with leaves sub-screen
   'attendance-leaves': 'attendance',
 
-
 };
 
 // Main Dashboard Component
@@ -916,13 +915,37 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
       if (Platform.OS === 'android') {
         try {
+          // Default channel
           await NotificationsExpo.setNotificationChannelAsync('default', {
             name: 'default',
             importance: NotificationsExpo.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
             lightColor: '#2D3748',
           });
-          await debugLog('[Push Token] Notification channel created');
+
+          // Fetch notification sound configs from backend and create channels
+          const userToken = await AsyncStorage.getItem(TOKEN_2_KEY);
+          if (userToken) {
+            const res = await fetch(`${BACKEND_URL}/core/getNotificationSounds`, {
+              method: 'GET',
+              headers: { 'Content-Type': 'application/json' },
+            });
+            if (res.ok) {
+              const configs = await res.json();
+              for (const config of configs) {
+                await NotificationsExpo.setNotificationChannelAsync(config.channel_id, {
+                  name: config.module_unique_name,
+                  importance: NotificationsExpo.AndroidImportance.MAX,
+                  sound: config.android_sound_name,       // e.g. "driver.mp3"
+                  vibrationPattern: config.vibration_pattern || [0, 250, 250, 250],
+                  enableVibrate: true,
+                });
+                await debugLog(`[Push Token] Channel created: ${config.channel_id} with sound: ${config.android_sound_name}`);
+              }
+            }
+          }
+
+          await debugLog('[Push Token] All notification channels created');
         } catch (channelError: any) {
           await logPushTokenError('Failed to create notification channel', {
             error: channelError.message,
@@ -1392,7 +1415,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setActivePage('dashboard');
     } else {
       setShowAttendance(false);
-    setAttendanceOpenLeaves(false);
+      setAttendanceOpenLeaves(false);
       setShowAsset(false);
       setShowOffice(false);
       setShowProfile(false);

@@ -179,6 +179,7 @@ export type ActivePage =
   | 'asset'  
   | 'assets'
   | 'office'
+  | 'access'
 
 // Helper functions
 export const getInitials = (fullName: string): string => {
