@@ -1604,9 +1604,34 @@ export const Chat: React.FC<ChatProps> = ({
       }
 
       // ── Text (default) ──
-      if (message.message_type === 'text') {
-        return <Text style={styles.messageText}>{message.content}</Text>;
-      }
+      // ── Text (default) ──
+if (message.message_type === 'text') {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = message.content.split(urlRegex);
+  const hasLinks = urlRegex.test(message.content);
+
+  if (!hasLinks) {
+    return <Text style={styles.messageText}>{message.content}</Text>;
+  }
+
+  return (
+    <Text style={styles.messageText}>
+      {parts.map((part, i) =>
+        /^https?:\/\//.test(part) ? (
+          <Text
+            key={i}
+            style={[styles.messageText, { color: '#0d6efd', textDecorationLine: 'underline' }]}
+            onPress={() => Linking.openURL(part).catch(() => Alert.alert('Error', 'Could not open link.'))}
+          >
+            {part}
+          </Text>
+        ) : (
+          <Text key={i}>{part}</Text>
+        )
+      )}
+    </Text>
+  );
+}
 
       return null;
     };
