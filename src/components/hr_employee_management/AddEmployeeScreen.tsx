@@ -16,6 +16,7 @@ import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
 import { Header } from './header';
 import { BACKEND_URL } from '../../config/config';
+import * as ImagePicker from 'expo-image-picker';
 import alert from '../../utils/Alert';
 
 // ==================== TYPES ====================
@@ -292,27 +293,55 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     setSelectedReportingTag(tagId);
   }, []);
 
-  const pickDocuments = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
-        multiple: true,
-      });
-
-      if (!result.canceled && result.assets) {
-        const newDocuments: Document[] = result.assets.map(doc => ({
-          uri: doc.uri,
-          name: doc.name || 'Document',
-          type: doc.mimeType || 'application/octet-stream',
-          size: doc.size,
-        }));
-        setDocuments(prev => [...prev, ...newDocuments]);
-      }
-    } catch (error) {
-      console.error('Error picking documents:', error);
-      alert('Error', 'Failed to pick documents');
+  const pickFromGallery = async () => {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    alert('Permission', 'Gallery access is required');
+    return;
+  }
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsMultipleSelection: true,
+    quality: 0.8,
+  });
+  if (!result.canceled && result.assets) {
+    const newDocs: Document[] = result.assets.map(asset => ({
+      uri: asset.uri,
+      name: asset.fileName || `image_${Date.now()}.jpg`,
+      type: asset.mimeType || 'image/jpeg',
+      size: asset.fileSize,
+    }));
+    setDocuments(prev => [...prev, ...newDocs]);
+  }
+};
+const pickDocuments = async () => {
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: '*/*',
+      multiple: true,
+    });
+    if (!result.canceled && result.assets) {
+      const newDocuments: Document[] = result.assets.map(doc => ({
+        uri: doc.uri,
+        name: doc.name || 'Document',
+        type: doc.mimeType || 'application/octet-stream',
+        size: doc.size,
+      }));
+      setDocuments(prev => [...prev, ...newDocuments]);
     }
-  };
+  } catch (error) {
+    console.error('Error picking documents:', error);
+    alert('Error', 'Failed to pick documents');
+  }
+};
+
+const showPickerOptions = () => {
+  alert('Upload Document', 'Choose source', [
+    { text: 'Gallery', onPress: pickFromGallery },
+    { text: 'Files', onPress: pickDocuments },
+    { text: 'Cancel', style: 'cancel' },
+  ]);
+};
 
   const removeDocument = useCallback((index: number) => {
     setDocuments(prev => prev.filter((_, i) => i !== index));
@@ -593,13 +622,17 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       // CRITICAL: Check response status FIRST before parsing JSON
       if (!response.ok) {
         // Parse error response
-        const errorData = await response.json();
-        const errorMessage = errorData.message || errorData.error || 'Failed to create employee. Please try again.';
-        
-        console.error('Server returned error:', response.status, errorMessage);
-        
-        alert('Error', errorMessage);
-        return; // Exit early on error
+        const text = await response.text();
+          let errorMessage = 'Failed to create employee. Please try again.';
+          try {
+            const errorData = JSON.parse(text);
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } catch {
+            // Server returned HTML (500 page), use generic message
+            console.error('Server HTML error:', text.substring(0, 200));
+          }
+          alert('Error', errorMessage);
+          return;
       }
 
       // Only parse success response if response.ok is true
@@ -1183,7 +1216,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
 
         <TouchableOpacity
           style={styles.uploadButton}
-          onPress={pickDocuments}
+          onPress={showPickerOptions}
           disabled={submitting}
         >
           <Ionicons name="cloud-upload-outline" size={24} color={WHATSAPP_COLORS.primary} />
