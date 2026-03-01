@@ -2988,13 +2988,13 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
           />
 
           <List
-            chatRooms={searchQuery ? searchState.results : chatRooms}
+            chatRooms={getFilteredChatRooms()}
             currentUser={currentUser}
             onChatSelect={handleChatSelect}
             onRefresh={loadChatRoomsInitial}
             isRefreshing={chatListPagination.isLoading}
-            onScroll={handleChatListScroll}  // NEW: Handle scroll for prefetch
-            onLoadMore={() => loadChatRoomsMore(false)}  // NEW: Explicit load more
+            onScroll={handleChatListScroll}
+            onLoadMore={() => loadChatRoomsMore(false)} 
             hasMore={chatListPagination.hasMore}
             onDeleteChat={handleDeleteChat}
             onMute={(roomId: number, duration: string) => muteChat(roomId, duration)}
