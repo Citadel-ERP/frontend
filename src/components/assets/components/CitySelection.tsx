@@ -60,13 +60,13 @@ export const AssetCitySelection: React.FC<CitySelectionProps> = ({
       >
         {/* Header Banner */}
         <LinearGradient
-          colors={['#008069', '#00a884']}
+          colors={['#4A5568', '#2D3748']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[styles.headerBanner, { height: 180 + insets.top }]} 
         >
           <Image
-            source={require('../../../../assets/cars.jpeg')}
+            source={require('../../../../assets/access_assets.jpg')}
             style={styles.headerImage}
             resizeMode="cover"
           />

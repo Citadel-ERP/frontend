@@ -88,7 +88,7 @@ interface Message {
   id: number | string;
   sender: User;
   content: string;
-  message_type: 'text' | 'image' | 'file' | 'audio' | 'video' | "system";
+  message_type: 'text' | 'image' | 'file' | 'audio' | 'video' | "system" | "contact";
   created_at: string;
   is_edited: boolean;
   parent_message?: Message;
@@ -595,36 +595,36 @@ export const Chat: React.FC<ChatProps> = ({
 
   useEffect(() => {
     setDisplayMessages([...messages].reverse());
-}, [messages]);
+  }, [messages]);
 
   // Active room tracking via WebSocket
   useEffect(() => {
-  if (!chatRoom?.id) return;
-  const isWsReady = ws?.current?.readyState === WebSocket.OPEN;
-  if (!isWsReady) return;
+    if (!chatRoom?.id) return;
+    const isWsReady = ws?.current?.readyState === WebSocket.OPEN;
+    if (!isWsReady) return;
 
-  try {
-    ws.current.send(JSON.stringify({
-      action: 'set_active_room',
-      room_id: chatRoom.id
-    }));
-    // ✅ ADD THIS — tell server you've read messages when you open the chat
-    ws.current.send(JSON.stringify({
-      action: 'read_messages',
-      room_id: chatRoom.id
-    }));
-  } catch (error) {
-    console.error('❌ Failed to set active room:', error);
-  }
-
-  return () => {
-    if (ws?.current?.readyState === WebSocket.OPEN) {
-      try {
-        ws.current.send(JSON.stringify({ action: 'clear_active_room' }));
-      } catch (error) {}
+    try {
+      ws.current.send(JSON.stringify({
+        action: 'set_active_room',
+        room_id: chatRoom.id
+      }));
+      // ✅ ADD THIS — tell server you've read messages when you open the chat
+      ws.current.send(JSON.stringify({
+        action: 'read_messages',
+        room_id: chatRoom.id
+      }));
+    } catch (error) {
+      console.error('❌ Failed to set active room:', error);
     }
-  };
-}, [chatRoom?.id]);
+
+    return () => {
+      if (ws?.current?.readyState === WebSocket.OPEN) {
+        try {
+          ws.current.send(JSON.stringify({ action: 'clear_active_room' }));
+        } catch (error) { }
+      }
+    };
+  }, [chatRoom?.id]);
 
   // Animate reaction bar
   useEffect(() => {
@@ -1605,33 +1605,80 @@ export const Chat: React.FC<ChatProps> = ({
 
       // ── Text (default) ──
       // ── Text (default) ──
-if (message.message_type === 'text') {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = message.content.split(urlRegex);
-  const hasLinks = urlRegex.test(message.content);
+      if (message.message_type === 'text') {
+        // Matches both https://example.com AND bare domains like example.com
+        // Capture group 1: full URL with protocol
+        // Capture group 2: bare domain (no protocol)
+        const URL_REGEX = /([Hh][Tt][Tt][Pp][Ss]?:\/\/[^\s<>"]+|(?<![a-zA-Z0-9@])(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+(?:com|in|org|net|edu|gov|io|co|app|dev|ai|me|info|biz|uk|us|ca|au|de|fr|jp|cn|br|ru|tech|store|site|online|shop|blog|news|tv|fm|co\.in|co\.uk|co\.au|co\.jp|net\.in|org\.in|ac\.in|edu\.in)[^\s<>"]*)/g;
 
-  if (!hasLinks) {
-    return <Text style={styles.messageText}>{message.content}</Text>;
-  }
+        const parts: string[] = [];
+        const linkMap: { [index: number]: string } = {}; // maps part index → full URL to open
+        let lastIndex = 0;
+        let match: RegExpExecArray | null;
+        let partIndex = 0;
 
-  return (
-    <Text style={styles.messageText}>
-      {parts.map((part, i) =>
-        /^https?:\/\//.test(part) ? (
-          <Text
-            key={i}
-            style={[styles.messageText, { color: '#0d6efd', textDecorationLine: 'underline' }]}
-            onPress={() => Linking.openURL(part).catch(() => Alert.alert('Error', 'Could not open link.'))}
-          >
-            {part}
+        // Reset regex state
+        URL_REGEX.lastIndex = 0;
+
+        while ((match = URL_REGEX.exec(message.content)) !== null) {
+          // Push text before match
+          if (match.index > lastIndex) {
+            parts.push(message.content.slice(lastIndex, match.index));
+            partIndex++;
+          }
+          // Push the matched URL
+          parts.push(match[0]);
+          // Determine the actual URL to open (add https:// if missing)
+          const openUrl = /^https?:\/\//i.test(match[0])  // the `i` flag handles all case variants
+            ? match[0]
+            : `https://${match[0]}`;
+          linkMap[partIndex] = openUrl;
+          partIndex++;
+          lastIndex = match.index + match[0].length;
+        }
+
+        // Push any remaining text after the last match
+        if (lastIndex < message.content.length) {
+          parts.push(message.content.slice(lastIndex));
+        }
+
+        // Plain text fast path — no links found
+        if (Object.keys(linkMap).length === 0) {
+          return <Text style={styles.messageText}>{message.content}</Text>;
+        }
+
+        return (
+          <Text style={styles.messageText}>
+            {parts.map((part, i) =>
+              linkMap[i] !== undefined ? (
+                <Text
+                  key={i}
+                  style={{
+                    // DO NOT spread styles.messageText here — it causes color inheritance to
+                    // override our link color. Set all needed props explicitly.
+                    fontSize: 14.2,
+                    lineHeight: 19,
+                    color: isOwnMessage ? '#0a7ea4' : '#1a6ed8',
+                    textDecorationLine: 'underline',
+                  }}
+                  onPress={() =>
+                    Linking.openURL(linkMap[i]).catch(() =>
+                      Alert.alert('Cannot Open Link', `Could not open: ${linkMap[i]}`)
+                    )
+                  }
+                  suppressHighlighting={true}
+                >
+                  {part}
+                </Text>
+              ) : (
+                <Text key={i} style={{ fontSize: 14.2, lineHeight: 19, color: '#111b21' }}>
+                  {part}
+                </Text>
+              )
+            )}
           </Text>
-        ) : (
-          <Text key={i}>{part}</Text>
-        )
-      )}
-    </Text>
-  );
-}
+        );
+      }
 
       return null;
     };
@@ -1932,14 +1979,14 @@ if (message.message_type === 'text') {
 
   return (
     <ImageBackground
-  source={require('../../assets/whatsappBackground.jpg')}
-  style={styles.container}
-  imageStyle={{ 
-    opacity: 0.4,
-    ...(Platform.OS === 'web' && { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' })
-  }}
-  resizeMode="cover"
->
+      source={require('../../assets/whatsappBackground.jpg')}
+      style={styles.container}
+      imageStyle={{
+        opacity: 0.4,
+        ...(Platform.OS === 'web' && { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' })
+      }}
+      resizeMode="cover"
+    >
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
       {/* Header */}
@@ -2086,7 +2133,7 @@ if (message.message_type === 'text') {
         // In Chat component, update FlatList:
         <FlatList
           ref={flatListRef}
-          data={messagesToDisplay} 
+          data={messagesToDisplay}
           keyboardDismissMode="on-drag"
           renderItem={renderMessage}
           keyExtractor={item => item.id.toString()}
@@ -2103,16 +2150,16 @@ if (message.message_type === 'text') {
               </View>
             ) : null
           }
-          style={[styles.messagesList, { 
-    marginBottom: Platform.OS === 'web' ? 0 : bottomOffset + INPUT_CONTAINER_HEIGHT 
-  }]}
+          style={[styles.messagesList, {
+            marginBottom: Platform.OS === 'web' ? 0 : bottomOffset + INPUT_CONTAINER_HEIGHT
+          }]}
           contentContainerStyle={[
             styles.messagesContent,
             {
-              paddingBottom: Platform.OS === 'web' 
-      ? 8 
-      : INPUT_CONTAINER_HEIGHT + bottomOffset + 50,
-  },
+              paddingBottom: Platform.OS === 'web'
+                ? 8
+                : INPUT_CONTAINER_HEIGHT + bottomOffset + 50,
+            },
           ]}
           ListFooterComponent={
             isLoading || isSearching ? (
@@ -2122,7 +2169,7 @@ if (message.message_type === 'text') {
             ) : null
           }
           keyboardShouldPersistTaps="handled"
-           maintainVisibleContentPosition={
+          maintainVisibleContentPosition={
             Platform.OS === 'ios'
               ? {
                 minIndexForVisible: 0,
@@ -2194,18 +2241,18 @@ if (message.message_type === 'text') {
       {/* Input Container */}
       {!isSearchMode && !isBlocked && (
         <View style={[
-            styles.inputContainer,
-            Platform.OS !== 'web' ? {
-              position: 'absolute',
-              bottom: bottomOffset,
-              left: 0,
-              right: 0,
-            } : {
-              position: 'relative',
-              borderTopWidth: 1,
-              borderTopColor: '#e9edef',
-            }
-          ]}>
+          styles.inputContainer,
+          Platform.OS !== 'web' ? {
+            position: 'absolute',
+            bottom: bottomOffset,
+            left: 0,
+            right: 0,
+          } : {
+            position: 'relative',
+            borderTopWidth: 1,
+            borderTopColor: '#e9edef',
+          }
+        ]}>
           <View style={styles.inputRow}>
             <TouchableOpacity
               style={styles.inputIconBtn}
@@ -2580,7 +2627,7 @@ if (message.message_type === 'text') {
 const muteSheetStyles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: '#ffffff', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 28 },
-  header: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#e9edef',  marginTop: Platform.OS === 'web' ? 0 : (Platform.OS === 'ios' ? -80 : -50), },
+  header: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#e9edef', marginTop: Platform.OS === 'web' ? 0 : (Platform.OS === 'ios' ? -80 : -50), },
   title: { fontSize: 16, fontWeight: '600', color: '#111b21', textAlign: 'center' },
   option: { paddingVertical: 16, paddingHorizontal: 20, borderBottomWidth: 0.5, borderBottomColor: '#e9edef' },
   optionText: { fontSize: 16, color: '#111b21' },
@@ -2589,15 +2636,15 @@ const muteSheetStyles = StyleSheet.create({
 });
 const styles = StyleSheet.create({
   container: {
-  flex: 1,
-  backgroundColor: '#efeae2',
-  ...(Platform.OS === 'web' && {
-    display: 'flex' as any,
-    flexDirection: 'column' as any,
-    height: '100%' as any,
-    overflow: 'hidden' as any,
-  }),
-},
+    flex: 1,
+    backgroundColor: '#efeae2',
+    ...(Platform.OS === 'web' && {
+      display: 'flex' as any,
+      flexDirection: 'column' as any,
+      height: '100%' as any,
+      overflow: 'hidden' as any,
+    }),
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2693,15 +2740,15 @@ const styles = StyleSheet.create({
     color: '#111b21',
   },
   messagesList: {
-  flex: 1,
-  marginBottom: 50,
-  ...(Platform.OS === 'web' && {
-    flexGrow: 1,         
-    marginBottom: 0,
-    maxHeight: 'calc(100vh - 120px)' as any,
-    overflowY: 'auto' as any,
-  }),
-},
+    flex: 1,
+    marginBottom: 50,
+    ...(Platform.OS === 'web' && {
+      flexGrow: 1,
+      marginBottom: 0,
+      maxHeight: 'calc(100vh - 120px)' as any,
+      overflowY: 'auto' as any,
+    }),
+  },
   messagesContent: {
     paddingHorizontal: 16,
     paddingTop: 8,
@@ -3136,18 +3183,18 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   inputContainer: {
-  backgroundColor: '#f0f2f5',
-  paddingHorizontal: 8,
-  paddingVertical: 8,
-  zIndex: 2,
-  marginBottom: 0,
-  ...(Platform.OS === 'web' && {
-    position: 'relative',  // override absolute for web
-    bottom: 'auto',
-    left: 'auto',
-    right: 'auto',
-  }),
-},
+    backgroundColor: '#f0f2f5',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    zIndex: 2,
+    marginBottom: 0,
+    ...(Platform.OS === 'web' && {
+      position: 'relative',  // override absolute for web
+      bottom: 'auto',
+      left: 'auto',
+      right: 'auto',
+    }),
+  },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3284,26 +3331,26 @@ const styles = StyleSheet.create({
     color: '#00a884',
   },
   modalOverlay: {
-  flex: 1,
-  backgroundColor: 'transparent',
-  justifyContent: 'flex-start',
-  alignItems: 'flex-end',
-  paddingTop: Platform.OS === 'web' ? 60 : (Platform.OS === 'ios' ? 80 : 60),
-  paddingRight: Platform.OS === 'web' ? 16 : 8,
-},
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: Platform.OS === 'web' ? 60 : (Platform.OS === 'ios' ? 80 : 60),
+    paddingRight: Platform.OS === 'web' ? 16 : 8,
+  },
   modalContent: {
-  backgroundColor: '#ffffff',
-  borderRadius: 8,
-  minWidth: 220,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.25,
-  shadowRadius: 4,
-  elevation: 5,
-  ...(Platform.OS === 'web' && {
-    marginRight: 300,
-  }),
-},
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    minWidth: 220,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    ...(Platform.OS === 'web' && {
+      marginRight: 300,
+    }),
+  },
   modalMenuItem: {
     paddingHorizontal: 16,
     paddingVertical: 12,
