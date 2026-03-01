@@ -20,7 +20,7 @@ import {
   Linking,
 } from 'react-native';
 import { ImageStyle } from 'react-native';
-
+import Support from './Support';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, FontAwesome5, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -32,7 +32,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 // Import all pages
 import Profile from './Profile';
-import PrivacyPolicy from './PrivacyPolicy'; 
+import PrivacyPolicy from './PrivacyPolicy';
 import HR from './hr/HR';
 import Cab from './cab/Cab';
 import Driver from './driver/Driver';
@@ -359,6 +359,9 @@ const COMPLETE_MODULE_MAP: Record<string, ActivePage> = {
 
   // Attendance with leaves sub-screen
   'attendance-leaves': 'attendance',
+  'driver_management': 'driverManager',
+  'hr-request': 'hrManager',
+  'hr-grievance': 'hrManager',
 
 };
 
@@ -384,12 +387,15 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [lastOpenedModules, setLastOpenedModules] = useState<Module[]>([]);
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [attendanceKey, setAttendanceKey] = useState(0);
+  const [showSupport, setShowSupport] = useState(false);
+
 
   const [attendanceOpenLeaves, setAttendanceOpenLeaves] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hoursWorked, setHoursWorked] = useState<number[]>([]);
   const [overtimeHours, setOvertimeHours] = useState<number[]>([]);
   const [showAccess, setShowAccess] = useState(false);
+  const [hrManagerInitialTab, setHrManagerInitialTab] = useState<'requests' | 'grievances'>('requests');
 
   // ============================================================================
   // NEW: Dynamic Tile Configuration State
@@ -564,7 +570,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         'employeeManagement': () => setShowEmployeeManagement(true),
         'hrEmployeeManager': () => setShowHREmployeeManagement(true),
         'driverManager': () => setShowDriverManager(true),
-        'hrManager': () => setShowHrManager(true),
+        'hrManager': () => {
+          setHrManagerInitialTab(normalized === 'hr-grievance' ? 'grievances' : 'requests');
+          setShowHrManager(true);
+        },
         'profile': () => setShowProfile(true),
         'settings': () => setShowSettings(true),
         'notifications': () => setShowNotifications(true),
@@ -634,12 +643,17 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             setSmallTile2(data.small_tile_2);
             console.log('🎯 Small tile 2 set to:', data.small_tile_2);
           }
-          
+
 
           await AsyncStorage.setItem('user_data', JSON.stringify(transformedUserData));
           await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
           if (data.city) {
             await AsyncStorage.setItem('city', data.city);
+          }
+          // NEW: store admin status and user city
+          await AsyncStorage.setItem('is_admin', JSON.stringify(data.is_admin ?? false));
+          if (data.user_city) {
+            await AsyncStorage.setItem('user_city', data.user_city);
           }
 
           setUpcomingBirthdays(data.upcoming_birthdays || []);
@@ -1166,6 +1180,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               if (data.city) {
                 await AsyncStorage.setItem('city', data.city);
               }
+              // NEW: store admin status and user city
+              await AsyncStorage.setItem('is_admin', JSON.stringify(data.is_admin ?? false));
+              if (data.user_city) {
+                await AsyncStorage.setItem('user_city', data.user_city);
+              }
               console.log('✅ User data, city, and driver status saved to AsyncStorage');
             } catch (storageError) {
               console.error('❌ Error saving to AsyncStorage:', storageError);
@@ -1442,7 +1461,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setActiveMenuItem('Dashboard');
       setActiveNavItem('home');
       setShowAccess(false);
-      setShowPrivacy(false); 
+      setShowPrivacy(false);
+      setShowSupport(false);
     }
     // Reset profile modal state
     setProfileModalToOpen(null);
@@ -1504,7 +1524,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       }
     }
     else if (navItem === 'support') {
-      Linking.openURL('https://citadel-erp.github.io/privacy-policy/');
+      if (isWeb) {
+        setActivePage('support'); // optional web support
+      } else {
+        setShowSupport(true);
+      }
     } else if (navItem !== 'home') {
       Alert.alert('Coming Soon', `${navItem} feature will be available soon!`);
     }
@@ -1660,9 +1684,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     );
   }
 
-  // ============================================================================
-  // MOBILE PAGE RENDERS
-  // ============================================================================
 
   if (!isWeb) {
     if (showChatRoom && selectedChatRoom) {
@@ -1728,7 +1749,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
     if (showHrManager) {
       return (
-        <HR_Manager onBack={handleBackFromPage} />
+        <HR_Manager onBack={handleBackFromPage} initialTab={hrManagerInitialTab} />
       );
     }
 
@@ -1835,6 +1856,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       return (
         <HREmployeeManager onBack={handleBackFromPage} />
       );
+    }
+
+    if (showSupport) {
+      return <Support onBack={handleBackFromPage} isDark={isDark} />;
     }
   }
 
@@ -2202,11 +2227,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                       />
                     )}
                     {activePage === 'privacy' && (
-                        <PrivacyPolicy
-                          onBack={() => setActivePage('dashboard')}
-                          isDark={isDark}
-                        />
-                      )}
+                      <PrivacyPolicy
+                        onBack={() => setActivePage('dashboard')}
+                        isDark={isDark}
+                      />
+                    )}
                     {activePage === 'messages' && (
                       <CitadelHub
                         apiBaseUrl={BACKEND_URL}
@@ -2279,7 +2304,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                       <DriverManager onBack={() => setActivePage('dashboard')} />
                     )}
                     {activePage === 'hrManager' && (
-                      <HR_Manager onBack={() => setActivePage('dashboard')} />
+                       <HR_Manager onBack={() => setActivePage('dashboard')} initialTab={hrManagerInitialTab} />
                     )}
                     {activePage === 'validation' && (
                       <ValidationScreen onBack={() => setActivePage('dashboard')} />

@@ -29,6 +29,7 @@ interface Section {
   title: string;
   content: string | string[];
   bullets?: string[];
+  subsections?: { title: string; bullets: string[] }[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,15 +42,98 @@ const SECTIONS: Section[] = [
     iconFamily: 'Ionicons',
     title: 'Overview',
     content:
-      'This Privacy Policy explains how we collect, use, and protect your information when you use our mobile application. We are committed to safeguarding your privacy.',
+      'This Privacy Policy governs how Citadel Net Inc. ("Company", "we", "us", or "our") collects, processes, stores, shares, and protects the personal information of authorized employees who access and use the internal Employee Management Application ("Application"). By using the Application, you acknowledge that you have read and understood this Policy.\n\nThis Application is a closed, enterprise-only system. There is no public access, no self-registration, and no use of data for commercial purposes such as advertising.',
+  },
+  {
+    id: 'scope',
+    icon: 'people-outline',
+    iconFamily: 'Ionicons',
+    title: 'Scope & Applicability',
+    content: 'This Policy applies to all individuals granted access to the Application, including:',
+    bullets: [
+      'Full-time and part-time employees of the Company',
+      'Contractual staff with system access granted by authorized HR or Admin personnel',
+      'Site managers, team leads, and administrative staff',
+      'Any other personnel whose accounts are explicitly provisioned within the system',
+    ],
   },
   {
     id: 'collect',
     icon: 'information-circle-outline',
     iconFamily: 'Ionicons',
     title: 'Information We Collect',
+    content: 'We collect only the minimum information necessary to operate the Application and manage workforce functions.\n\nAccount & Employment Information:',
+    bullets: [
+      'Full Name – for identification, communication, and record-keeping',
+      'Official Email Address – primary login credential and system notifications',
+      'Employee ID – unique identifier linking all activity to the correct record',
+      'Company ID – assigns the employee to their correct entity or branch',
+      'Office Location Mapping – associates employee with their designated site for geofencing',
+      'Role and Access Permissions – determines authorized modules, data views, and actions',
+    ],
+    subsections: [
+      {
+        title: 'Attendance Information:',
+        bullets: [
+          'Check-in and Check-out Timestamps',
+          'Location Coordinates at time of attendance marking',
+          'Geofence Validation Status (within / outside boundary)',
+          'Attendance Status (Present, Absent, Late, etc.)',
+          'Automatic vs. Manual mark indicator',
+        ],
+      },
+      {
+        title: 'Messaging & Internal Communication:',
+        bullets: [
+          'Messages sent within the Application between employees',
+          'Images and attachments uploaded in messages or module comments',
+          'Module activity logs (HR, Lead Tracking, Site, Driver, Cab)',
+          'Sender and recipient identifiers for audit purposes',
+        ],
+      },
+      {
+        title: 'Device & Technical Information:',
+        bullets: [
+          'Device type and model',
+          'Operating system version',
+          'Application version',
+          'Error and diagnostic log files',
+          'Session identifiers (expire on logout)',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'location',
+    icon: 'location-outline',
+    iconFamily: 'Ionicons',
+    title: 'Location Data Usage',
     content:
-      'We only collect information that is necessary to provide and improve the functionality of the app. No unnecessary data is ever collected.',
+      'Location data is collected strictly for attendance validation and geofencing. We access location only during defined attendance windows — never continuously throughout the workday.',
+    bullets: [
+      'Precise (Fine) Location – high-accuracy GPS required for geofence validation',
+      'Background Location – enables automatic attendance during scheduled login windows even when the App is not in the foreground',
+      'Location is NOT accessed continuously or outside attendance windows',
+      'No live tracking or movement monitoring is performed',
+      'If within geofence: only attendance status is stored; coordinates are not retained',
+      'If outside geofence: coordinates may be stored for audit purposes and retained for 2 years',
+    ],
+  },
+  {
+    id: 'biometric',
+    icon: 'finger-print',
+    iconFamily: 'Ionicons',
+    title: 'Biometric Authentication',
+    content:
+      'The Application uses device-native biometric APIs (Face ID on iOS, Fingerprint on Android) to securely authenticate users. Authentication happens entirely on-device.',
+    bullets: [
+      'Biometric data is stored exclusively on your device in hardware-secured storage (Secure Enclave / TEE)',
+      'The App receives only a binary success/failure result from the OS',
+      'No biometric data is ever transmitted to our servers',
+      'No biometric data is collected, stored, or processed by us',
+      'We do not use any third-party facial recognition system or biometric SDK',
+      'Biometric login is optional — email + password is always available as fallback',
+    ],
   },
   {
     id: 'camera',
@@ -57,90 +141,213 @@ const SECTIONS: Section[] = [
     iconFamily: 'Ionicons',
     title: 'Camera Usage',
     content:
-      'The app uses the device camera exclusively for Face ID authentication and related security features. Camera access is used only when required and never without your consent.',
+      'Camera access is used exclusively for uploading images within the internal messaging system and operational modules (e.g., site documentation, incident reporting, vehicle status).',
     bullets: [
-      'Camera is accessed only for Face ID / security authentication',
-      'We do not store, transmit, or share camera images or videos',
-      'No background camera access is ever initiated',
-    ],
-  },
-  {
-    id: 'biometric',
-    icon: 'finger-print',
-    iconFamily: 'Ionicons',
-    title: 'Biometric & Face ID Data',
-    content:
-      'The app uses biometric authentication methods such as fingerprint and Face ID to securely authenticate users and protect sensitive data.',
-    bullets: [
-      'Biometric data is processed locally on your device',
-      'No biometric data is stored on our servers',
-      'No biometric data is shared with third parties',
-    ],
-  },
-  {
-    id: 'location',
-    icon: 'location-outline',
-    iconFamily: 'Ionicons',
-    title: 'Location Information',
-    content:
-      'The app collects location data to support attendance-related features. We do not track users unnecessarily or use location data for advertising.',
-    bullets: [
-      'Location access is used to verify your presence at the office',
-      'Background location may be used to automatically mark attendance',
-      'Location data is only used for attendance purposes',
+      'Camera is NOT used for attendance verification or facial recognition',
+      'No "selfie check-in" or photo-based attendance feature exists',
+      'Uploaded images are stored in Amazon S3 with access-controlled policies',
+      'Only authorized users can view images relevant to their work context',
+      'Images are retained for up to 7 years per Company record-keeping policy',
     ],
   },
   {
     id: 'background',
     icon: 'sync-outline',
     iconFamily: 'Ionicons',
-    title: 'Background Services',
-    content: 'The app may use foreground and background services to:',
+    title: 'Background Services & Permissions',
+    content: 'The Application requests the following device permissions to function correctly:',
     bullets: [
-      'Fetch updates',
-      'Process attendance-related location checks',
-      'Deliver important notifications',
+      'Foreground Service – processes attendance validation during login windows reliably',
+      'Post Notifications – sends attendance reminders, module updates, and message alerts',
+      'Vibration – haptic feedback for notifications (optional)',
+      'Internet Access – required for all server communication',
+      'Network State – checks connectivity before data sync to prevent failed requests',
+      'Ignore Battery Optimizations – prevents Android OS from suspending geofencing during battery-save mode',
+      'Wake Lock – temporarily prevents CPU sleep during critical tasks; released immediately after completion',
     ],
   },
   {
-    id: 'notifications',
-    icon: 'notifications-outline',
+    id: 'data_usage',
+    icon: 'analytics-outline',
     iconFamily: 'Ionicons',
-    title: 'Notifications & Vibration',
-    content:
-      'We use notifications to inform users about important updates, attendance status, and app-related alerts. Vibration may be used to enhance notification experience.',
-  },
-  {
-    id: 'wakelock',
-    icon: 'lock-closed-outline',
-    iconFamily: 'Ionicons',
-    title: 'Wake Lock',
-    content:
-      'Wake lock permission is used to ensure critical tasks such as attendance verification and background processing complete without interruption.',
+    title: 'How We Use Your Data',
+    content: 'All collected data is used exclusively for the following organizational purposes:',
+    subsections: [
+      {
+        title: 'Workforce Management:',
+        bullets: [
+          'Recording and managing attendance, punctuality, and leave records',
+          'Calculating attendance-based payroll components where applicable',
+          'Providing HR with accurate, real-time workforce presence data',
+        ],
+      },
+      {
+        title: 'Operational Coordination:',
+        bullets: [
+          'Facilitating internal communication between employees, leads, HR, and management',
+          'Managing modules including site activity, driver assignments, lead tracking, and cab coordination',
+        ],
+      },
+      {
+        title: 'Security & Compliance:',
+        bullets: [
+          'Verifying attendance is marked from authorized locations via geofencing',
+          'Maintaining audit trails for internal policy and labor regulation compliance',
+          'Detecting and investigating unauthorized access or fraudulent attendance',
+        ],
+      },
+    ],
   },
   {
     id: 'sharing',
     icon: 'share-social-outline',
     iconFamily: 'Ionicons',
-    title: 'Data Sharing',
+    title: 'Data Sharing & Disclosure',
     content:
-      'We do not sell, rent, or trade your personal data. Information is not shared with third parties unless required by law.',
+      'We do not sell, rent, or trade your personal data. Sharing is limited to the following:',
+    bullets: [
+      'HR and Admin Personnel – access employee records and attendance logs as required for their duties',
+      'Managers and Team Leads – access attendance and module data for their direct reports only',
+      'System Administrators – access technical logs for maintenance and security',
+      'AWS – infrastructure and storage provider operating under strict data processing agreements',
+      'Firebase Cloud Messaging – receives device push tokens only; no message content',
+      'Legal / Regulatory Disclosure – only minimum data required to satisfy a lawful obligation',
+    ],
+  },
+  {
+    id: 'retention',
+    icon: 'time-outline',
+    iconFamily: 'Ionicons',
+    title: 'Data Retention Policy',
+    content: 'We retain personal data only as long as necessary for the purposes described or as required by law:',
+    bullets: [
+      'Attendance Records – retained indefinitely unless Company policy changes',
+      'Messages & Uploaded Images – retained for 7 years',
+      'Location Data (outside geofence) – retained for 2 years',
+      'Device & System Logs – 90–180 days based on operational necessity',
+      'Account Information – duration of employment + offboarding period',
+      'Session Tokens – expire on logout or inactivity; not retained after expiry',
+    ],
+  },
+  {
+    id: 'offboarding',
+    icon: 'person-remove-outline',
+    iconFamily: 'Ionicons',
+    title: 'Account Deletion & Offboarding',
+    content:
+      'Upon resignation, termination, retirement, or contract completion, the following process is followed:',
+    bullets: [
+      'Employee account is deactivated by HR, immediately revoking Application access',
+      'Active session tokens are invalidated upon deactivation',
+      'Open tasks, leads, and assets are transferred to designated active personnel',
+      'Historical records are retained per the Data Retention Policy (Section above)',
+      'Employees may request data deletion by contacting HR or the Application Administrator',
+      'Certain records (e.g., attendance for payroll compliance) may be exempt from deletion under law',
+    ],
   },
   {
     id: 'security',
     icon: 'shield-checkmark-outline',
     iconFamily: 'Ionicons',
-    title: 'Data Security',
+    title: 'Data Storage & Security',
     content:
-      'We implement appropriate technical and organizational measures to protect your data against unauthorized access, loss, or misuse.',
+      'Our backend is hosted on Amazon Web Services (AWS). All data transmission is encrypted via HTTPS/TLS.',
+    bullets: [
+      'EC2 – compute services for application servers',
+      'RDS – managed database with automated backups, failover, and encryption at rest',
+      'S3 – secure object storage with access-controlled retrieval policies',
+      'Role-based access control (RBAC) – employees access only data relevant to their role',
+      'Principle of least privilege applied to all users and systems',
+      'Administrative actions are logged and auditable',
+      'Databases are not publicly exposed; accessible only via private networking',
+      'Regular automated backups with periodic integrity testing',
+    ],
   },
   {
-    id: 'control',
-    icon: 'settings-outline',
+    id: 'thirdparty',
+    icon: 'git-network-outline',
     iconFamily: 'Ionicons',
-    title: 'User Control',
+    title: 'Third-Party Services',
     content:
-      'You can revoke permissions such as camera, location, and notifications at any time through your device settings.',
+      'The Application integrates with a limited number of third-party services. No analytics SDKs or advertising networks are integrated.',
+    bullets: [
+      'Firebase Cloud Messaging – push notification delivery (device token only)',
+      'Expo Notification Services – cross-platform notification layer (device token only)',
+      'Google Maps (future) – renders geofence boundaries in admin setup; no employee personal data shared',
+      'Amazon Web Services – all application data; governed by AWS Data Processing Agreements',
+    ],
+  },
+  {
+    id: 'rights',
+    icon: 'hand-left-outline',
+    iconFamily: 'Ionicons',
+    title: 'Your Employee Rights',
+    content:
+      'You have specific rights with respect to your personal data. Contact HR or the Application Administrator to exercise them:',
+    bullets: [
+      'Right to Access – request a summary of personal data we hold about you',
+      'Right to Correction – request correction of inaccurate or incomplete records',
+      'Right to Deletion – request deletion of your data (subject to legal exemptions)',
+      'Right to Object – raise objections to data processing in writing to HR',
+      'Right to Data Portability – receive a copy of your data in a structured, machine-readable format (where applicable under GDPR or DPDP)',
+      'Requests are acknowledged within 5 business days and fulfilled within 30 days',
+    ],
+  },
+  {
+    id: 'legal',
+    icon: 'scale-outline',
+    iconFamily: 'Ionicons',
+    title: 'Legal Basis for Processing',
+    content: 'All data processing is grounded in one or more of the following legal bases:',
+    bullets: [
+      'Contractual Necessity – attendance and account data are necessary to perform the employment contract',
+      'Legitimate Business Interest – workforce management, geofencing verification, and internal communications',
+      'Legal Obligation – attendance records, financial documentation, and regulatory compliance',
+      'Consent – biometric authentication and optional notification preferences (withdrawable at any time)',
+    ],
+  },
+  {
+    id: 'compliance',
+    icon: 'ribbon-outline',
+    iconFamily: 'Ionicons',
+    title: 'Compliance with Data Protection Laws',
+    content: 'We align our data practices with applicable legal frameworks:',
+    bullets: [
+      'India DPDP Act 2023 – lawful processing, data accuracy, security safeguards, and data principal rights',
+      'GDPR Principles (where applicable) – lawfulness, purpose limitation, data minimization, accuracy, storage limitation, and accountability',
+      'Periodic compliance reviews are conducted and this Policy updated as laws evolve',
+    ],
+  },
+  {
+    id: 'breach',
+    icon: 'warning-outline',
+    iconFamily: 'Ionicons',
+    title: 'Data Breach & Incident Response',
+    content:
+      'In the event of a data security incident, we follow a structured response process:',
+    bullets: [
+      'Immediate containment to prevent further unauthorized access',
+      'Assessment of scope, affected data, and number of impacted individuals',
+      'Prompt notification to affected employees with details of what occurred and steps to take',
+      'Regulatory authority notification within legally required timeframes (DPDP Act / GDPR)',
+      'Remediation through root-cause corrections and updated security controls',
+    ],
+  },
+  {
+    id: 'transfers',
+    icon: 'globe-outline',
+    iconFamily: 'Ionicons',
+    title: 'Cross-Border Data Transfers',
+    content:
+      'Our AWS infrastructure may process or store data in regions outside India (e.g., US or EU). We ensure adequate safeguards are in place, including AWS standard contractual clauses and compliance certifications. Contact the Administrator for details on your specific data storage region.',
+  },
+  {
+    id: 'children',
+    icon: 'alert-circle-outline',
+    iconFamily: 'Ionicons',
+    title: "Children's Privacy",
+    content:
+      'This Application is strictly for authorized adult employees. We do not knowingly collect data from individuals under 18 years of age. Accounts are created only in the context of a formal employment relationship. If data from a minor is discovered, it will be immediately deleted and the situation reviewed to prevent recurrence.',
   },
   {
     id: 'changes',
@@ -148,15 +355,26 @@ const SECTIONS: Section[] = [
     iconFamily: 'Ionicons',
     title: 'Changes to This Policy',
     content:
-      'We may update this Privacy Policy from time to time. Any changes will be reflected on this page with an updated effective date.',
+      'We may update this Privacy Policy periodically to reflect changes in our practices, applicable law, or organizational operations.',
+    bullets: [
+      'Updated versions will be published within the Application with a revised date',
+      'Employees will be notified of significant changes via in-app notification or email',
+      'Continued use of the Application following notification constitutes acknowledgment of the updated Policy',
+    ],
   },
   {
     id: 'contact',
     icon: 'mail-outline',
     iconFamily: 'Ionicons',
-    title: 'Contact Us',
-    content: 'If you have any questions or concerns about this Privacy Policy, please contact us at:',
-    bullets: ['info@citadel.com'],
+    title: 'Contact Information',
+    content:
+      'For any questions, concerns, or data rights requests related to this Privacy Policy, please contact:',
+    bullets: [
+      'Application Administrator / Data Contact',
+      'prasanna@citadelnetinc.com',
+      'Organization: Citadel Net Inc.',
+      'Response Time: Within 5 business days',
+    ],
   },
 ];
 
@@ -274,6 +492,21 @@ export default function PrivacyPolicy({ onBack, isDark = false }: PrivacyPolicyP
             ))}
           </View>
         )}
+
+        {/* Subsections */}
+        {section.subsections && section.subsections.map((sub, si) => (
+          <View key={si} style={styles.subsection}>
+            <Text style={[styles.subsectionTitle, { color: C.bodyText }]}>{sub.title}</Text>
+            <View style={styles.bulletList}>
+              {sub.bullets.map((bullet, bi) => (
+                <View key={bi} style={styles.bulletRow}>
+                  <View style={[styles.bulletDot, { backgroundColor: C.lightGreen }]} />
+                  <Text style={[styles.bulletText, { color: C.subText }]}>{bullet}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ))}
       </Animated.View>
     );
   };
@@ -285,7 +518,7 @@ export default function PrivacyPolicy({ onBack, isDark = false }: PrivacyPolicyP
     <View style={[styles.root, { backgroundColor: C.bg }]}>
       <StatusBar barStyle="light-content" backgroundColor="#075E54" />
 
-      {/* ── Header (unchanged) ── */}
+      {/* ── Header ── */}
       <LinearGradient
         colors={['#075E54', '#128C7E']}
         start={{ x: 0, y: 0 }}
@@ -320,11 +553,11 @@ export default function PrivacyPolicy({ onBack, isDark = false }: PrivacyPolicyP
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Effective date banner */}
+        {/* Meta banner */}
         <View style={[styles.dateBanner, { backgroundColor: C.surface, borderColor: C.border }]}>
           <Ionicons name="calendar-outline" size={14} color={C.subText} />
           <Text style={[styles.dateBannerText, { color: C.subText }]}>
-            Effective date: January 2025
+            Last Updated: March 2026 · Version 2.0 · Internal Use Only
           </Text>
         </View>
 
@@ -332,7 +565,7 @@ export default function PrivacyPolicy({ onBack, isDark = false }: PrivacyPolicyP
 
         {/* Footer note */}
         <Text style={[styles.footerNote, { color: C.subText }]}>
-          This policy may be updated periodically. Please review it regularly to stay informed.
+          This policy may be updated periodically. Significant changes will be communicated via in-app notification or email. Continued use of the Application constitutes acknowledgment of the updated policy.
         </Text>
       </ScrollView>
     </View>
@@ -480,6 +713,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     lineHeight: 20,
+  },
+
+  // ── Subsections ───────────────────────────────────────────────────────────
+  subsection: {
+    marginTop: 14,
+  },
+  subsectionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 2,
   },
 
   // ── Footer ────────────────────────────────────────────────────────────────
