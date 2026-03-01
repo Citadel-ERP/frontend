@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView,
     TextInput, ActivityIndicator, Modal, KeyboardAvoidingView,
-    Platform, Alert, Pressable
+    Platform, Alert, Pressable, Keyboard
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -66,6 +66,7 @@ const IOSPickerSheet: React.FC<IOSPickerSheetProps> = ({
     visible, mode, value, minimumDate, title, accentColor, onCancel, onConfirm
 }) => {
     const [tempDate, setTempDate] = useState<Date>(value);
+
 
     // Sync tempDate whenever the picker opens or the incoming value changes
     useEffect(() => {
@@ -262,40 +263,65 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
     const [showUserSearch, setShowUserSearch] = useState(false);
     const [activePicker, setActivePicker] = useState<ActivePicker>(null);
     const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [keyboardHeight, setKeyboardHeight] = useState(0);
 
     // Refs for scroll-to-field behaviour
     const scrollViewRef = useRef<ScrollView>(null);
-    const purposeSectionRef = useRef<View>(null);
+    // const purposeSectionRef = useRef<View>(null);
+    const purposeYRef = useRef<number>(0);
+
+    useEffect(() => {
+        if (Platform.OS !== 'android') return;
+        const showSub = Keyboard.addListener('keyboardDidShow', e => {
+            setKeyboardHeight(e.endCoordinates.height);
+        });
+        const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+            setKeyboardHeight(0);
+        });
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, []);
 
     useEffect(() => {
         return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
     }, []);
 
-    // Reset state when modal closes
     useEffect(() => {
         if (!visible) {
             setActivePicker(null);
             setLocalSearchQuery('');
             setLocalUserResults([]);
             setShowUserSearch(false);
+            setKeyboardHeight(0);                                   // ← ADD reset
         }
     }, [visible]);
 
     // Scroll the Purpose field into view when the keyboard opens
+    // const handlePurposeFocus = () => {
+    //     setTimeout(() => {
+    //         purposeSectionRef.current?.measure((_x, _y, _width, _height, _pageX, pageY) => {
+    //             // pageY is absolute; get scroll offset by measuring relative to scrollView
+    //             purposeSectionRef.current?.measureLayout(
+    //                 // @ts-ignore
+    //                 scrollViewRef.current,
+    //                 (_relX: number, relY: number) => {
+    //                     scrollViewRef.current?.scrollTo({ y: relY - 16, animated: true });
+    //                 },
+    //                 () => {
+    //                     scrollViewRef.current?.scrollToEnd({ animated: true });
+    //                 }
+    //             );
+    //         });
+    //     }, 150);
+    // };
+
     const handlePurposeFocus = () => {
         setTimeout(() => {
-            purposeSectionRef.current?.measure((_x, _y, _width, _height, _pageX, pageY) => {
-                // pageY is absolute; get scroll offset by measuring relative to scrollView
-                purposeSectionRef.current?.measureLayout(
-                    // @ts-ignore
-                    scrollViewRef.current,
-                    (_relX: number, relY: number) => {
-                        scrollViewRef.current?.scrollTo({ y: relY - 16, animated: true });
-                    },
-                    () => {
-                        scrollViewRef.current?.scrollToEnd({ animated: true });
-                    }
-                );
+            scrollViewRef.current?.scrollTo({
+                y: purposeYRef.current - 16,
+                animated: true,
             });
         }, 150);
     };
@@ -419,7 +445,8 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
             >
                 <View style={styles.modalOverlay}>
                     <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}   // ← was 'height' on Android
+                        enabled={Platform.OS === 'ios'}                            // ← ADD: disable on Android
                         style={styles.keyboardAvoidingView}
                         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
                     >
@@ -442,7 +469,8 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                                 style={styles.modalScroll}
                                 showsVerticalScrollIndicator={false}
                                 keyboardShouldPersistTaps="handled"
-                                keyboardDismissMode="interactive"
+                                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'none'}  // ← was 'interactive' always
+                                contentContainerStyle={{ paddingBottom: keyboardHeight }}
                             >
                                 {/* ── Vehicle Summary ── */}
                                 <View style={styles.section}>
@@ -547,9 +575,9 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
 
                                 {/* ── Purpose ── */}
                                 <View
-                                    ref={purposeSectionRef}
+                                    // ref={purposeSectionRef}
                                     style={styles.section}
-                                    collapsable={false}
+                                    onLayout={(e) => { purposeYRef.current = e.nativeEvent.layout.y; }}
                                 >
                                     <Text style={styles.sectionTitle}>Purpose</Text>
                                     <TextInput

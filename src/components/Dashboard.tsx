@@ -949,6 +949,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             if (res.ok) {
               const configs = await res.json();
               for (const config of configs) {
+                console.log("CONFIG", config);
                 await NotificationsExpo.setNotificationChannelAsync(config.channel_id, {
                   name: config.module_unique_name,
                   importance: NotificationsExpo.AndroidImportance.MAX,

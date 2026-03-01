@@ -11,10 +11,11 @@
 //  - Accept payment shown only when user_status === 'payment_confirmation'
 //  - Referral removed from create form; always sends referral_amt: 0 to backend
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   StatusBar, Alert, TextInput, ActivityIndicator,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { colors, spacing, fontSize, borderRadius, shadows } from './theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -130,6 +131,10 @@ const Incentive: React.FC<IncentiveProps> = ({
   const [addingRemark, setAddingRemark]       = useState(false);
   const [accepting, setAccepting]             = useState(false);
   const [confirmingPayment, setConfirmingPayment] = useState(false);
+
+  // Refs for keyboard-aware scrolling
+  const scrollViewRef = useRef<ScrollView>(null);
+  const remarkInputRef = useRef<TextInput>(null);
 
   // Create-form state — no referral field; BUP sets it
   const [grossIncome, setGrossIncome]         = useState('');
@@ -365,6 +370,15 @@ const Incentive: React.FC<IncentiveProps> = ({
         },
       ]
     );
+  };
+
+  // ── Scroll remark input into view when keyboard opens ─────────────────────
+  const handleRemarkInputFocus = () => {
+    // Small delay to let the keyboard animation begin before scrolling,
+    // ensuring the measured position accounts for the keyboard offset.
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 300);
   };
 
   // ── Derived — per-user status drives all conditional rendering ─────────────
@@ -756,177 +770,197 @@ const Incentive: React.FC<IncentiveProps> = ({
   return (
     <View style={s.container}>
       {!hideHeader && <HeaderBar title="Incentive Checklist" onPressBack={onBack} />}
-      <ScrollView style={s.scrollView} showsVerticalScrollIndicator={false}>
+      {/*
+        KeyboardAvoidingView sits between the header and the ScrollView.
+        - iOS: 'padding' shrinks the scroll area above the keyboard.
+        - Android: 'height' achieves the same effect. We skip the header
+          height offset because the header is rendered outside this wrapper,
+          so no keyboardVerticalOffset adjustment is needed here.
+      */}
+      <KeyboardAvoidingView
+        style={s.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        <ScrollView
+          ref={scrollViewRef}
+          style={s.scrollView}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
 
-        {/* ── Status card — badge shows MY per-user status ── */}
-        <View style={s.card}>
-          <View style={s.statusHeader}>
-            <Text style={s.cardTitle}>Lead: {leadName}</Text>
-            {myStatus && (
-              <View style={[s.statusBadge, { backgroundColor: getMyStatusColor(myStatus) }]}>
-                <Text style={s.statusText}>{getMyStatusText(myStatus)}</Text>
+          {/* ── Status card — badge shows MY per-user status ── */}
+          <View style={s.card}>
+            <View style={s.statusHeader}>
+              <Text style={s.cardTitle}>Lead: {leadName}</Text>
+              {myStatus && (
+                <View style={[s.statusBadge, { backgroundColor: getMyStatusColor(myStatus) }]}>
+                  <Text style={s.statusText}>{getMyStatusText(myStatus)}</Text>
+                </View>
+              )}
+            </View>
+            <View style={s.infoRow}>
+              <Text style={s.infoLabel}>Created:</Text>
+              <Text style={s.infoValue}>{formatDate(incentiveData.created_at)}</Text>
+            </View>
+            <View style={s.infoRow}>
+              <Text style={s.infoLabel}>Last Updated:</Text>
+              <Text style={s.infoValue}>{formatDate(incentiveData.updated_at)}</Text>
+            </View>
+          </View>
+
+          {/* ── Transaction details ── */}
+          <View style={s.card}>
+            <Text style={s.cardTitle}>Transaction Details</Text>
+            <View style={[s.infoRow, s.dividerRow]}>
+              <Text style={s.infoLabel}>Gross Income:</Text>
+              <Text style={s.infoValue}>{formatCurrency(incentiveData.gross_income_recieved)}</Text>
+            </View>
+            {incentiveData.referral_amt > 0 && (
+              <View style={[s.infoRow, s.dividerRow]}>
+                <Text style={s.infoLabel}>Referral Amount:</Text>
+                <Text style={s.infoValue}>{formatCurrency(incentiveData.referral_amt)}</Text>
+              </View>
+            )}
+            {incentiveData.bdt_expenses > 0 && (
+              <View style={[s.infoRow, s.dividerRow]}>
+                <Text style={s.infoLabel}>BD Expenses:</Text>
+                <Text style={s.infoValue}>{formatCurrency(incentiveData.bdt_expenses)}</Text>
+              </View>
+            )}
+            <View style={[s.infoRow, s.dividerRow]}>
+              <Text style={s.infoLabel}>Deal Type:</Text>
+              <View style={incentiveData.intercity_deals ? s.badgeYes : s.badgeNo}>
+                <Text style={incentiveData.intercity_deals ? s.badgeTextYes : s.badgeTextNo}>
+                  {incentiveData.intercity_deals ? 'Intercity' : 'Local'}
+                </Text>
+              </View>
+            </View>
+            {incentiveData.city && (
+              <View style={s.infoRow}>
+                <Text style={s.infoLabel}>City:</Text>
+                <Text style={s.infoValue}>{incentiveData.city}</Text>
               </View>
             )}
           </View>
-          <View style={s.infoRow}>
-            <Text style={s.infoLabel}>Created:</Text>
-            <Text style={s.infoValue}>{formatDate(incentiveData.created_at)}</Text>
-          </View>
-          <View style={s.infoRow}>
-            <Text style={s.infoLabel}>Last Updated:</Text>
-            <Text style={s.infoValue}>{formatDate(incentiveData.updated_at)}</Text>
-          </View>
-        </View>
 
-        {/* ── Transaction details ── */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Transaction Details</Text>
-          <View style={[s.infoRow, s.dividerRow]}>
-            <Text style={s.infoLabel}>Gross Income:</Text>
-            <Text style={s.infoValue}>{formatCurrency(incentiveData.gross_income_recieved)}</Text>
-          </View>
-          {incentiveData.referral_amt > 0 && (
-            <View style={[s.infoRow, s.dividerRow]}>
-              <Text style={s.infoLabel}>Referral Amount:</Text>
-              <Text style={s.infoValue}>{formatCurrency(incentiveData.referral_amt)}</Text>
-            </View>
-          )}
-          {incentiveData.bdt_expenses > 0 && (
-            <View style={[s.infoRow, s.dividerRow]}>
-              <Text style={s.infoLabel}>BD Expenses:</Text>
-              <Text style={s.infoValue}>{formatCurrency(incentiveData.bdt_expenses)}</Text>
-            </View>
-          )}
-          <View style={[s.infoRow, s.dividerRow]}>
-            <Text style={s.infoLabel}>Deal Type:</Text>
-            <View style={incentiveData.intercity_deals ? s.badgeYes : s.badgeNo}>
-              <Text style={incentiveData.intercity_deals ? s.badgeTextYes : s.badgeTextNo}>
-                {incentiveData.intercity_deals ? 'Intercity' : 'Local'}
-              </Text>
-            </View>
-          </View>
-          {incentiveData.city && (
-            <View style={s.infoRow}>
-              <Text style={s.infoLabel}>City:</Text>
-              <Text style={s.infoValue}>{incentiveData.city}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* ── Earnings breakdown — my_share for per-user figures ── */}
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Earnings Breakdown</Text>
-          <View style={s.calculationRow}>
-            <Text style={s.calculationLabel}>Brokerage Amount (Gross)</Text>
-            <Text style={s.calculationValue}>{formatCurrency(incentiveData.gross_income_recieved)}</Text>
-          </View>
-          {incentiveData.referral_amt > 0 && (
-            <View style={s.calculationRow}>
-              <Text style={s.calculationLabel}>Less: Referral Fee</Text>
-              <Text style={[s.calculationValue, s.negativeValue]}>- {formatCurrency(incentiveData.referral_amt)}</Text>
-            </View>
-          )}
-          {incentiveData.bdt_expenses > 0 && (
-            <View style={s.calculationRow}>
-              <Text style={s.calculationLabel}>Less: BD Expenses</Text>
-              <Text style={[s.calculationValue, s.negativeValue]}>- {formatCurrency(incentiveData.bdt_expenses)}</Text>
-            </View>
-          )}
-          <View style={[s.calculationRow, s.highlightRow]}>
-            <Text style={s.calculationLabelBold}>Net Company Earnings</Text>
-            <Text style={s.calculationValueBold}>{formatCurrency(incentiveData.net_company_earning)}</Text>
-          </View>
-          {incentiveData.intercity_deals && (
-            <View style={s.calculationRow}>
-              <Text style={s.calculationLabel}>Intercity Share (50%)</Text>
-              <Text style={s.calculationValue}>{formatCurrency(incentiveData.intercity_amount)}</Text>
-            </View>
-          )}
-          <MyShareSection share={incentiveData.my_share} />
-        </View>
-
-        {/* ── Remarks ── */}
-        {incentiveData.remarks.length > 0 && (
+          {/* ── Earnings breakdown — my_share for per-user figures ── */}
           <View style={s.card}>
-            <Text style={s.cardTitle}>Remarks ({incentiveData.remarks.length})</Text>
-            {incentiveData.remarks.map((r, i) => (
-              <View key={i} style={s.remarkItem}>
-                <View style={s.remarkHeader}>
-                  <Text style={s.remarkAuthor}>{r.username}</Text>
-                  <Text style={s.remarkDate}>{formatDate(r.created_at)}</Text>
-                </View>
-                <Text style={s.remarkText}>{r.remark}</Text>
+            <Text style={s.cardTitle}>Earnings Breakdown</Text>
+            <View style={s.calculationRow}>
+              <Text style={s.calculationLabel}>Brokerage Amount (Gross)</Text>
+              <Text style={s.calculationValue}>{formatCurrency(incentiveData.gross_income_recieved)}</Text>
+            </View>
+            {incentiveData.referral_amt > 0 && (
+              <View style={s.calculationRow}>
+                <Text style={s.calculationLabel}>Less: Referral Fee</Text>
+                <Text style={[s.calculationValue, s.negativeValue]}>- {formatCurrency(incentiveData.referral_amt)}</Text>
               </View>
-            ))}
+            )}
+            {incentiveData.bdt_expenses > 0 && (
+              <View style={s.calculationRow}>
+                <Text style={s.calculationLabel}>Less: BD Expenses</Text>
+                <Text style={[s.calculationValue, s.negativeValue]}>- {formatCurrency(incentiveData.bdt_expenses)}</Text>
+              </View>
+            )}
+            <View style={[s.calculationRow, s.highlightRow]}>
+              <Text style={s.calculationLabelBold}>Net Company Earnings</Text>
+              <Text style={s.calculationValueBold}>{formatCurrency(incentiveData.net_company_earning)}</Text>
+            </View>
+            {incentiveData.intercity_deals && (
+              <View style={s.calculationRow}>
+                <Text style={s.calculationLabel}>Intercity Share (50%)</Text>
+                <Text style={s.calculationValue}>{formatCurrency(incentiveData.intercity_amount)}</Text>
+              </View>
+            )}
+            <MyShareSection share={incentiveData.my_share} />
           </View>
-        )}
 
-        {/* ── Add remark — only when THIS user's share is in correction ── */}
-        {myStatus === 'correction' && (
-          <View style={s.card}>
-            <Text style={s.cardTitle}>Add Remark</Text>
-            <TextInput
-              style={s.remarkInput}
-              value={newRemark}
-              onChangeText={setNewRemark}
-              placeholder="Enter your remark..."
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
+          {/* ── Remarks ── */}
+          {incentiveData.remarks.length > 0 && (
+            <View style={s.card}>
+              <Text style={s.cardTitle}>Remarks ({incentiveData.remarks.length})</Text>
+              {incentiveData.remarks.map((r, i) => (
+                <View key={i} style={s.remarkItem}>
+                  <View style={s.remarkHeader}>
+                    <Text style={s.remarkAuthor}>{r.username}</Text>
+                    <Text style={s.remarkDate}>{formatDate(r.created_at)}</Text>
+                  </View>
+                  <Text style={s.remarkText}>{r.remark}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* ── Add remark — only when THIS user's share is in correction ── */}
+          {myStatus === 'correction' && (
+            <View style={s.card}>
+              <Text style={s.cardTitle}>Add Remark</Text>
+              <TextInput
+                ref={remarkInputRef}
+                style={s.remarkInput}
+                value={newRemark}
+                onChangeText={setNewRemark}
+                placeholder="Enter your remark..."
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+                onFocus={handleRemarkInputFocus}
+              />
+              <TouchableOpacity
+                style={[s.addRemarkButton, addingRemark && s.disabledBtn]}
+                onPress={addRemark}
+                disabled={addingRemark}
+              >
+                {addingRemark
+                  ? <ActivityIndicator color={colors.white} size="small" />
+                  : <Text style={s.submitBtnText}>Add Remark</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ── Action buttons — ALL gated on my_share.user_status ── */}
+
+          {/* Accept: BUP has set share AND this user is pending or in correction */}
+          {myShareSet && (myStatus === 'pending' || myStatus === 'correction') && (
             <TouchableOpacity
-              style={[s.addRemarkButton, addingRemark && s.disabledBtn]}
-              onPress={addRemark}
-              disabled={addingRemark}
+              style={[s.acceptButton, accepting && s.disabledBtn]}
+              onPress={acceptIncentive}
+              disabled={accepting}
             >
-              {addingRemark
+              {accepting
                 ? <ActivityIndicator color={colors.white} size="small" />
-                : <Text style={s.submitBtnText}>Add Remark</Text>
+                : <Text style={s.acceptButtonText}>Accept My Incentive Share</Text>
               }
             </TouchableOpacity>
-          </View>
-        )}
+          )}
 
-        {/* ── Action buttons — ALL gated on my_share.user_status ── */}
+          {/* Confirm payment: only when BUP has sent payment for this specific user */}
+          {myStatus === 'payment_confirmation' && (
+            <TouchableOpacity
+              style={[s.paymentButton, confirmingPayment && s.disabledBtn]}
+              onPress={acceptPaymentConfirmation}
+              disabled={confirmingPayment}
+            >
+              {confirmingPayment
+                ? <ActivityIndicator color={colors.white} size="small" />
+                : <Text style={s.acceptButtonText}>Confirm Payment Received</Text>
+              }
+            </TouchableOpacity>
+          )}
 
-        {/* Accept: BUP has set share AND this user is pending or in correction */}
-        {myShareSet && (myStatus === 'pending' || myStatus === 'correction') && (
-          <TouchableOpacity
-            style={[s.acceptButton, accepting && s.disabledBtn]}
-            onPress={acceptIncentive}
-            disabled={accepting}
-          >
-            {accepting
-              ? <ActivityIndicator color={colors.white} size="small" />
-              : <Text style={s.acceptButtonText}>Accept My Incentive Share</Text>
-            }
-          </TouchableOpacity>
-        )}
+          {/* Completed indicator */}
+          {myStatus === 'completed' && (
+            <View style={s.completedBanner}>
+              <Text style={s.completedIcon}>🎉</Text>
+              <Text style={s.completedText}>Your incentive is complete!</Text>
+            </View>
+          )}
 
-        {/* Confirm payment: only when BUP has sent payment for this specific user */}
-        {myStatus === 'payment_confirmation' && (
-          <TouchableOpacity
-            style={[s.paymentButton, confirmingPayment && s.disabledBtn]}
-            onPress={acceptPaymentConfirmation}
-            disabled={confirmingPayment}
-          >
-            {confirmingPayment
-              ? <ActivityIndicator color={colors.white} size="small" />
-              : <Text style={s.acceptButtonText}>Confirm Payment Received</Text>
-            }
-          </TouchableOpacity>
-        )}
-
-        {/* Completed indicator */}
-        {myStatus === 'completed' && (
-          <View style={s.completedBanner}>
-            <Text style={s.completedIcon}>🎉</Text>
-            <Text style={s.completedText}>Your incentive is complete!</Text>
-          </View>
-        )}
-
-        <View style={{ height: 100 }} />
-      </ScrollView>
+          <View style={{ height: 100 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 };
@@ -934,6 +968,7 @@ const Incentive: React.FC<IncentiveProps> = ({
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.primary },
+  keyboardAvoidingView: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: colors.primary, marginTop: 30 },
   headerWithGreen: { backgroundColor: 'transparent', position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
   greenHeader: { paddingTop: 80, paddingBottom: 20, paddingHorizontal: spacing.lg },
