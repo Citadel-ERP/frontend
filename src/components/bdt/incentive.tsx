@@ -1,11 +1,20 @@
-// bdt incentive — updated to show only the requesting user's personal share
-// The backend now returns `incentive.my_share` which is either null (BUP has
-// not yet set this user's share) or { bdt_share, tds_deducted, final_amount_payable }.
+// bdt incentive — works with per-user share status from updated backend.
+// Backend returns `incentive.my_share` with:
+//   { bdt_share, tds_deducted, final_amount_payable,
+//     user_status, payment_confirmed_by_bdt, payment_sent_by_bup }
+//
+// KEY CHANGES vs previous version:
+//  - All action buttons gate on my_share.user_status (per-user), NOT incentiveData.status
+//  - Status badge shows my_share.user_status label
+//  - Add remark shown only when my_share.user_status === 'correction'
+//  - Accept incentive shown when user_status is 'pending' (share set) OR 'correction'
+//  - Accept payment shown only when user_status === 'payment_confirmation'
+//  - Referral removed from create form; always sends referral_amt: 0 to backend
 
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  StatusBar, Alert, TextInput, ActivityIndicator, Platform,
+  StatusBar, Alert, TextInput, ActivityIndicator,
 } from 'react-native';
 import { colors, spacing, fontSize, borderRadius, shadows } from './theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,20 +24,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 const TOKEN_KEY = 'token_2';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
-
 interface IncentiveProps {
   onBack: () => void;
   leadId: number;
   leadName: string;
   hideHeader?: boolean;
-  /** Pass true only when lead.subphase === 'payment_received' and no incentive exists yet */
   canCreate?: boolean;
-  /** Called after a new incentive is successfully created (used by BDT.tsx workflow) */
   onIncentiveCreated?: () => void;
 }
 
 // ─── Data shapes ──────────────────────────────────────────────────────────────
-
 interface BDTUser {
   employee_id: string;
   email: string;
@@ -51,14 +56,22 @@ interface Remark {
 }
 
 /**
- * `my_share` is the new field added by the backend.
- * It holds ONLY the share that BUP allocated to the requesting BDT user.
- * null means BUP has not yet set this user's share.
+ * Per-user share returned by the backend for the requesting BDT user.
+ * user_status is the source of truth for all action gating.
  */
 interface MyShare {
   bdt_share: number | null;
   tds_deducted: number | null;
   final_amount_payable: number | null;
+  user_status:
+    | 'pending'
+    | 'correction'
+    | 'accepted_by_bdt'
+    | 'accepted'
+    | 'payment_confirmation'
+    | 'completed';
+  payment_confirmed_by_bdt: boolean;
+  payment_sent_by_bup: boolean;
 }
 
 interface IncentiveData {
@@ -74,44 +87,32 @@ interface IncentiveData {
   bdt_expenses: number;
   goodwill: number;
   staff_incentive: number | null;
-  // The aggregate bdt_share on the root incentive still exists for BUP's use;
-  // BDT users should use my_share instead.
   tds_deducted: number | null;
   net_company_earning: number | null;
   bdt_share: number | null;
   less_tax: number | null;
   final_amount_payable: number | null;
-  status: 'pending' | 'correction' | 'accepted' | 'accepted_by_bdt' | 'payment_raised' | 'paid' | 'completed' | 'payment_confirmation';
+  /** Top-level aggregate status — display context only. Actions use my_share.user_status */
+  status: string;
   remarks: Remark[];
   city?: string;
-  /** Per-user share allocated by BUP for the requesting BDT user. null = not yet set. */
   my_share: MyShare | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const EXPENSE_OPTIONS = [
-  { label: 'Referral', key: 'referral' },
-  { label: 'BD Expenses', key: 'bd_expenses' },
-  // { label: 'Goodwill',   key: 'goodwill'    },
-];
-
+// Referral removed — BUP handles referral, not BDT
 const INTERCITY_CITIES = [
   'Bangalore', 'Chennai', 'Hyderabad', 'Mumbai', 'NCR', 'Pune', 'Other',
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Returns true only when v is a real, non-zero number */
 const hasValue = (v: number | null | undefined): boolean =>
   v !== null && v !== undefined && v !== 0;
 
-/** True when a MyShare object has actual share data set by BUP */
 const shareIsSet = (share: MyShare | null | undefined): boolean =>
   share != null && hasValue(share.bdt_share);
 
 // ─── Component ────────────────────────────────────────────────────────────────
-
 const Incentive: React.FC<IncentiveProps> = ({
   onBack,
   leadId,
@@ -120,25 +121,25 @@ const Incentive: React.FC<IncentiveProps> = ({
   canCreate = false,
   onIncentiveCreated,
 }) => {
-  const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [incentiveData, setIncentiveData] = useState<IncentiveData | null>(null);
-  const [isCreateMode, setIsCreateMode] = useState(false);
+  const [token, setToken]                     = useState<string | null>(null);
+  const [loading, setLoading]                 = useState(false);
+  const [incentiveData, setIncentiveData]     = useState<IncentiveData | null>(null);
+  const [isCreateMode, setIsCreateMode]       = useState(false);
   const [showCalculation, setShowCalculation] = useState(false);
-  const [newRemark, setNewRemark] = useState('');
-  const [addingRemark, setAddingRemark] = useState(false);
+  const [newRemark, setNewRemark]             = useState('');
+  const [addingRemark, setAddingRemark]       = useState(false);
+  const [accepting, setAccepting]             = useState(false);
+  const [confirmingPayment, setConfirmingPayment] = useState(false);
 
-  // Create-form state
-  const [grossIncome, setGrossIncome] = useState('');
-  const [selectedExpenses, setSelectedExpenses] = useState<Set<string>>(new Set());
-  const [expenseValues, setExpenseValues] = useState<Record<string, string>>({
-    referral: '', bd_expenses: '', goodwill: '',
-  });
-  const [intercityDeals, setIntercityDeals] = useState('No');
+  // Create-form state — no referral field; BUP sets it
+  const [grossIncome, setGrossIncome]         = useState('');
+  const [bdExpenses, setBdExpenses]           = useState('');
+  const [hasBdExpenses, setHasBdExpenses]     = useState(false);
+  const [intercityDeals, setIntercityDeals]   = useState('No');
   const [showIntercityDD, setShowIntercityDD] = useState(false);
-  const [selectedCity, setSelectedCity] = useState('');
-  const [showCityDD, setShowCityDD] = useState(false);
-  const [customCity, setCustomCity] = useState('');
+  const [selectedCity, setSelectedCity]       = useState('');
+  const [showCityDD, setShowCityDD]           = useState(false);
+  const [customCity, setCustomCity]           = useState('');
 
   // ── Token ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -170,34 +171,25 @@ const Incentive: React.FC<IncentiveProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, lead_id: leadId }),
       });
-
       const contentType = res.headers.get('content-type') ?? '';
       if (!contentType.includes('application/json')) {
-        // Unexpected response — treat as "no incentive"
         canCreate ? setIsCreateMode(true) : setIncentiveData(null);
         return;
       }
-
       const data = await res.json();
-
       if (res.ok) {
-        // ── Incentive exists — pre-fill form fields for possible edit ─────
         const inc: IncentiveData = data.incentive;
         setIncentiveData(inc);
         setIsCreateMode(false);
+        // Pre-fill form
         setGrossIncome(fmt(inc.gross_income_recieved.toString()));
-
-        const newSelected = new Set<string>();
-        const newValues: Record<string, string> = { referral: '', bd_expenses: '', goodwill: '' };
-        if (inc.referral_amt > 0) { newSelected.add('referral'); newValues.referral = fmt(inc.referral_amt.toString()); }
-        if (inc.bdt_expenses > 0) { newSelected.add('bd_expenses'); newValues.bd_expenses = fmt(inc.bdt_expenses.toString()); }
-        if (inc.goodwill > 0) { newSelected.add('goodwill'); newValues.goodwill = fmt(inc.goodwill.toString()); }
-        setExpenseValues(newValues);
-        setSelectedExpenses(newSelected);
+        if (inc.bdt_expenses > 0) {
+          setHasBdExpenses(true);
+          setBdExpenses(fmt(inc.bdt_expenses.toString()));
+        }
         setIntercityDeals(inc.intercity_deals ? 'Yes' : 'No');
         if (inc.city) setSelectedCity(inc.city);
       } else {
-        // ── No incentive (or error) ────────────────────────────────────────
         if (data.message?.includes('already paid')) {
           Alert.alert('Notice', 'This incentive has been paid and is no longer visible.');
           onBack();
@@ -215,33 +207,21 @@ const Incentive: React.FC<IncentiveProps> = ({
     }
   };
 
-  // ── Expense helpers ────────────────────────────────────────────────────────
-  const toggleExpense = (key: string) => {
-    const next = new Set(selectedExpenses);
-    if (next.has(key)) { next.delete(key); setExpenseValues(p => ({ ...p, [key]: '' })); }
-    else { next.add(key); }
-    setSelectedExpenses(next);
-  };
-
-  // ── Calculate from form ────────────────────────────────────────────────────
+  // ── Calculate from form (referral always 0 — BUP sets it) ─────────────────
   const calcFromForm = () => {
-    const gross = parseFloat(parse(grossIncome)) || 0;
-    const referral = expenseValues.referral ? parseFloat(parse(expenseValues.referral)) : 0;
-    const bdExp = expenseValues.bd_expenses ? parseFloat(parse(expenseValues.bd_expenses)) : 0;
-    const goodwillAmt = expenseValues.goodwill ? parseFloat(parse(expenseValues.goodwill)) : 0;
-    const netEarning = gross - referral - bdExp - goodwillAmt;
+    const gross       = parseFloat(parse(grossIncome)) || 0;
+    const bdExp       = hasBdExpenses && bdExpenses ? parseFloat(parse(bdExpenses)) : 0;
+    const netEarning  = gross - bdExp;
     const isIntercity = intercityDeals === 'Yes';
     const intercityAmount = isIntercity ? netEarning * 0.5 : netEarning;
-    return { gross, referral, bdExp, goodwillAmt, netEarning, intercityAmount };
+    return { gross, bdExp, netEarning, intercityAmount };
   };
 
   // ── Validate create form ───────────────────────────────────────────────────
   const validateForm = (): boolean => {
     if (!grossIncome) { Alert.alert('Error', 'Please enter gross income'); return false; }
-    for (const key of selectedExpenses) {
-      if (!expenseValues[key]) { Alert.alert('Error', 'Please enter values for all selected expenses'); return false; }
-    }
-    if (intercityDeals === 'Yes' && !selectedCity) { Alert.alert('Error', 'Please select a city for intercity deal'); return false; }
+    if (hasBdExpenses && !bdExpenses) { Alert.alert('Error', 'Please enter BD expenses amount'); return false; }
+    if (intercityDeals === 'Yes' && !selectedCity) { Alert.alert('Error', 'Please select a city'); return false; }
     if (selectedCity === 'Other' && !customCity.trim()) { Alert.alert('Error', 'Please enter city name'); return false; }
     return true;
   };
@@ -251,32 +231,29 @@ const Incentive: React.FC<IncentiveProps> = ({
     if (!token) return;
     try {
       setLoading(true);
-      const c = calcFromForm();
+      const c           = calcFromForm();
       const isIntercity = intercityDeals === 'Yes';
-      const cityToSend = selectedCity === 'Other' ? customCity : selectedCity;
-
+      const cityToSend  = selectedCity === 'Other' ? customCity : selectedCity;
       const res = await fetch(`${BACKEND_URL}/employee/createIncentive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
-          lead_id: leadId,
+          lead_id:               leadId,
           gross_income_recieved: parse(grossIncome),
-          referral_amt: expenseValues.referral ? parse(expenseValues.referral) : 0,
-          bdt_expenses: expenseValues.bd_expenses ? parse(expenseValues.bd_expenses) : 0,
-          goodwill: 0,
-          intercity_deals: isIntercity,
-          intercity_amount: c.intercityAmount,
-          net_company_earning: c.netEarning,
-          // BDT does NOT set share/TDS — BUP will set them per-user later
-          bdt_share: null,
-          tds_deducted: null,
-          less_tax: null,
-          final_amount_payable: null,
-          city: isIntercity ? cityToSend : null,
+          referral_amt:          0,           // BUP handles referral — always 0 from BDT
+          bdt_expenses:          hasBdExpenses && bdExpenses ? parse(bdExpenses) : 0,
+          goodwill:              0,
+          intercity_deals:       isIntercity,
+          intercity_amount:      c.intercityAmount,
+          net_company_earning:   c.netEarning,
+          bdt_share:             null,
+          tds_deducted:          null,
+          less_tax:              null,
+          final_amount_payable:  null,
+          city:                  isIntercity ? cityToSend : null,
         }),
       });
-
       if (!res.ok) throw new Error('Failed to create incentive');
       const data = await res.json();
       setIncentiveData(data.incentive);
@@ -292,7 +269,7 @@ const Incentive: React.FC<IncentiveProps> = ({
     }
   };
 
-  // ── Add remark ─────────────────────────────────────────────────────────────
+  // ── Add remark — only when my_share.user_status === 'correction' ──────────
   const addRemark = async () => {
     if (!token || !newRemark.trim()) { Alert.alert('Error', 'Please enter a remark'); return; }
     try {
@@ -302,88 +279,131 @@ const Incentive: React.FC<IncentiveProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, lead_id: leadId, remark: newRemark.trim() }),
       });
-      if (!res.ok) throw new Error('Failed to add remark');
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error((errData as any).message || 'Failed to add remark');
+      }
       const data = await res.json();
       setIncentiveData(data.incentive);
       setNewRemark('');
       Alert.alert('Success', 'Remark added successfully!');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error adding remark:', err);
-      Alert.alert('Error', 'Failed to add remark. Please try again.');
+      Alert.alert('Error', err.message || 'Failed to add remark. Please try again.');
     } finally {
       setAddingRemark(false);
     }
   };
 
-  // ── Accept incentive (BDT confirms BUP's calculations) ────────────────────
+  // ── Accept incentive — moves THIS user's user_status → 'accepted_by_bdt' ──
   const acceptIncentive = async () => {
     if (!token) return;
-    try {
-      const res = await fetch(`${BACKEND_URL}/employee/acceptIncentive`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, lead_id: leadId }),
-      });
-      if (!res.ok) throw new Error('Failed to accept incentive');
-      Alert.alert('Success', 'Incentive accepted successfully!');
-      fetchIncentive();
-    } catch (err) {
-      console.error('Error accepting incentive:', err);
-      Alert.alert('Error', 'Failed to accept incentive. Please try again.');
-    }
+    Alert.alert(
+      'Accept Incentive',
+      'Confirm that you accept your share of this incentive?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Accept',
+          onPress: async () => {
+            try {
+              setAccepting(true);
+              const res = await fetch(`${BACKEND_URL}/employee/acceptIncentive`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, lead_id: leadId }),
+              });
+              if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error((errData as any).message || 'Failed to accept incentive');
+              }
+              Alert.alert('Success', 'Incentive accepted! BUP has been notified.');
+              fetchIncentive();
+            } catch (err: any) {
+              console.error('Error accepting incentive:', err);
+              Alert.alert('Error', err.message || 'Failed to accept incentive.');
+            } finally {
+              setAccepting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
-  // ── Accept payment confirmation ────────────────────────────────────────────
+  // ── Accept payment — marks THIS user's share as completed ──────────────────
   const acceptPaymentConfirmation = async () => {
     if (!token) return;
-    try {
-      const res = await fetch(`${BACKEND_URL}/employee/acceptPaymentConfirmation`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, lead_id: leadId }),
-      });
-      if (!res.ok) throw new Error('Failed to accept payment confirmation');
-      Alert.alert('Success', 'Payment confirmation accepted successfully!');
-      fetchIncentive();
-    } catch (err) {
-      console.error('Error accepting payment confirmation:', err);
-      Alert.alert('Error', 'Failed to accept payment confirmation. Please try again.');
-    }
+    Alert.alert(
+      'Confirm Payment Received',
+      'Confirm that you have received your payment for this incentive?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              setConfirmingPayment(true);
+              const res = await fetch(`${BACKEND_URL}/employee/acceptPaymentConfirmation`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, lead_id: leadId }),
+              });
+              if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error((errData as any).message || 'Failed to confirm payment');
+              }
+              Alert.alert('Success', 'Payment confirmed! Your incentive is now complete.');
+              fetchIncentive();
+            } catch (err: any) {
+              console.error('Error confirming payment:', err);
+              Alert.alert('Error', err.message || 'Failed to confirm payment.');
+            } finally {
+              setConfirmingPayment(false);
+            }
+          },
+        },
+      ]
+    );
   };
+
+  // ── Derived — per-user status drives all conditional rendering ─────────────
+  const myStatus  = incentiveData?.my_share?.user_status ?? null;
+  const myShareSet = shareIsSet(incentiveData?.my_share);
 
   // ── Formatters ─────────────────────────────────────────────────────────────
   const formatDate = (ds: string) =>
     new Date(ds).toLocaleString('en-IN', {
-      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
     });
 
   const formatCurrency = (amount: number | null): string => {
     if (amount === null || amount === undefined) return '₹0.00';
-    return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `₹${amount.toLocaleString('en-IN', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2,
+    })}`;
   };
 
-  const getStatusColor = (s: string): string => ({
-    pending: colors.warning,
-    correction: colors.error,
-    accepted: colors.success,
-    accepted_by_bdt: colors.success,
-    payment_raised: colors.info,
-    payment_confirmation: colors.info,
-    completed: colors.primary,
+  const getMyStatusColor = (s: string): string => ({
+    pending:              colors.warning,
+    correction:           colors.error,
+    accepted_by_bdt:      '#2196F3',
+    accepted:             colors.success,
+    payment_confirmation: '#9C27B0',
+    completed:            colors.primary,
   }[s] ?? colors.textSecondary);
 
-  const getStatusText = (s: string): string => ({
-    pending: 'Under Review',
-    correction: 'Needs Correction',
-    accepted: 'Accepted',
-    accepted_by_bdt: 'Confirmed by BDT',
-    payment_raised: 'Payment Processing',
-    payment_confirmation: 'Payment Processing',
-    completed: 'Completed',
+  const getMyStatusText = (s: string): string => ({
+    pending:              'Awaiting BUP Review',
+    correction:           'Needs Your Response',
+    accepted_by_bdt:      'Awaiting BUP Acceptance',
+    accepted:             'Accepted by BUP',
+    payment_confirmation: 'Confirm Payment Receipt',
+    completed:            'Completed',
   }[s] ?? s);
 
   // ─── Sub-components ─────────────────────────────────────────────────────────
-
   const BackIcon = () => (
     <View style={s.backIcon}>
       <View style={s.backArrow} />
@@ -417,50 +437,64 @@ const Incentive: React.FC<IncentiveProps> = ({
   );
 
   /**
-   * "My Share" card — shown in the earnings breakdown.
-   * Conditionally renders either the user's actual share (set by BUP)
-   * or a "pending BUP calculation" notice.
+   * Shows this user's BUP-allocated share, or a pending notice.
+   * Also shows payment pipeline indicators when relevant.
    */
   const MyShareSection = ({ share }: { share: MyShare | null | undefined }) => {
-    if (shareIsSet(share)) {
-      // BUP has already allocated a share for this user
+    if (!shareIsSet(share)) {
       return (
-        <>
-          <View style={s.calculationRow}>
-            <Text style={s.calculationLabel}>Your Transaction Share</Text>
-            <Text style={s.calculationValue}>{formatCurrency(share!.bdt_share)}</Text>
-          </View>
-          <View style={s.calculationRow}>
-            <Text style={s.calculationLabel}>Less: TDS</Text>
-            <Text style={[s.calculationValue, s.negativeValue]}>
-              - {formatCurrency(share!.tds_deducted)}
+        <View style={s.pendingBupBox}>
+          <Text style={s.pendingBupIcon}>⏳</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={s.pendingBupTitle}>Pending BUP Calculation</Text>
+            <Text style={s.pendingBupSubtext}>
+              Your Transaction Team Share, TDS & Final Amount will be set by the BUP team.
             </Text>
           </View>
-          {hasValue(share!.final_amount_payable) && (
-            <View style={[s.calculationRow, s.finalRow]}>
-              <Text style={s.finalLabel}>Your Final Amount Payable</Text>
-              <Text style={s.finalValue}>{formatCurrency(share!.final_amount_payable)}</Text>
-            </View>
-          )}
-        </>
+        </View>
       );
     }
 
-    // BUP has not yet set this user's share
     return (
-      <View style={s.pendingBupBox}>
-        <Text style={s.pendingBupIcon}>⏳</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={s.pendingBupTitle}>Pending BUP Calculation</Text>
-          <Text style={s.pendingBupSubtext}>
-            Your Transaction Team Share, TDS &amp; Final Amount will be set by BUP team.
+      <>
+        <View style={s.calculationRow}>
+          <Text style={s.calculationLabel}>Your Transaction Share</Text>
+          <Text style={s.calculationValue}>{formatCurrency(share!.bdt_share)}</Text>
+        </View>
+        <View style={s.calculationRow}>
+          <Text style={s.calculationLabel}>Less: TDS</Text>
+          <Text style={[s.calculationValue, s.negativeValue]}>
+            - {formatCurrency(share!.tds_deducted)}
           </Text>
         </View>
-      </View>
+        {hasValue(share!.final_amount_payable) && (
+          <View style={[s.calculationRow, s.finalRow]}>
+            <Text style={s.finalLabel}>Your Final Amount Payable</Text>
+            <Text style={s.finalValue}>{formatCurrency(share!.final_amount_payable)}</Text>
+          </View>
+        )}
+        {share!.payment_sent_by_bup && !share!.payment_confirmed_by_bdt && (
+          <View style={s.paymentSentBox}>
+            <Text style={s.paymentSentIcon}>💸</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.paymentSentTitle}>Payment Dispatched</Text>
+              <Text style={s.paymentSentSubtext}>
+                BUP has sent your payment. Please confirm receipt below.
+              </Text>
+            </View>
+          </View>
+        )}
+        {share!.payment_confirmed_by_bdt && (
+          <View style={s.paymentDoneBox}>
+            <Text style={s.paymentDoneIcon}>✅</Text>
+            <Text style={s.paymentDoneText}>Payment Received & Confirmed</Text>
+          </View>
+        )}
+      </>
     );
   };
 
-  // ─── Loading state ──────────────────────────────────────────────────────────
+  // ─── Loading ────────────────────────────────────────────────────────────────
   if (loading && !incentiveData && !isCreateMode) {
     return (
       <View style={s.container}>
@@ -473,7 +507,7 @@ const Incentive: React.FC<IncentiveProps> = ({
     );
   }
 
-  // ─── Create mode: Review screen ─────────────────────────────────────────────
+  // ─── Create mode: Review screen ──────────────────────────────────────────────
   if (isCreateMode && canCreate && showCalculation) {
     const c = calcFromForm();
     return (
@@ -485,7 +519,7 @@ const Incentive: React.FC<IncentiveProps> = ({
               <TouchableOpacity style={s.backButton} onPress={() => setShowCalculation(false)}>
                 <BackIcon />
               </TouchableOpacity>
-              <Text style={s.headerTitle}>Review &amp; Submit</Text>
+              <Text style={s.headerTitle}>Review & Submit</Text>
               <View style={s.headerSpacer} />
             </View>
           </>
@@ -496,7 +530,6 @@ const Incentive: React.FC<IncentiveProps> = ({
             <Text style={s.leadName}>Lead: {leadName}</Text>
           </View>
 
-          {/* Summary grid */}
           <View style={s.card}>
             <Text style={s.cardTitle}>Summary</Text>
             <View style={s.summaryGrid}>
@@ -511,17 +544,16 @@ const Incentive: React.FC<IncentiveProps> = ({
             </View>
           </View>
 
-          {/* Expenses */}
-          {selectedExpenses.size > 0 && (
+          {c.bdExp > 0 && (
             <View style={s.card}>
               <Text style={s.cardTitle}>Expenses</Text>
-              {c.referral > 0 && <View style={s.expenseSummaryRow}><Text style={s.infoLabel}>Referral</Text><Text style={s.infoValue}>₹{c.referral.toLocaleString('en-IN')}</Text></View>}
-              {c.bdExp > 0 && <View style={s.expenseSummaryRow}><Text style={s.infoLabel}>BD Expenses</Text><Text style={s.infoValue}>₹{c.bdExp.toLocaleString('en-IN')}</Text></View>}
-              {/* {c.goodwillAmt > 0 && <View style={s.expenseSummaryRow}><Text style={s.infoLabel}>Goodwill</Text><Text style={s.infoValue}>₹{c.goodwillAmt.toLocaleString('en-IN')}</Text></View>} */}
+              <View style={s.expenseSummaryRow}>
+                <Text style={s.infoLabel}>BD Expenses</Text>
+                <Text style={s.infoValue}>₹{c.bdExp.toLocaleString('en-IN')}</Text>
+              </View>
             </View>
           )}
 
-          {/* Deal info */}
           <View style={s.card}>
             <Text style={s.cardTitle}>Deal Information</Text>
             <View style={s.infoRow}>
@@ -546,12 +578,11 @@ const Incentive: React.FC<IncentiveProps> = ({
             )}
           </View>
 
-          {/* BDT note */}
           <View style={s.infoCard}>
             <Text style={s.infoCardTitle}>📋 Important Note</Text>
             <Text style={s.infoCardText}>
-              Your final earnings (Transaction Team Share &amp; TDS) will be calculated by BUP
-              team after reviewing all details.
+              Your final earnings (Transaction Team Share & TDS) will be calculated by the BUP
+              team. Referral amounts, if any, will also be set by BUP.
             </Text>
           </View>
 
@@ -573,7 +604,6 @@ const Incentive: React.FC<IncentiveProps> = ({
               }
             </TouchableOpacity>
           </LinearGradient>
-
           <View style={{ height: 100 }} />
         </ScrollView>
       </View>
@@ -603,29 +633,30 @@ const Incentive: React.FC<IncentiveProps> = ({
             />
           </View>
 
-          {/* Expenses */}
+          {/* BD Expenses only — referral removed entirely */}
           <View style={s.card}>
-            <Text style={s.label}>Select Expenses (Optional)</Text>
-            <Text style={s.expenseInfoText}>Check the expenses that apply and enter their amounts</Text>
-            {EXPENSE_OPTIONS.map(opt => (
-              <View key={opt.key} style={s.expenseItem}>
-                <TouchableOpacity style={s.checkboxContainer} onPress={() => toggleExpense(opt.key)}>
-                  <View style={[s.checkbox, selectedExpenses.has(opt.key) && s.checkboxChecked]}>
-                    {selectedExpenses.has(opt.key) && <Text style={s.checkmark}>✓</Text>}
-                  </View>
-                  <Text style={s.expenseLabel}>{opt.label}</Text>
-                </TouchableOpacity>
-                {selectedExpenses.has(opt.key) && (
-                  <TextInput
-                    style={s.expenseInput}
-                    value={expenseValues[opt.key]}
-                    onChangeText={t => setExpenseValues(p => ({ ...p, [opt.key]: fmt(t) }))}
-                    placeholder="Enter amount"
-                    keyboardType="numeric"
-                  />
-                )}
+            <Text style={s.label}>BD Expenses (Optional)</Text>
+            <TouchableOpacity
+              style={s.checkboxContainer}
+              onPress={() => { setHasBdExpenses(!hasBdExpenses); if (hasBdExpenses) setBdExpenses(''); }}
+            >
+              <View style={[s.checkbox, hasBdExpenses && s.checkboxChecked]}>
+                {hasBdExpenses && <Text style={s.checkmark}>✓</Text>}
               </View>
-            ))}
+              <Text style={s.expenseLabel}>Include BD Expenses</Text>
+            </TouchableOpacity>
+            {hasBdExpenses && (
+              <TextInput
+                style={[s.input, { marginTop: spacing.sm }]}
+                value={bdExpenses}
+                onChangeText={t => setBdExpenses(fmt(t))}
+                placeholder="Enter BD expenses amount"
+                keyboardType="numeric"
+              />
+            )}
+            <Text style={s.expenseInfoText}>
+              Note: Referral amounts are set by the BUP team and don't need to be entered here.
+            </Text>
           </View>
 
           {/* Intercity */}
@@ -727,13 +758,15 @@ const Incentive: React.FC<IncentiveProps> = ({
       {!hideHeader && <HeaderBar title="Incentive Checklist" onPressBack={onBack} />}
       <ScrollView style={s.scrollView} showsVerticalScrollIndicator={false}>
 
-        {/* ── Status card ── */}
+        {/* ── Status card — badge shows MY per-user status ── */}
         <View style={s.card}>
           <View style={s.statusHeader}>
             <Text style={s.cardTitle}>Lead: {leadName}</Text>
-            <View style={[s.statusBadge, { backgroundColor: getStatusColor(incentiveData.status) }]}>
-              <Text style={s.statusText}>{getStatusText(incentiveData.status)}</Text>
-            </View>
+            {myStatus && (
+              <View style={[s.statusBadge, { backgroundColor: getMyStatusColor(myStatus) }]}>
+                <Text style={s.statusText}>{getMyStatusText(myStatus)}</Text>
+              </View>
+            )}
           </View>
           <View style={s.infoRow}>
             <Text style={s.infoLabel}>Created:</Text>
@@ -745,7 +778,7 @@ const Incentive: React.FC<IncentiveProps> = ({
           </View>
         </View>
 
-        {/* ── Transaction details (shared for all BDT users) ── */}
+        {/* ── Transaction details ── */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Transaction Details</Text>
           <View style={[s.infoRow, s.dividerRow]}>
@@ -758,12 +791,6 @@ const Incentive: React.FC<IncentiveProps> = ({
               <Text style={s.infoValue}>{formatCurrency(incentiveData.referral_amt)}</Text>
             </View>
           )}
-          {/* {incentiveData.goodwill > 0 && (
-            <View style={[s.infoRow, s.dividerRow]}>
-              <Text style={s.infoLabel}>Goodwill:</Text>
-              <Text style={s.infoValue}>{formatCurrency(incentiveData.goodwill)}</Text>
-            </View>
-          )} */}
           {incentiveData.bdt_expenses > 0 && (
             <View style={[s.infoRow, s.dividerRow]}>
               <Text style={s.infoLabel}>BD Expenses:</Text>
@@ -786,11 +813,9 @@ const Incentive: React.FC<IncentiveProps> = ({
           )}
         </View>
 
-        {/* ── Earnings breakdown — uses my_share for per-user data ── */}
+        {/* ── Earnings breakdown — my_share for per-user figures ── */}
         <View style={s.card}>
           <Text style={s.cardTitle}>Earnings Breakdown</Text>
-
-          {/* Shared calculations */}
           <View style={s.calculationRow}>
             <Text style={s.calculationLabel}>Brokerage Amount (Gross)</Text>
             <Text style={s.calculationValue}>{formatCurrency(incentiveData.gross_income_recieved)}</Text>
@@ -807,12 +832,6 @@ const Incentive: React.FC<IncentiveProps> = ({
               <Text style={[s.calculationValue, s.negativeValue]}>- {formatCurrency(incentiveData.bdt_expenses)}</Text>
             </View>
           )}
-          {/* {incentiveData.goodwill > 0 && (
-            <View style={s.calculationRow}>
-              <Text style={s.calculationLabel}>Less: Goodwill</Text>
-              <Text style={[s.calculationValue, s.negativeValue]}>- {formatCurrency(incentiveData.goodwill)}</Text>
-            </View>
-          )} */}
           <View style={[s.calculationRow, s.highlightRow]}>
             <Text style={s.calculationLabelBold}>Net Company Earnings</Text>
             <Text style={s.calculationValueBold}>{formatCurrency(incentiveData.net_company_earning)}</Text>
@@ -823,11 +842,6 @@ const Incentive: React.FC<IncentiveProps> = ({
               <Text style={s.calculationValue}>{formatCurrency(incentiveData.intercity_amount)}</Text>
             </View>
           )}
-
-          {/* ── Per-user share — THE KEY CHANGE ────────────────────────────
-              Uses incentiveData.my_share (the backend now returns only this
-              user's allocation, not the aggregate bdt_share).
-              ──────────────────────────────────────────────────────────── */}
           <MyShareSection share={incentiveData.my_share} />
         </View>
 
@@ -847,8 +861,8 @@ const Incentive: React.FC<IncentiveProps> = ({
           </View>
         )}
 
-        {/* ── Add remark (correction status) ── */}
-        {incentiveData.status === 'correction' && (
+        {/* ── Add remark — only when THIS user's share is in correction ── */}
+        {myStatus === 'correction' && (
           <View style={s.card}>
             <Text style={s.cardTitle}>Add Remark</Text>
             <TextInput
@@ -861,7 +875,7 @@ const Incentive: React.FC<IncentiveProps> = ({
               textAlignVertical="top"
             />
             <TouchableOpacity
-              style={[s.submitButton, { backgroundColor: colors.success }, addingRemark && s.disabledBtn]}
+              style={[s.addRemarkButton, addingRemark && s.disabledBtn]}
               onPress={addRemark}
               disabled={addingRemark}
             >
@@ -873,21 +887,42 @@ const Incentive: React.FC<IncentiveProps> = ({
           </View>
         )}
 
-        {/* ── Action buttons ── */}
-        {incentiveData.status === 'correction' && (
-          <TouchableOpacity style={s.acceptButton} onPress={acceptIncentive}>
-            <Text style={s.acceptButtonText}>Accept Incentive</Text>
+        {/* ── Action buttons — ALL gated on my_share.user_status ── */}
+
+        {/* Accept: BUP has set share AND this user is pending or in correction */}
+        {myShareSet && (myStatus === 'pending' || myStatus === 'correction') && (
+          <TouchableOpacity
+            style={[s.acceptButton, accepting && s.disabledBtn]}
+            onPress={acceptIncentive}
+            disabled={accepting}
+          >
+            {accepting
+              ? <ActivityIndicator color={colors.white} size="small" />
+              : <Text style={s.acceptButtonText}>Accept My Incentive Share</Text>
+            }
           </TouchableOpacity>
         )}
-        {incentiveData.status === 'payment_raised' && (
-          <TouchableOpacity style={s.acceptButton} onPress={acceptPaymentConfirmation}>
-            <Text style={s.acceptButtonText}>Accept Payment Confirmation</Text>
+
+        {/* Confirm payment: only when BUP has sent payment for this specific user */}
+        {myStatus === 'payment_confirmation' && (
+          <TouchableOpacity
+            style={[s.paymentButton, confirmingPayment && s.disabledBtn]}
+            onPress={acceptPaymentConfirmation}
+            disabled={confirmingPayment}
+          >
+            {confirmingPayment
+              ? <ActivityIndicator color={colors.white} size="small" />
+              : <Text style={s.acceptButtonText}>Confirm Payment Received</Text>
+            }
           </TouchableOpacity>
         )}
-        {incentiveData.status === 'payment_confirmation' && (
-          <TouchableOpacity style={s.acceptButton} onPress={acceptPaymentConfirmation}>
-            <Text style={s.acceptButtonText}>Completed</Text>
-          </TouchableOpacity>
+
+        {/* Completed indicator */}
+        {myStatus === 'completed' && (
+          <View style={s.completedBanner}>
+            <Text style={s.completedIcon}>🎉</Text>
+            <Text style={s.completedText}>Your incentive is complete!</Text>
+          </View>
         )}
 
         <View style={{ height: 100 }} />
@@ -897,7 +932,6 @@ const Incentive: React.FC<IncentiveProps> = ({
 };
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.primary },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, backgroundColor: colors.primary, marginTop: 30 },
@@ -918,19 +952,16 @@ const s = StyleSheet.create({
   leadNameLarge: { fontSize: fontSize.lg, color: colors.text, fontWeight: '600' },
   cardTitle: { fontSize: fontSize.lg, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
   statusHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md },
-  statusBadge: { marginTop: -15, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, borderRadius: borderRadius.lg },
-  statusText: { color: colors.white, fontSize: 12, fontWeight: '600' },
+  statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: borderRadius.lg },
+  statusText: { color: colors.white, fontSize: 11, fontWeight: '600' },
   label: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
   input: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.white },
-  expenseInfoText: { fontSize: fontSize.sm, color: colors.textSecondary, marginBottom: spacing.md, fontStyle: 'italic' },
-  expenseItem: { marginBottom: spacing.md, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
-
+  expenseInfoText: { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: spacing.sm, fontStyle: 'italic' },
   checkboxContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
   checkbox: { width: 20, height: 20, borderWidth: 2, borderColor: colors.border, borderRadius: borderRadius.sm, alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
   checkboxChecked: { borderColor: colors.primary, backgroundColor: colors.primary },
   checkmark: { color: colors.white, fontSize: fontSize.md, fontWeight: '700' },
   expenseLabel: { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
-  expenseInput: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.backgroundSecondary, marginTop: spacing.xs },
   dropdown: { borderWidth: 1, borderColor: colors.border, borderRadius: borderRadius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.white },
   dropdownText: { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
   dropdownArrow: { fontSize: fontSize.sm, color: colors.textSecondary },
@@ -962,18 +993,30 @@ const s = StyleSheet.create({
   pendingBupIcon: { fontSize: 20 },
   pendingBupTitle: { fontSize: fontSize.sm, fontWeight: '700', color: colors.warning, marginBottom: 2 },
   pendingBupSubtext: { fontSize: fontSize.xs, color: colors.text, lineHeight: 16 },
+  paymentSentBox: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.md, padding: spacing.md, backgroundColor: '#9C27B015', borderRadius: borderRadius.lg, borderWidth: 1, borderColor: '#9C27B0' },
+  paymentSentIcon: { fontSize: 20 },
+  paymentSentTitle: { fontSize: fontSize.sm, fontWeight: '700', color: '#9C27B0', marginBottom: 2 },
+  paymentSentSubtext: { fontSize: fontSize.xs, color: colors.text, lineHeight: 16 },
+  paymentDoneBox: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md, padding: spacing.md, backgroundColor: colors.success + '15', borderRadius: borderRadius.lg, borderWidth: 1, borderColor: colors.success },
+  paymentDoneIcon: { fontSize: 18 },
+  paymentDoneText: { fontSize: fontSize.sm, fontWeight: '700', color: colors.success },
   infoCard: { backgroundColor: colors.info + '15', marginHorizontal: spacing.lg, marginTop: spacing.lg, padding: spacing.lg, borderRadius: borderRadius.xl, borderWidth: 1, borderColor: colors.info },
   infoCardTitle: { fontSize: fontSize.md, fontWeight: '600', color: colors.info, marginBottom: spacing.xs },
   infoCardText: { fontSize: fontSize.sm, color: colors.text, lineHeight: 20 },
   continueButton: { paddingVertical: 14, paddingHorizontal: 16, borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md },
   gradientTouchable: { width: '100%', alignItems: 'center', paddingVertical: 16 },
   continueButtonText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
-  submitButton: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md, minHeight: 50 },
-  submitBtnTouchable: { width: '100%', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.md },
+  submitButton: { borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md, overflow: 'hidden' },
+  submitBtnTouchable: { width: '100%', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.lg },
   submitBtnText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
-  disabledBtn: { opacity: 0.7 },
-  acceptButton: { backgroundColor: colors.success, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md },
+  disabledBtn: { opacity: 0.6 },
+  addRemarkButton: { backgroundColor: colors.success, paddingVertical: spacing.md, borderRadius: borderRadius.lg, alignItems: 'center', marginTop: spacing.sm, minHeight: 48, justifyContent: 'center' },
+  acceptButton: { backgroundColor: colors.success, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md, minHeight: 50, justifyContent: 'center' },
+  paymentButton: { backgroundColor: '#9C27B0', paddingVertical: spacing.md, paddingHorizontal: spacing.lg, borderRadius: borderRadius.lg, alignItems: 'center', marginHorizontal: spacing.lg, marginTop: spacing.lg, ...shadows.md, minHeight: 50, justifyContent: 'center' },
   acceptButtonText: { color: colors.white, fontSize: fontSize.md, fontWeight: '600' },
+  completedBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, backgroundColor: colors.success + '20', marginHorizontal: spacing.lg, marginTop: spacing.lg, padding: spacing.lg, borderRadius: borderRadius.xl, borderWidth: 1, borderColor: colors.success },
+  completedIcon: { fontSize: 22 },
+  completedText: { fontSize: fontSize.md, fontWeight: '700', color: colors.success },
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.xs },
   infoLabel: { fontSize: fontSize.sm, color: colors.textSecondary },
   infoValue: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
