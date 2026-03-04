@@ -25,12 +25,13 @@ import { BACKEND_URL } from '../../config/config';
 
 interface HRManagerProps {
     onBack: () => void;
+    initialTab?: 'requests' | 'grievances';  // ADD THIS
 }
 
-const HR_Manager: React.FC<HRManagerProps> = ({ onBack }) => {
+const HR_Manager: React.FC<HRManagerProps> = ({ onBack,initialTab = 'requests' }) => {
     const insets = useSafeAreaInsets();
+    const [activeTab, setActiveTab] = useState<TabType>(initialTab); 
     const [token, setToken] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<TabType>('requests');
     const [loading, setLoading] = useState(false);
     const [loadingDetails, setLoadingDetails] = useState(false);
     const [selectedItem, setSelectedItem] = useState<Item | null>(null);

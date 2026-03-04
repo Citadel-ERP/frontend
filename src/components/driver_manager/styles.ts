@@ -65,7 +65,7 @@ export const styles = StyleSheet.create({
     },
     headerTopRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        // justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 20,
     },
@@ -82,11 +82,9 @@ export const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '800',
         letterSpacing: 1,
-        textAlign: 'center',
-        flex: 1,
-        marginLeft: 30,
-        marginTop:8 
-    },
+         textAlign: 'center',
+    
+},
     headerTitle: {
         fontSize: 24,
         fontWeight: '600',

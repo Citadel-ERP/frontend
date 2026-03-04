@@ -140,7 +140,11 @@
           "color": "#2D3748",
           "useNextNotificationsApi": true,
           "androidMode": "default",
-          "androidCollapsedTitle": "#{unread_notifications} new interactions"
+          "androidCollapsedTitle": "#{unread_notifications} new interactions",
+          "sounds": [
+            "./assets/sounds/driver.wav",
+            "./assets/sounds/driver.mp3"
+          ]
         }
       ],
       "expo-task-manager",

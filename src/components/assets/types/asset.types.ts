@@ -1,15 +1,22 @@
+export interface SerialId {
+  id: number;
+  serial_id: string;
+  is_assigned: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Asset {
   id: number;
   asset_name: string;
   asset_type: string;
   asset_description?: string;
   asset_count: number;
-  asset_serial?: string;
-  // Backend serializer returns asset_city (not city)
-  asset_city?: string;
-  city?: string;
   assigned_count?: number;
   available_count?: number;
+  asset_city?: string;
+  city?: string;                      // alias used internally
+  asset_serial_id: SerialId[];        // replaces old asset_serial string
   created_at?: string;
   updated_at?: string;
 }
@@ -19,15 +26,13 @@ export interface AssetFormData {
   asset_type: string;
   asset_description?: string;
   asset_count: string | number;
-  asset_serial?: string;
-  // city is the frontend field name; service maps it to asset_city when calling backend
   city?: string;
+  // serial_id removed — serials are managed via addSerialIds endpoint
 }
 
 export interface AssetFilters {
   search?: string;
   asset_type?: string;
-  location?: string;
   city?: string;
 }
 

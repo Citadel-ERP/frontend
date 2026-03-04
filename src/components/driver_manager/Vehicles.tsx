@@ -2306,26 +2306,28 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                         <Text style={styles.backText}>Back</Text>
                                     </View>
                                 </TouchableOpacity>
-                                <View style={styles.headerCenter}>
-                                    <Text style={styles.logoText}>CITADEL</Text>
-                                </View>
-                                <TouchableOpacity
-                                    style={{
-                                        backgroundColor: 'transparent',
-                                        paddingHorizontal: 16,
-                                        paddingVertical: 8,
-                                        borderRadius: 8,
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        gap: 6
-                                    }}
-                                    onPress={() => {
-                                        setCurrentView('create-vehicle');
-                                    }}
-                                >
-                                    <MaterialCommunityIcons name="plus" size={20} color="#FFFFFF" />
-                                    <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>Add</Text>
-                                </TouchableOpacity>
+                                <View style={[styles.headerCenter, { marginRight: 60, height: 40 }]}>
+    <Text style={[styles.logoText, { marginTop: 6 }]}>CITADEL</Text>
+</View>
+<TouchableOpacity
+    style={{
+        position: 'absolute',
+        right: 0,
+        backgroundColor: 'transparent',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        borderRadius: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6
+    }}
+    onPress={() => {
+        setCurrentView('create-vehicle');
+    }}
+>
+    <MaterialCommunityIcons name="plus" size={20} color="#FFFFFF" />
+    <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>Add</Text>
+</TouchableOpacity>
                             </View>
                         </View>
                         <View style={styles.titleSection}>

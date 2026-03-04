@@ -103,6 +103,11 @@ const LEGEND_ITEMS = [
 
 // Map backend status to display status
 const mapStatusForDisplay = (status: string): string => {
+  // Strip lop_ prefix and use the remaining status
+  const strippedStatus = status.toLowerCase().startsWith('lop_') 
+    ? status.toLowerCase().replace('lop_', '') 
+    : status.toLowerCase();
+
   const statusMapping: Record<string, string> = {
     'checkout_missing': 'present',
     'late_login_checkout_missing': 'late_login',
@@ -110,7 +115,7 @@ const mapStatusForDisplay = (status: string): string => {
     'checkout_pending': 'present',
   };
 
-  return statusMapping[status.toLowerCase()] || status;
+  return statusMapping[strippedStatus] || strippedStatus;
 };
 
 const AttendanceButtonSection: React.FC<{

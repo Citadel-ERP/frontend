@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import { Header } from './header';
@@ -59,7 +59,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   const [showWorkStatistics, setShowWorkStatistics] = useState(false);
   const [showBulkPayslips, setShowBulkPayslips] = useState(false);
   const [showBulkEmployees, setShowBulkEmployees] = useState(false);
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
@@ -146,7 +146,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   const fetchEmployees = async (page: number = 1) => {
     console.log('=== fetchEmployees called ===');
     console.log('Page:', page);
-    
+
     if (!token) {
       console.log('No token available for fetch - aborting');
       setError('No authentication token available');
@@ -159,13 +159,13 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
     try {
       const url = `${BACKEND_URL}/manager/getAllEmployees`;
       console.log('Fetching from URL:', url);
-      
+
       const requestBody = {
         token,
         page,
         page_size: 100,
       };
-      
+
       console.log('Request Body:', JSON.stringify(requestBody));
 
       const response = await fetch(url, {
@@ -245,28 +245,19 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
 
     try {
       console.log('Downloading attendance report:', { month, year, employeeId });
-      
+
       const response = await fetch(`${BACKEND_URL}/manager/downloadAllAttendanceReport`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          month,
-          year
-        }),
+        body: JSON.stringify({ token, month, year }),
       });
 
       console.log('Response status:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Error response:', errorText);
         let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { message: errorText };
-        }
+        try { errorData = JSON.parse(errorText); } catch { errorData = { message: errorText }; }
         const errorMessage = errorData.message || 'Failed to download attendance report';
         alert('Error', errorMessage);
         throw new Error(errorMessage);
@@ -281,12 +272,12 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
       }
 
       const fileUrl = data.file_url;
-      const filename = data.filename || `attendance_report_all_employees_${month}_${year}.pdf`;
+      const filename = data.filename || `attendance_report_${month}_${year}.xlsx`;
       const monthName = data.month || '';
 
       alert(
-        'Download Report',
-        `Attendance report for ${monthName} ${year} is ready. Choose how you want to access it:`,
+        'Report Ready',
+        `Attendance report for ${monthName} ${year} is ready. How would you like to access it?`,
         [
           {
             text: 'Open in Browser',
@@ -304,54 +295,31 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
             onPress: async () => {
               try {
                 setLoading(true);
-                const pdfResponse = await fetch(fileUrl);
-                
-                if (!pdfResponse.ok) {
-                  throw new Error('Failed to fetch PDF from server');
+
+                const fileUri = FileSystem.documentDirectory + filename;
+                console.log('Downloading to:', fileUri);
+
+                const downloadResult = await FileSystem.downloadAsync(fileUrl, fileUri);
+                console.log('Download result:', downloadResult);
+
+                if (downloadResult.status !== 200) {
+                  throw new Error(`Download failed with status: ${downloadResult.status}`);
                 }
 
-                const blob = await pdfResponse.blob();
-                const reader = new FileReader();
-                
-                reader.onloadend = async () => {
-                  try {
-                    const base64data = reader.result as string;
-                    const base64Content = base64data.split(',')[1];
-                    const fileUri = FileSystem.documentDirectory + filename;
-
-                    await FileSystem.writeAsStringAsync(fileUri, base64Content, {
-                      encoding: FileSystem.EncodingType.Base64,
-                    });
-
-                    const canShare = await Sharing.isAvailableAsync();
-                    if (canShare) {
-                      await Sharing.shareAsync(fileUri, {
-                        mimeType: 'application/pdf',
-                        dialogTitle: 'Share Attendance Report',
-                        UTI: 'com.adobe.pdf',
-                      });
-                      alert('Success', 'Report downloaded successfully!');
-                    } else {
-                      alert('Info', 'File saved to app directory but sharing is not available on this device');
-                    }
-                  } catch (shareError) {
-                    console.error('Share error:', shareError);
-                    alert('Error', 'Failed to share PDF. The file may have been saved to app directory.');
-                  } finally {
-                    setLoading(false);
-                  }
-                };
-
-                reader.onerror = () => {
-                  console.error('FileReader error');
-                  alert('Error', 'Failed to process PDF');
-                  setLoading(false);
-                };
-
-                reader.readAsDataURL(blob);
-              } catch (err) {
-                console.error('Download error:', err);
-                alert('Error', 'Failed to download PDF. Please try again.');
+                const canShare = await Sharing.isAvailableAsync();
+                if (canShare) {
+                  await Sharing.shareAsync(downloadResult.uri, {
+                    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    dialogTitle: 'Share Attendance Report',
+                    UTI: 'com.microsoft.excel.xlsx',
+                  });
+                } else {
+                  Alert.alert('Info', `File saved to: ${fileUri}\n\nSharing is not available on this device.`);
+                }
+              } catch (err: any) {
+                console.error('Download & share error:', err);
+                Alert.alert('Error', err.message || 'Failed to download and share the report. Please try "Open in Browser" instead.');
+              } finally {
                 setLoading(false);
               }
             },
@@ -450,7 +418,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         backgroundColor="#2D3748"
         translucent={false}
       />
-      
+
       <Header
         title="HR Management"
         subtitle={
@@ -461,7 +429,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         onBack={onBack}
         showAddEmployee={() => setShowAddEmployeeScreen(true)}
       />
-      
+
       <SearchAndDownload
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -472,7 +440,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         onOpenBulkEmployees={() => setShowBulkEmployees(true)}
         placeholder="Search by name, ID, city, or designation..."
       />
-      
+
       <EmployeeList
         employeesByCity={filteredEmployeesByCity}
         loading={loading}
@@ -485,7 +453,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         totalEmployees={totalEmployees}
         displayedEmployees={displayedCount}
       />
-      
+
       <AttendanceDownloadModal
         visible={showAttendanceModal}
         onClose={() => setShowAttendanceModal(false)}

@@ -61,33 +61,21 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
   });
   const [editMode, setEditMode] = useState<DateEditMode>('none');
 
-  // Add refs for ScrollView and TextInput
+  // Refs for ScrollView, TextInput, and reason section Y position
   const scrollViewRef = useRef<ScrollView>(null);
+  const reasonSectionY = useRef<number>(0);
   const reasonInputRef = useRef<TextInput>(null);
+
   const toDate = (value: DateType): Date | undefined => {
     if (!value) return undefined;
     if (value instanceof Date) return value;
     if (typeof value === 'string' || typeof value === 'number') return new Date(value);
-    // Handle Dayjs
     return (value as Dayjs).toDate();
   };
-  useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
-      setKeyboardVisible(true);
 
-      // Scroll to the reason input when keyboard opens
-      if (reasonInputRef.current) {
-        // Small delay to ensure keyboard is fully up
-        setTimeout(() => {
-          reasonInputRef.current?.measure((x, y, width, height, pageX, pageY) => {
-            const scrollPosition = pageY - 100; // Adjust offset as needed
-            scrollViewRef.current?.scrollTo({
-              y: Math.max(0, scrollPosition),
-              animated: true
-            });
-          });
-        }, 100);
-      }
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+      setKeyboardVisible(true);
     });
 
     const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
@@ -100,27 +88,16 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
     };
   }, []);
 
-  // Add a function to handle TextInput focus
+  // iOS needs a longer delay to wait for KeyboardAvoidingView padding animation to finish.
+  // Android needs only a short delay for the keyboard to appear.
   const handleReasonInputFocus = () => {
-    // Scroll to the input field
-    reasonInputRef.current?.measure((x, y, width, height, pageX, pageY) => {
-      // Calculate position to scroll to (input position minus some offset)
-      const scrollToY = Math.max(0, pageY - 420); // Adjust 120 based on your header height
+    const delay = Platform.OS === 'ios' ? 350 : 150;
+    setTimeout(() => {
       scrollViewRef.current?.scrollTo({
-        y: scrollToY,
-        animated: true
+        y: reasonSectionY.current - 20,
+        animated: true,
       });
-    });
-  };
-
-  // Alternatively, you can use this simpler approach without measure
-  const scrollToReason = () => {
-    // Scroll to a specific position where the reason section is
-    // You might need to adjust the 450 value based on your content
-    scrollViewRef.current?.scrollTo({
-      y: 450,
-      animated: true
-    });
+    }, delay);
   };
 
   useEffect(() => {
@@ -433,8 +410,13 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
         </View>
       </View>
 
-      {/* Reason */}
-      <View style={styles.section}>
+      {/* Reason — onLayout captures Y position within ScrollView for scroll fix */}
+      <View
+        style={styles.section}
+        onLayout={(e) => {
+          reasonSectionY.current = e.nativeEvent.layout.y;
+        }}
+      >
         <Text style={styles.sectionTitle}>Reason</Text>
         <TextInput
           ref={reasonInputRef}
@@ -468,7 +450,7 @@ const LeaveModal: React.FC<LeaveModalProps> = ({
     >
       <View style={styles.overlay}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardContainer}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
         >

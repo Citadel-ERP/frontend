@@ -146,9 +146,11 @@ export interface ApiResponse {
   overtime_hours: any[];
   upcoming_reminder: any[];
   city?: string;
-  big_tile?: string;           // ADD THIS
-  small_tile_1?: string;        // ADD THIS
+  big_tile?: string;          
+  small_tile_1?: string;        
   small_tile_2?: string; 
+  is_admin?: boolean;
+  user_city?: string;   
 }
 
 export type ActivePage = 
@@ -179,6 +181,8 @@ export type ActivePage =
   | 'asset'  
   | 'assets'
   | 'office'
+  | 'access'
+  | 'support'
 
 // Helper functions
 export const getInitials = (fullName: string): string => {

@@ -12,7 +12,7 @@ import {
   TextInput,
   Platform,
   TouchableWithoutFeedback,
-  type TouchableOpacity as TouchableOpacityType 
+  type TouchableOpacity as TouchableOpacityType
 } from 'react-native';
 
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -108,15 +108,15 @@ export const Attendance: React.FC<AttendanceProps> = ({
   const [dayData, setDayData] = useState<DayData | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  
+
   // Time picker states
   const [showLoginTimePicker, setShowLoginTimePicker] = useState(false);
   const [showLogoutTimePicker, setShowLogoutTimePicker] = useState(false);
   const [loginTime, setLoginTime] = useState<Date>(new Date());
   const [logoutTime, setLogoutTime] = useState<Date>(new Date());
-  const [pickerPosition, setPickerPosition] = useState<{top: number; left: number} | null>(null);
+  const [pickerPosition, setPickerPosition] = useState<{ top: number; left: number } | null>(null);
   const [activePicker, setActivePicker] = useState<'login' | 'logout' | null>(null);
-  
+
   // Form data
   const [editData, setEditData] = useState({
     login_time: '',
@@ -126,7 +126,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
   });
 
   const loginTimeRef = useRef<View>(null);
-  const logoutTimeRef = useRef<View>(null); 
+  const logoutTimeRef = useRef<View>(null);
 
   useEffect(() => {
     Animated.spring(legendHeight, {
@@ -149,11 +149,13 @@ export const Attendance: React.FC<AttendanceProps> = ({
     if (!attendanceReport || attendanceReport.length === 0) {
       return { present: 0, leave: 0, absent: 0, holidays: 0, pending: 0, weekends: 0 };
     }
-
     const summary = { present: 0, leave: 0, absent: 0, holidays: 0, pending: 0, weekends: 0 };
-
     attendanceReport.forEach(record => {
-      const status = record.day || record.attendance_status;
+      const rawStatus = record.day || record.attendance_status;
+      const status = rawStatus?.toLowerCase().startsWith('lop_')
+        ? rawStatus.toLowerCase().replace('lop_', '')
+        : rawStatus;
+
       if (status === 'present' || status === 'checkout_missing' || status === 'checkout_pending') {
         summary.present++;
       } else if (status === 'leave') {
@@ -168,12 +170,11 @@ export const Attendance: React.FC<AttendanceProps> = ({
         summary.weekends++;
       }
     });
-
     return summary;
   };
 
   const summary = calculateAttendanceSummary();
-  
+
   const getMonthName = (month: number): string => {
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     return months[month];
@@ -209,7 +210,10 @@ export const Attendance: React.FC<AttendanceProps> = ({
     const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const record = attendanceReport.find(r => r.date === dateStr);
     if (record) {
-      return record.day || record.attendance_status;
+      const status = record.day || record.attendance_status;
+      return status?.toLowerCase().startsWith('lop_')
+        ? status.toLowerCase().replace('lop_', '')
+        : status;
     }
     return null;
   };
@@ -227,7 +231,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
   const parseTimeString = (timeStr: string | null): Date => {
     const now = new Date();
     if (!timeStr) return new Date();
-    
+
     const [hours, minutes, seconds] = timeStr.split(':').map(Number);
     const date = new Date();
     date.setHours(hours || 0, minutes || 0, seconds || 0);
@@ -236,7 +240,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
 
   const formatTimeForDisplay = (timeStr: string | null): string => {
     if (!timeStr) return 'Not marked';
-    
+
     const [hours, minutes, seconds] = timeStr.split(':');
     const hour = parseInt(hours);
     const ampm = hour >= 12 ? 'PM' : 'AM';
@@ -263,7 +267,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
 
   const fetchDayData = async (day: number) => {
     const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    
+
     setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/manager/getDayData`, {
@@ -279,7 +283,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
       if (response.ok) {
         const result = await response.json();
         setDayData(result.data);
-        
+
         // Initialize edit data and time pickers
         setEditData({
           login_time: result.data.login_time || '',
@@ -287,10 +291,10 @@ export const Attendance: React.FC<AttendanceProps> = ({
           login_reason: result.data.login_location?.reason || '',
           logout_reason: result.data.logout_location?.reason || '',
         });
-        
+
         setLoginTime(result.data.login_time ? parseTimeString(result.data.login_time) : new Date());
         setLogoutTime(result.data.logout_time ? parseTimeString(result.data.logout_time) : new Date());
-        
+
         setShowDayDetailsModal(true);
         setIsEditMode(false);
         setActivePicker(null);
@@ -339,7 +343,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
       setPickerPosition(null);
       return;
     }
-    
+
     setShowLoginTimePicker(Platform.OS === 'ios');
     if (selectedDate) {
       setLoginTime(selectedDate);
@@ -347,7 +351,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
         ...editData,
         login_time: formatTimeForAPI(selectedDate)
       });
-      
+
       // On iOS, keep the picker open. On Android, close it after selection
       if (Platform.OS === 'android') {
         setShowLoginTimePicker(false);
@@ -364,7 +368,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
       setPickerPosition(null);
       return;
     }
-    
+
     setShowLogoutTimePicker(Platform.OS === 'ios');
     if (selectedDate) {
       setLogoutTime(selectedDate);
@@ -372,7 +376,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
         ...editData,
         logout_time: formatTimeForAPI(selectedDate)
       });
-      
+
       // On iOS, keep the picker open. On Android, close it after selection
       if (Platform.OS === 'android') {
         setShowLogoutTimePicker(false);
@@ -404,7 +408,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
     // Fix TypeScript error by handling undefined values
     const loginReason = editData.login_reason || '';
     const logoutReason = editData.logout_reason || '';
-    
+
     // Validation: If login_time is provided, login_reason should be provided
     if (editData.login_time && editData.login_time.trim() !== '') {
       if (!loginReason.trim()) {
@@ -715,7 +719,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
                   <>
                     {/* Login Section */}
                     <View style={styles.sectionAlt}>
-                      <View style={[styles.sectionHeader,{marginTop:20}]}>
+                      <View style={[styles.sectionHeader, { marginTop: 20 }]}>
                         <MaterialIcons name="login" size={20} color="#25D366" style={{ marginRight: 8, marginTop: 2 }} />
                         <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Check-in Details</Text>
                       </View>
@@ -843,7 +847,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
                   <>
                     {/* Login Section */}
                     <View style={styles.sectionAlt}>
-                      <View style={[styles.sectionHeader,{marginTop:20}]}>
+                      <View style={[styles.sectionHeader, { marginTop: 20 }]}>
                         <MaterialIcons name="login" size={20} color="#25D366" style={{ marginRight: 8, marginTop: 2 }} />
                         <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Check-in Details</Text>
                       </View>
@@ -957,7 +961,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
 
               {/* Custom Time Picker Overlay */}
               {(showLoginTimePicker || showLogoutTimePicker) && pickerPosition && (
-                <View 
+                <View
                   style={{
                     top: pickerPosition.top,
                     left: pickerPosition.left,
@@ -1021,7 +1025,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
   };
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.detailsContent}
       showsVerticalScrollIndicator={false}
     >
@@ -1036,7 +1040,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
               Present
             </Text>
           </View>
-          
+
           <View style={[styles.summaryCard, { backgroundColor: '#FFEBEE' }]}>
             <Text style={[styles.summaryValue, { color: '#D32F2F' }]}>
               {summary.absent}
@@ -1045,7 +1049,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
               Absent
             </Text>
           </View>
-                  
+
           <View style={[styles.summaryCard, { backgroundColor: '#FFF3E0' }]}>
             <Text style={[styles.summaryValue, { color: '#EF6C00' }]}>
               {summary.leave}
@@ -1063,11 +1067,11 @@ export const Attendance: React.FC<AttendanceProps> = ({
           <TouchableOpacity onPress={prevMonth} style={styles.navButton}>
             <Text style={styles.navButtonText}>‹</Text>
           </TouchableOpacity>
-          
+
           <Text style={styles.monthYearText}>
             {getMonthName(selectedMonth)} {selectedYear}
           </Text>
-          
+
           <TouchableOpacity onPress={nextMonth} style={styles.navButton}>
             <Text style={styles.navButtonText}>›</Text>
           </TouchableOpacity>
@@ -1135,8 +1139,8 @@ export const Attendance: React.FC<AttendanceProps> = ({
 
       {/* Download Button */}
       <View style={styles.downloadContainer}>
-        <TouchableOpacity 
-          style={[styles.downloadButton, { alignSelf: 'center', paddingHorizontal: 24, width:'100%', display:'flex', justifyContent:'center', alignItems:'center' }]}
+        <TouchableOpacity
+          style={[styles.downloadButton, { alignSelf: 'center', paddingHorizontal: 24, width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }]}
           onPress={downloadAttendanceReport}
           disabled={loading}
         >
