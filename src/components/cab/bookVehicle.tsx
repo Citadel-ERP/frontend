@@ -547,16 +547,30 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                                             accentColor="#00d285"
                                             date={bookingForm.startDate}
                                             time={bookingForm.startTime}
-                                            onPressDate={() => setActivePicker('startDate')}
-                                            onPressTime={() => setActivePicker('startTime')}
+                                            onPressDate={() => {
+                                                Keyboard.dismiss();
+                                                setActivePicker('startDate');
+                                            }}
+
+                                            onPressTime={() => {
+                                                Keyboard.dismiss();
+                                                setActivePicker('startTime');
+                                            }}
                                         />
                                         <DateTimeRow
                                             label="🔴  Drop-off Date & Time"
                                             accentColor="#ff5e7a"
                                             date={bookingForm.endDate}
                                             time={bookingForm.endTime}
-                                            onPressDate={() => setActivePicker('endDate')}
-                                            onPressTime={() => setActivePicker('endTime')}
+                                            onPressDate={() => {
+                                                Keyboard.dismiss();
+                                                setActivePicker('endDate');
+                                            }}
+
+                                            onPressTime={() => {
+                                                Keyboard.dismiss();
+                                                setActivePicker('endTime');
+                                            }}
                                         />
                                         <View style={styles.formGroup}>
                                             <Text style={styles.formLabel}>Grace Period (hours)</Text>
