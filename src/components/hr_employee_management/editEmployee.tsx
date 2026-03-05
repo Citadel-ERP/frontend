@@ -653,7 +653,14 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
     >
       {/* ─── OVERLAY ─────────────────────────────── */}
       <View style={styles.assetsModalOverlay}>
-        <View style={styles.assetsModalContainer}>
+        <View style={[
+              styles.assetsModalContainer,
+              // Web-only: constrain width to 50% and center horizontally
+              Platform.OS === 'web' && {
+                width: '50%',
+                alignSelf: 'center',
+              },
+            ]}>
 
           {/* ─── HEADER ──────────────────────────────── */}
           <View style={styles.assetsModalHeader}>

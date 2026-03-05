@@ -702,7 +702,14 @@ export const Attendance: React.FC<AttendanceProps> = ({
       >
         <TouchableWithoutFeedback onPress={handleBackdropPress}>
           <View style={styles.assetsModalOverlay}>
-            <View style={styles.assetsModalContainer}>
+            <View style={[
+              styles.assetsModalContainer,
+              // Web-only: constrain width to 50% and center horizontally
+              Platform.OS === 'web' && {
+                width: '50%',
+                alignSelf: 'center',
+              },
+            ]}>
               {/* Modal Header */}
               <View style={styles.assetsModalHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -750,6 +757,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
                               <input
                                 type="time"
                                 value={editData.login_time ? editData.login_time.substring(0, 5) : ''}
+                                onClick={(e: any) => e.currentTarget.showPicker?.()}
                                 onChange={(e: any) => {
                                   const val = e.target.value;
                                   if (val) {
@@ -829,6 +837,8 @@ export const Attendance: React.FC<AttendanceProps> = ({
                               <input
                                 type="time"
                                 value={editData.logout_time ? editData.logout_time.substring(0, 5) : ''}
+                                onClick={(e: any) => e.currentTarget.showPicker?.()}
+
                                 onChange={(e: any) => {
                                   const val = e.target.value;
                                   if (val) {

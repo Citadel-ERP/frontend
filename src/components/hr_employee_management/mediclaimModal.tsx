@@ -850,7 +850,14 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       onRequestClose={onClose}
     >
       <View style={styles.assetsModalOverlay}>
-        <View style={styles.assetsModalContainer}>
+        <View style={[
+              styles.assetsModalContainer,
+              // Web-only: constrain width to 50% and center horizontally
+              Platform.OS === 'web' && {
+                width: '50%',
+                alignSelf: 'center',
+              },
+            ]}>
           <View style={styles.assetsModalHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
               <MaterialIcons name="health-and-safety" size={24} color={WHATSAPP_COLORS.primary} />

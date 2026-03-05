@@ -66,25 +66,25 @@ interface AssetsProps {
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
 const C = {
-  bg:           '#ECE5DD',
-  surface:      '#FFFFFF',
-  headerBg:     '#075E54',
-  headerText:   '#FFFFFF',
-  accent:       '#00A884',
-  accentLight:  '#DCF8C6',
-  success:      '#25D366',
+  bg: '#ECE5DD',
+  surface: '#FFFFFF',
+  headerBg: '#075E54',
+  headerText: '#FFFFFF',
+  accent: '#00A884',
+  accentLight: '#DCF8C6',
+  success: '#25D366',
   successLight: '#E8FBF0',
-  danger:       '#DC2626',
-  dangerLight:  '#FEF2F2',
-  warning:      '#D97706',
+  danger: '#DC2626',
+  dangerLight: '#FEF2F2',
+  warning: '#D97706',
   warningLight: '#FFFBEB',
-  textPrimary:  '#111827',
-  textSecondary:'#6B7280',
+  textPrimary: '#111827',
+  textSecondary: '#6B7280',
   textTertiary: '#9CA3AF',
-  border:       '#E5E7EB',
-  borderFocus:  '#00A884',
-  serialBadge:  '#E8F5E9',
-  serialText:   '#075E54',
+  border: '#E5E7EB',
+  borderFocus: '#00A884',
+  serialBadge: '#E8F5E9',
+  serialText: '#075E54',
 };
 
 // ─── Small reusable components ────────────────────────────────────────────────
@@ -695,16 +695,28 @@ const AssetsModal: React.FC<AssetsProps> = ({
         onRequestClose={onClose}
         statusBarTranslucent
       >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <Animated.View style={{
-            flex: 1,
-            backgroundColor: C.bg,
-            marginTop: 52,
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            overflow: 'hidden',
-            transform: [{ translateY: slideAnim }],
-          }}>
+        <View style={[{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)'},
+          // Web-only: constrain to 50% width
+          Platform.OS === 'web' && {
+             alignItems: 'center' 
+          }
+        ]}>
+          <Animated.View style={[
+            {
+              flex: 1,
+              backgroundColor: C.bg,
+              marginTop: 52,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              overflow: 'hidden',
+              transform: [{ translateY: slideAnim }],
+            },
+            // Web-only: constrain to 50% width
+            Platform.OS === 'web' && {
+              width: '50%',
+              flex: undefined,
+            },
+          ]}>
             {/* ── Header ── */}
             <View style={{
               backgroundColor: C.headerBg,
