@@ -11,7 +11,8 @@ import {
   TextInput,
   Image,
   Platform,
-  Linking
+  Linking,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -19,12 +20,10 @@ import { BACKEND_URL } from '../../config/config';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
 import alert from '../../utils/Alert';
-
 interface Employee {
   employee_id: string;
   full_name: string;
 }
-
 interface MediclaimProps {
   visible: boolean;
   onClose: () => void;
@@ -32,7 +31,6 @@ interface MediclaimProps {
   token: string;
   onRefresh?: () => void;
 }
-
 interface MediclaimData {
   id: number;
   policy_number: string;
@@ -51,7 +49,6 @@ interface MediclaimData {
   created_at: string;
   family?: any[];
 }
-
 const MediclaimModal: React.FC<MediclaimProps> = ({
   visible,
   onClose,
@@ -64,7 +61,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
   const [modalMode, setModalMode] = useState<'view' | 'create' | 'edit'>('view');
   const [isEditing, setIsEditing] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-
   // Form data
   const [formData, setFormData] = useState({
     policy_number: '',
@@ -73,13 +69,11 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
     base_cover: '',
     optional_top_up_cover: '',
   });
-
   useEffect(() => {
     if (visible) {
       fetchMediclaimData();
     }
   }, [visible]);
-
   useEffect(() => {
     // Reset state when modal closes
     if (!visible) {
@@ -87,7 +81,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       setIsEditing(false);
     }
   }, [visible]);
-
   const fetchMediclaimData = async () => {
     setLoading(true);
     try {
@@ -99,9 +92,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
           employee_id: employee.employee_id
         }),
       });
-
       const data = await response.json();
-
       if (response.ok && data.data) {
         setMediclaimData(data.data);
         setFormData({
@@ -121,15 +112,12 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       setLoading(false);
     }
   };
-
   const handleCreateMediclaim = async () => {
-    if (!formData.policy_number || !formData.insurance_provider_name ||
-      !formData.sum_insured_opted || !formData.base_cover ||
-      !formData.optional_top_up_cover) {
-      alert('Error', 'Please fill all required fields');
+    // Only policy_number, insurance_provider_name, and sum_insured_opted are required
+    if (!formData.policy_number || !formData.insurance_provider_name || !formData.sum_insured_opted) {
+      alert('Error', 'Please fill all required fields (Policy Number, Insurance Provider, Sum Insured)');
       return;
     }
-
     setActionLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/manager/addMediclaim`, {
@@ -141,13 +129,12 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
           policy_number: formData.policy_number,
           insurance_provider_name: formData.insurance_provider_name,
           sum_insured_opted: parseFloat(formData.sum_insured_opted),
-          base_cover: parseFloat(formData.base_cover),
-          optional_top_up_cover: parseFloat(formData.optional_top_up_cover),
+          // Send null if empty so backend handles gracefully
+          base_cover: formData.base_cover ? parseFloat(formData.base_cover) : null,
+          optional_top_up_cover: formData.optional_top_up_cover ? parseFloat(formData.optional_top_up_cover) : null,
         }),
       });
-
       const data = await response.json();
-
       if (response.ok) {
         alert(
           'Success',
@@ -177,15 +164,12 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       setActionLoading(false);
     }
   };
-
   const handleUpdateMediclaim = async () => {
-    if (!formData.policy_number || !formData.insurance_provider_name ||
-      !formData.sum_insured_opted || !formData.base_cover ||
-      !formData.optional_top_up_cover) {
-      alert('Error', 'Please fill all required fields');
+    // Only policy_number, insurance_provider_name, and sum_insured_opted are required
+    if (!formData.policy_number || !formData.insurance_provider_name || !formData.sum_insured_opted) {
+      alert('Error', 'Please fill all required fields (Policy Number, Insurance Provider, Sum Insured)');
       return;
     }
-
     setActionLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/manager/updateMediclaim`, {
@@ -197,13 +181,11 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
           policy_number: formData.policy_number,
           insurance_provider_name: formData.insurance_provider_name,
           sum_insured_opted: parseFloat(formData.sum_insured_opted),
-          base_cover: parseFloat(formData.base_cover),
-          optional_top_up_cover: parseFloat(formData.optional_top_up_cover),
+          base_cover: formData.base_cover ? parseFloat(formData.base_cover) : null,
+          optional_top_up_cover: formData.optional_top_up_cover ? parseFloat(formData.optional_top_up_cover) : null,
         }),
       });
-
       const data = await response.json();
-
       if (response.ok) {
         alert('Success', 'Mediclaim updated successfully');
         setIsEditing(false);
@@ -220,25 +202,20 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       setActionLoading(false);
     }
   };
-
   const handleSignMediclaim = async () => {
     if (!mediclaimData?.employee_signature) {
       alert('Error', 'Employee has not signed the mediclaim yet');
       return;
     }
-
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ['image/*', 'application/pdf'],
         copyToCacheDirectory: true,
       });
-
       if (result.canceled || !result.assets || result.assets.length === 0) {
         return;
       }
-
       const signatureFile = result.assets[0];
-
       alert(
         'Confirm Signature',
         'Once signed, this mediclaim cannot be edited. Continue?',
@@ -256,16 +233,13 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       alert('Error', 'Failed to pick signature file');
     }
   };
-
   const uploadSignature = async (signatureFile: any) => {
     setActionLoading(true);
     try {
       const formDataToSend = new FormData();
       formDataToSend.append('token', token);
       formDataToSend.append('employee_id', employee.employee_id);
-
       if (Platform.OS === 'web') {
-        // For web, fetch the blob and create a File object
         const response = await fetch(signatureFile.uri);
         const blob = await response.blob();
         const file = new File([blob], signatureFile.name || 'signature.jpg', {
@@ -273,14 +247,12 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
         });
         formDataToSend.append('signature', file);
       } else {
-        // For mobile
         formDataToSend.append('signature', {
           uri: signatureFile.uri,
           type: signatureFile.mimeType || 'image/jpeg',
           name: signatureFile.name || 'signature.jpg',
         } as any);
       }
-
       const response = await fetch(`${BACKEND_URL}/manager/signMediclaim`, {
         method: 'POST',
         body: formDataToSend,
@@ -288,9 +260,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
           'Content-Type': 'multipart/form-data',
         },
       });
-
       const data = await response.json();
-
       if (response.ok) {
         alert(
           'Success',
@@ -312,7 +282,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       setActionLoading(false);
     }
   };
-
   const handleViewDocument = async (url: string) => {
     try {
       const supported = await Linking.canOpenURL(url);
@@ -326,7 +295,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       alert('Error', 'Failed to open document');
     }
   };
-
   const handleCancelEdit = () => {
     setIsEditing(false);
     if (mediclaimData) {
@@ -339,7 +307,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       });
     }
   };
-
   const formatDate = (dateString: string | null | undefined): string => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -349,7 +316,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       year: 'numeric'
     });
   };
-
   const getPolicyColor = () => {
     if (!mediclaimData) return WHATSAPP_COLORS.primary;
     const provider = mediclaimData.insurance_provider_name?.toLowerCase() || '';
@@ -359,11 +325,9 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
     if (provider.includes('star')) return '#4ECDC4';
     return WHATSAPP_COLORS.primary;
   };
-
   const canEdit = mediclaimData?.update_allowed && !mediclaimData?.sig_and_stamp;
   const isVerified = !!mediclaimData?.sig_and_stamp;
   const canSign = mediclaimData?.employee_signature && !mediclaimData?.sig_and_stamp;
-
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
       <MaterialIcons name="health-and-safety" size={64} color={WHATSAPP_COLORS.textTertiary} />
@@ -380,7 +344,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       </TouchableOpacity>
     </View>
   );
-
   const renderPendingAction = () => (
     <View style={styles.sectionAlt}>
       <View style={[styles.statusBanner, { backgroundColor: '#FF9500' }]}>
@@ -397,11 +360,84 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
     </View>
   );
 
+  /**
+   * Shared form fields used in both Create and Edit modes.
+   * Extracted to avoid duplication and keep label logic in one place.
+   */
+  const renderFormFields = () => (
+    <>
+      <Text style={styles.editLabel}>Policy Number *</Text>
+      <TextInput
+        style={styles.editInput}
+        value={formData.policy_number}
+        onChangeText={(text) => setFormData({ ...formData, policy_number: text })}
+        placeholder="POL-123456"
+        placeholderTextColor="#888"
+        returnKeyType="next"
+      />
+
+      <Text style={styles.editLabel}>Insurance Provider *</Text>
+      <TextInput
+        style={styles.editInput}
+        value={formData.insurance_provider_name}
+        onChangeText={(text) => setFormData({ ...formData, insurance_provider_name: text })}
+        placeholder="Insurance Company Name"
+        placeholderTextColor="#888"
+        returnKeyType="next"
+      />
+
+      <Text style={styles.editLabel}>Sum Insured (₹) *</Text>
+      <TextInput
+        style={styles.editInput}
+        value={formData.sum_insured_opted}
+        onChangeText={(text) => setFormData({ ...formData, sum_insured_opted: text })}
+        placeholder="500000"
+        keyboardType="numeric"
+        placeholderTextColor="#888"
+        returnKeyType="next"
+      />
+
+      {/* Optional fields — clearly labelled as optional */}
+      <Text style={styles.editLabel}>
+        Base Cover (₹){' '}
+        <Text style={{ color: '#888', fontWeight: '400', fontSize: 12 }}>(optional)</Text>
+      </Text>
+      <TextInput
+        style={styles.editInput}
+        value={formData.base_cover}
+        onChangeText={(text) => setFormData({ ...formData, base_cover: text })}
+        placeholder="300000"
+        keyboardType="numeric"
+        placeholderTextColor="#888"
+        returnKeyType="next"
+      />
+
+      <Text style={styles.editLabel}>
+        Optional Top-up Cover (₹){' '}
+        <Text style={{ color: '#888', fontWeight: '400', fontSize: 12 }}>(optional)</Text>
+      </Text>
+      <TextInput
+        style={styles.editInput}
+        value={formData.optional_top_up_cover}
+        onChangeText={(text) => setFormData({ ...formData, optional_top_up_cover: text })}
+        placeholder="200000"
+        keyboardType="numeric"
+        placeholderTextColor="#888"
+        returnKeyType="done"
+      />
+    </>
+  );
+
   const renderMediclaimDetails = () => {
     const policyColor = getPolicyColor();
-
     return (
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        // Extra bottom padding so content clears keyboard when scrolled
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
         {/* Status Banner - Only show if verified */}
         {isVerified && (
           <View style={[styles.statusBanner, {
@@ -419,14 +455,12 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
             </View>
           </View>
         )}
-
         {/* Employee Signature Status */}
         {!mediclaimData?.employee_signature && (
           <View style={{ padding: 16 }}>
             {renderPendingAction()}
           </View>
         )}
-
         {/* Policy Details */}
         <View style={[styles.sectionAlt, { marginTop: 20 }]}>
           <View style={styles.sectionHeader}>
@@ -452,58 +486,9 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
               </TouchableOpacity>
             )}
           </View>
-
           <View style={styles.detailCard}>
             {isEditing ? (
-              <>
-                <Text style={styles.editLabel}>Policy Number *</Text>
-                <TextInput
-                  style={styles.editInput}
-                  value={formData.policy_number}
-                  onChangeText={(text) => setFormData({ ...formData, policy_number: text })}
-                  placeholder="Enter policy number"
-                  placeholderTextColor="#888"
-                />
-
-                <Text style={styles.editLabel}>Insurance Provider *</Text>
-                <TextInput
-                  style={styles.editInput}
-                  value={formData.insurance_provider_name}
-                  onChangeText={(text) => setFormData({ ...formData, insurance_provider_name: text })}
-                  placeholder="Enter provider name"
-                  placeholderTextColor="#888"
-                />
-
-                <Text style={styles.editLabel}>Sum Insured (₹) *</Text>
-                <TextInput
-                  style={styles.editInput}
-                  value={formData.sum_insured_opted}
-                  onChangeText={(text) => setFormData({ ...formData, sum_insured_opted: text })}
-                  placeholder="500000"
-                  keyboardType="numeric"
-                  placeholderTextColor="#888"
-                />
-
-                <Text style={styles.editLabel}>Base Cover (₹) *</Text>
-                <TextInput
-                  style={styles.editInput}
-                  value={formData.base_cover}
-                  onChangeText={(text) => setFormData({ ...formData, base_cover: text })}
-                  placeholder="300000"
-                  keyboardType="numeric"
-                  placeholderTextColor="#888"
-                />
-
-                <Text style={styles.editLabel}>Optional Top-up Cover (₹) *</Text>
-                <TextInput
-                  style={styles.editInput}
-                  value={formData.optional_top_up_cover}
-                  onChangeText={(text) => setFormData({ ...formData, optional_top_up_cover: text })}
-                  placeholder="200000"
-                  keyboardType="numeric"
-                  placeholderTextColor="#888"
-                />
-              </>
+              renderFormFields()
             ) : (
               <>
                 <View style={styles.detailRow}>
@@ -511,9 +496,7 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
                   <Text style={styles.detailLabel}>Policy Number</Text>
                   <Text style={styles.detailValue}>{mediclaimData?.policy_number}</Text>
                 </View>
-
                 <View style={styles.detailDivider} />
-
                 <View style={styles.detailRow}>
                   <MaterialIcons name="business" size={18} color="#666" />
                   <Text style={styles.detailLabel}>Provider</Text>
@@ -521,33 +504,29 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
                     {mediclaimData?.insurance_provider_name}
                   </Text>
                 </View>
-
                 <View style={styles.detailDivider} />
-
                 <View style={styles.detailRow}>
                   <MaterialIcons name="attach-money" size={18} color="#666" />
                   <Text style={styles.detailLabel}>Sum Insured</Text>
                   <Text style={styles.detailValue}>₹{mediclaimData?.sum_insured_opted}</Text>
                 </View>
-
                 <View style={styles.detailDivider} />
-
                 <View style={styles.detailRow}>
                   <MaterialIcons name="shield" size={18} color="#666" />
                   <Text style={styles.detailLabel}>Base Cover</Text>
-                  <Text style={styles.detailValue}>₹{mediclaimData?.base_cover}</Text>
+                  <Text style={styles.detailValue}>
+                    {mediclaimData?.base_cover ? `₹${mediclaimData.base_cover}` : 'N/A'}
+                  </Text>
                 </View>
-
                 <View style={styles.detailDivider} />
-
                 <View style={styles.detailRow}>
                   <MaterialIcons name="add-circle" size={18} color="#666" />
                   <Text style={styles.detailLabel}>Top-up Cover</Text>
-                  <Text style={styles.detailValue}>₹{mediclaimData?.optional_top_up_cover}</Text>
+                  <Text style={styles.detailValue}>
+                    {mediclaimData?.optional_top_up_cover ? `₹${mediclaimData.optional_top_up_cover}` : 'N/A'}
+                  </Text>
                 </View>
-
                 <View style={styles.detailDivider} />
-
                 <View style={styles.detailRow}>
                   <MaterialIcons name="calendar-today" size={18} color="#666" />
                   <Text style={styles.detailLabel}>Created On</Text>
@@ -557,7 +536,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
             )}
           </View>
         </View>
-
         {/* Nominee Details */}
         {mediclaimData?.nominee_name && (
           <View style={styles.sectionAlt}>
@@ -565,7 +543,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
               <MaterialIcons name="person" size={20} color="#FF6B6B" style={{ marginRight: 8, marginTop: 2 }} />
               <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Nominee Details</Text>
             </View>
-
             <View style={styles.detailCard}>
               <View style={styles.detailRow}>
                 <MaterialIcons name="person-outline" size={18} color="#666" />
@@ -574,7 +551,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
                   {mediclaimData.nominee_name}
                 </Text>
               </View>
-
               {mediclaimData.nominee_relationship && (
                 <>
                   <View style={styles.detailDivider} />
@@ -585,7 +561,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
                   </View>
                 </>
               )}
-
               {mediclaimData.nominee_date_of_birth && (
                 <>
                   <View style={styles.detailDivider} />
@@ -601,7 +576,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
             </View>
           </View>
         )}
-
         {/* Family Members */}
         {mediclaimData?.family && mediclaimData.family.length > 0 && (
           <View style={styles.sectionAlt}>
@@ -611,7 +585,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
                 Family Members ({mediclaimData.family.length})
               </Text>
             </View>
-
             {mediclaimData.family.map((member: any, index: number) => (
               <View key={index} style={[styles.familyCard, { borderLeftColor: '#4ECDC4' }]}>
                 <View style={styles.familyHeader}>
@@ -627,7 +600,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
                     <Text style={styles.memberRelationship}>{member.relationship}</Text>
                   </View>
                 </View>
-
                 <View style={styles.familyDetails}>
                   <View style={styles.detailBadge}>
                     <Ionicons name="calendar-outline" size={14} color="#666" />
@@ -648,7 +620,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
             ))}
           </View>
         )}
-
         {/* Employee Signature */}
         {mediclaimData?.employee_signature && (
           <View style={styles.sectionAlt}>
@@ -672,7 +643,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
             </View>
           </View>
         )}
-
         {/* HR Signature */}
         {mediclaimData?.sig_and_stamp && (
           <View style={styles.sectionAlt}>
@@ -700,7 +670,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
             </View>
           </View>
         )}
-
         {/* Action Buttons */}
         {isEditing ? (
           <View style={styles.actionContainer}>
@@ -711,7 +680,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               onPress={handleUpdateMediclaim}
               style={[
@@ -759,14 +727,17 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
             </TouchableOpacity>
           </View>
         )}
-
         <View style={styles.bottomSpacer} />
       </ScrollView>
     );
   };
-
   const renderCreateForm = () => (
-    <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.content}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingBottom: 40 }}
+    >
       {/* Info Banner */}
       <View style={[styles.statusBanner, { backgroundColor: '#4ECDC4', margin: 16 }]}>
         <View style={styles.statusIcon}>
@@ -779,69 +750,19 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
           </Text>
         </View>
       </View>
-
       {/* Form Section */}
       <View style={[styles.sectionAlt, { marginTop: 0 }]}>
         <View style={styles.sectionHeader}>
           <MaterialIcons name="policy" size={20} color={WHATSAPP_COLORS.primary} style={{ marginRight: 8, marginTop: 2 }} />
           <Text style={[styles.sectionTitleAlt, { fontSize: 20 }]}>Policy Information</Text>
         </View>
-
         <View style={styles.detailCard}>
-          <Text style={styles.editLabel}>Policy Number *</Text>
-          <TextInput
-            style={styles.editInput}
-            value={formData.policy_number}
-            onChangeText={(text) => setFormData({ ...formData, policy_number: text })}
-            placeholder="POL-123456"
-            placeholderTextColor="#888"
-          />
-
-          <Text style={styles.editLabel}>Insurance Provider *</Text>
-          <TextInput
-            style={styles.editInput}
-            value={formData.insurance_provider_name}
-            onChangeText={(text) => setFormData({ ...formData, insurance_provider_name: text })}
-            placeholder="Insurance Company Name"
-            placeholderTextColor="#888"
-          />
-
-          <Text style={styles.editLabel}>Sum Insured (₹) *</Text>
-          <TextInput
-            style={styles.editInput}
-            value={formData.sum_insured_opted}
-            onChangeText={(text) => setFormData({ ...formData, sum_insured_opted: text })}
-            placeholder="500000"
-            keyboardType="numeric"
-            placeholderTextColor="#888"
-          />
-
-          <Text style={styles.editLabel}>Base Cover (₹) *</Text>
-          <TextInput
-            style={styles.editInput}
-            value={formData.base_cover}
-            onChangeText={(text) => setFormData({ ...formData, base_cover: text })}
-            placeholder="300000"
-            keyboardType="numeric"
-            placeholderTextColor="#888"
-          />
-
-          <Text style={styles.editLabel}>Optional Top-up Cover (₹) *</Text>
-          <TextInput
-            style={styles.editInput}
-            value={formData.optional_top_up_cover}
-            onChangeText={(text) => setFormData({ ...formData, optional_top_up_cover: text })}
-            placeholder="200000"
-            keyboardType="numeric"
-            placeholderTextColor="#888"
-          />
+          {renderFormFields()}
         </View>
       </View>
-
       <View style={styles.bottomSpacer} />
     </ScrollView>
   );
-
   return (
     <Modal
       visible={visible}
@@ -850,14 +771,19 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
       onRequestClose={onClose}
     >
       <View style={styles.assetsModalOverlay}>
-        <View style={[
-              styles.assetsModalContainer,
-              // Web-only: constrain width to 50% and center horizontally
-              Platform.OS === 'web' && {
-                width: '50%',
-                alignSelf: 'center',
-              },
-            ]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={[
+            styles.assetsModalContainer,
+            Platform.OS === 'web' && {
+              width: '50%',
+              alignSelf: 'center',
+            },
+          ]}
+          // On iOS the modal itself offsets; tweak keyboardVerticalOffset if
+          // your header height differs. 0 is correct for most full-height modals.
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
           <View style={styles.assetsModalHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
               <MaterialIcons name="health-and-safety" size={24} color={WHATSAPP_COLORS.primary} />
@@ -880,7 +806,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
               <Ionicons name="close" size={28} color={WHATSAPP_COLORS.textPrimary} />
             </TouchableOpacity>
           </View>
-
           {modalMode === 'view' ? (
             loading && !mediclaimData ? (
               <View style={styles.loadingContainer}>
@@ -895,7 +820,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
           ) : (
             renderCreateForm()
           )}
-
           {modalMode === 'create' && (
             <View style={[styles.actionContainer, { marginBottom: 16 }]}>
               <TouchableOpacity
@@ -914,7 +838,6 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={[
                   styles.actionButtonLarge,
@@ -936,10 +859,9 @@ const MediclaimModal: React.FC<MediclaimProps> = ({
               </TouchableOpacity>
             </View>
           )}
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
 };
-
 export default MediclaimModal;
