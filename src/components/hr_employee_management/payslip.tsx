@@ -402,7 +402,10 @@ const PayslipModal: React.FC<PayslipProps> = ({
       onRequestClose={onClose}
     >
       <View style={styles.assetsModalOverlay}>
-        <View style={styles.assetsModalContainer}>
+        <View style={[styles.assetsModalContainer,Platform.OS === 'web' && {
+                width: '50%',
+                alignSelf: 'center',
+              }]}>
           <View style={styles.assetsModalHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
               <Ionicons name="document-text-outline" size={24} color={WHATSAPP_COLORS.primary} />

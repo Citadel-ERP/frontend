@@ -13,9 +13,13 @@ import {
     Platform,
     Modal,
     Linking,
+    Keyboard,
+    KeyboardEvent,
+    Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { styles } from './styles';
@@ -119,15 +123,55 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
     const [showStatusSelector, setShowStatusSelector] = useState(false);
     const [currentUserName, setCurrentUserName] = useState<string>('HR Manager');
     const [currentUserEmailLocal, setCurrentUserEmailLocal] = useState<string>('');
+    const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
-    // Set local comments when item changes
+    // Animated value for Android keyboard push — same pattern as LeadDetails
+    const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
+
+    // ─── Keyboard listeners ────────────────────────────────────────────────────
+    useEffect(() => {
+        const showSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+            handleKeyboardShow
+        );
+        const hideSub = Keyboard.addListener(
+            Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+            handleKeyboardHide
+        );
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, []);
+
+    const handleKeyboardShow = (event: KeyboardEvent) => {
+        setIsKeyboardVisible(true);
+        // Animate on both platforms.
+        // iOS fires keyboardWillShow so the animation syncs with the keyboard.
+        // Android fires keyboardDidShow so it catches up immediately after.
+        Animated.timing(keyboardHeightAnim, {
+            toValue: event.endCoordinates.height,
+            duration: 250,
+            useNativeDriver: false,
+        }).start();
+    };
+
+    const handleKeyboardHide = () => {
+        setIsKeyboardVisible(false);
+        Animated.timing(keyboardHeightAnim, {
+            toValue: 0,
+            duration: 250,
+            useNativeDriver: false,
+        }).start();
+    };
+    // ──────────────────────────────────────────────────────────────────────────
+
     useEffect(() => {
         if (item?.comments) {
             setLocalComments(item.comments);
         }
     }, [item?.comments]);
 
-    // Fetch current user info
     useEffect(() => {
         const fetchUserName = async () => {
             if (token) {
@@ -150,7 +194,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
         fetchUserName();
     }, [token]);
 
-    // Auto-scroll on mount and when comments change
     useEffect(() => {
         if (localComments.length > 0 && !loadingDetails) {
             setTimeout(() => {
@@ -225,7 +268,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
     const handleSelectFromGallery = async () => {
         if (isPickerActive) return;
         setIsPickerActive(true);
-
         try {
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
@@ -265,7 +307,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
     const handleSelectDocument = async () => {
         if (isPickerActive) return;
         setIsPickerActive(true);
-
         try {
             const result = await DocumentPicker.getDocumentAsync({
                 type: '*/*',
@@ -323,16 +364,13 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
             }))
         };
 
-        // Add optimistic comment to local state
         setLocalComments(prev => [...prev, optimisticComment]);
         const commentText = newComment;
         const files = [...attachedFiles];
-        
-        // Clear input and files
+
         onCommentChange('');
         setAttachedFiles([]);
 
-        // Scroll to bottom after state updates
         setTimeout(() => {
             scrollToBottom(true);
         }, 100);
@@ -359,21 +397,15 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
 
             const response = await fetch(endpoint, {
                 method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                },
+                headers: { 'Accept': 'application/json' },
                 body: formData,
             });
 
             if (response.ok) {
-                console.log('Comment sent successfully');
-                // ONLY reload if there were attachments, otherwise keep optimistic UI
                 if (files.length > 0) {
-                    onAddComment(); // This will reload to get proper file URLs
+                    onAddComment();
                 }
-                // If no files, the optimistic comment stays as-is (no reload!)
             } else {
-                // Remove optimistic comment on error
                 setLocalComments(prev => prev.filter(c => c.id !== optimisticComment.id));
                 const errorText = await response.text();
                 console.error('Upload error:', errorText);
@@ -382,7 +414,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                 setAttachedFiles(files);
             }
         } catch (error: any) {
-            // Remove optimistic comment on error
             setLocalComments(prev => prev.filter(c => c.id !== optimisticComment.id));
             console.error('Error sending comment:', error);
             Alert.alert('Error', error.message || 'Failed to send comment. Please try again.');
@@ -395,7 +426,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
 
     const handleUpdateStatus = async (status: string) => {
         if (!token || !item) return;
-
         Alert.alert(
             `Update Status to ${getStatusConfig(status).label}`,
             `Are you sure you want to mark this ${activeTab.slice(0, -1)} as ${getStatusConfig(status).label.toLowerCase()}?`,
@@ -441,12 +471,10 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
         const isCurrentUser = comment.created_by_email === currentUserEmailLocal ||
             comment.created_by_email === currentUserEmail;
         return (
-            <View
-                style={[
-                    styles.messageRow,
-                    isCurrentUser ? styles.messageRowRight : styles.messageRowLeft
-                ]}
-            >
+            <View style={[
+                styles.messageRow,
+                isCurrentUser ? styles.messageRowRight : styles.messageRowLeft
+            ]}>
                 {!isCurrentUser && (
                     <View style={styles.otherAvatar}>
                         <Ionicons name="person-circle-outline" size={32} color="#999" />
@@ -512,14 +540,215 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                     )}
                     <Text style={styles.messageText}>{comment.content}</Text>
                     <View style={styles.messageFooter}>
-                        <Text style={styles.messageTime}>
-                            {formatTime(comment.created_at)}
-                        </Text>
+                        <Text style={styles.messageTime}>{formatTime(comment.created_at)}</Text>
                     </View>
                 </View>
             </View>
         );
     };
+
+    // ─── Chat scroll area only (no input bar here) ────────────────────────────
+    const renderChatScrollArea = () => (
+        <View style={styles.chatContainer}>
+            <ScrollView
+                ref={scrollViewRef}
+                style={styles.chatScrollView}
+                contentContainerStyle={styles.chatScrollContent}
+                showsVerticalScrollIndicator={false}
+                onScrollBeginDrag={handleScrollBeginDrag}
+                keyboardShouldPersistTaps="handled"
+            >
+                {/* Info card */}
+                <View style={styles.infoCardCompact}>
+                    <View style={styles.infoHeaderCompact}>
+                        <View style={styles.infoTitleRowCompact}>
+                            <View style={styles.infoIconContainerCompact}>
+                                <Ionicons
+                                    name={activeTab === 'requests' ? 'document-text' : 'alert-circle'}
+                                    size={20}
+                                    color={WHATSAPP_COLORS.white}
+                                />
+                            </View>
+                            <View style={styles.infoTitleContentCompact}>
+                                <Text style={styles.infoTitleCompact} numberOfLines={1}>
+                                    {item!.nature}
+                                </Text>
+                                <Text style={styles.infoStatusCompact}>
+                                    <Text style={{ fontWeight: '600' }}>Status: </Text>
+                                    <Text style={{ color: getStatusConfig(item!.status).color }}>
+                                        {getStatusConfig(item!.status).label}
+                                    </Text>
+                                </Text>
+                            </View>
+                        </View>
+                        {item!.employee_name && (
+                            <Text style={styles.infoEmployeeCompact}>
+                                Submitted by: {item!.employee_name}
+                                {item!.employee_email && ` (${item!.employee_email})`}
+                            </Text>
+                        )}
+                        <View style={styles.infoDateCompact}>
+                            <Ionicons name="calendar-outline" size={12} color={WHATSAPP_COLORS.gray} />
+                            <Text style={styles.infoDateTextCompact}>
+                                Submitted {new Date(item!.created_at).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                })}
+                            </Text>
+                        </View>
+                    </View>
+                    <View style={styles.descriptionContainerCompact}>
+                        <Text style={styles.descriptionLabelCompact}>Description</Text>
+                        <Text style={styles.descriptionTextCompact}>
+                            {item!.description || item!.issue}
+                        </Text>
+                    </View>
+                    <View style={styles.infoFooterCompact}>
+                        <View style={styles.updateInfoCompact}>
+                            <Ionicons name="time-outline" size={12} color={WHATSAPP_COLORS.gray} />
+                            <Text style={styles.infoFooterTextCompact}>
+                                Last updated: {new Date(item!.updated_at).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                })}
+                            </Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* Messages */}
+                <View style={styles.chatMessagesContainer}>
+                    <FlatList
+                        data={getProcessedComments()}
+                        renderItem={renderCommentItem}
+                        keyExtractor={(item) => item.id}
+                        style={styles.messagesList}
+                        contentContainerStyle={styles.messagesListContent}
+                        showsVerticalScrollIndicator={false}
+                        scrollEnabled={false}
+                        ListEmptyComponent={() => (
+                            <View style={styles.noMessages}>
+                                <Ionicons name="chatbubble-ellipses-outline" size={48} color={WHATSAPP_COLORS.gray} />
+                                <Text style={styles.noMessagesTitle}>No messages yet</Text>
+                                <Text style={styles.noMessagesText}>
+                                    Start the conversation by sending a message
+                                </Text>
+                            </View>
+                        )}
+                    />
+                </View>
+            </ScrollView>
+        </View>
+    );
+
+    // ─── Attached files preview ───────────────────────────────────────────────
+    const renderAttachedFilesPreview = () => {
+        if (attachedFiles.length === 0) return null;
+        return (
+            <View style={styles.attachedFilesPreview}>
+                <Text style={styles.attachedFilesTitle}>Attached Files ({attachedFiles.length}):</Text>
+                {attachedFiles.map((file, index) => {
+                    if (file.type === 'image') {
+                        return (
+                            <View key={`attached-image-${index}-${file.name}`} style={styles.previewImageWrapper}>
+                                <Image
+                                    source={{ uri: file.uri }}
+                                    style={styles.previewImage}
+                                    resizeMode="cover"
+                                />
+                                <TouchableOpacity
+                                    style={styles.removeFileButton}
+                                    onPress={() => removeAttachedFile(index)}
+                                >
+                                    <Ionicons name="close-circle" size={24} color={WHATSAPP_COLORS.red} />
+                                </TouchableOpacity>
+                            </View>
+                        );
+                    } else {
+                        return (
+                            <View key={`attached-doc-${index}-${file.name}`} style={styles.previewDocumentItem}>
+                                <Ionicons name="document-text" size={24} color={WHATSAPP_COLORS.primary} />
+                                <View style={styles.previewDocumentInfo}>
+                                    <Text style={styles.previewDocumentName} numberOfLines={1}>
+                                        {file.name}
+                                    </Text>
+                                    <Text style={styles.previewDocumentSize}>
+                                        {formatFileSize(file.size)}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity onPress={() => removeAttachedFile(index)}>
+                                    <Ionicons name="close-circle" size={24} color={WHATSAPP_COLORS.red} />
+                                </TouchableOpacity>
+                            </View>
+                        );
+                    }
+                })}
+            </View>
+        );
+    };
+
+    // ─── Input bar ────────────────────────────────────────────────────────────
+    const renderInputBar = () => (
+        <View style={styles.chatInputContainer}>
+            <View style={styles.chatInputWrapper}>
+                <TouchableOpacity
+                    style={styles.attachmentButton}
+                    onPress={() => setShowAttachmentModal(true)}
+                    disabled={uploadingFile || isPickerActive}
+                >
+                    {uploadingFile ? (
+                        <ActivityIndicator size="small" color={WHATSAPP_COLORS.gray} />
+                    ) : (
+                        <>
+                            <Ionicons name="attach" size={24} color={WHATSAPP_COLORS.gray} />
+                            {attachedFiles.length > 0 && (
+                                <View style={styles.imageCounterBadge}>
+                                    <Text style={styles.imageCounterText}>{attachedFiles.length}</Text>
+                                </View>
+                            )}
+                        </>
+                    )}
+                </TouchableOpacity>
+                <View style={styles.inputFieldContainer}>
+                    <TextInput
+                        style={styles.chatInput}
+                        value={newComment}
+                        onChangeText={onCommentChange}
+                        placeholder="Type a message..."
+                        placeholderTextColor="#999"
+                        multiline
+                        maxLength={300}
+                    />
+                </View>
+                <TouchableOpacity
+                    style={[
+                        styles.sendButton,
+                        (newComment.trim() || attachedFiles.length > 0)
+                            ? styles.sendButtonActive
+                            : styles.sendButtonDisabled
+                    ]}
+                    onPress={handleSendComment}
+                    disabled={(!newComment.trim() && attachedFiles.length === 0) || uploadingFile}
+                    activeOpacity={0.8}
+                >
+                    {uploadingFile ? (
+                        <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
+                    ) : (
+                        <Ionicons
+                            name="send"
+                            size={20}
+                            color={(newComment.trim() || attachedFiles.length > 0)
+                                ? WHATSAPP_COLORS.white
+                                : WHATSAPP_COLORS.gray}
+                        />
+                    )}
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
 
     const renderContent = () => {
         if (loadingDetails) {
@@ -543,194 +772,17 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
             );
         }
 
+        // Both Android and iOS use the same Animated.View push approach.
+        // iOS uses keyboardWillShow (fires before keyboard appears) → perfectly smooth.
+        // Android uses keyboardDidShow → catches up immediately after keyboard shows.
         return (
-            <>
-                <View style={styles.chatContainer}>
-                    <ScrollView
-                        ref={scrollViewRef}
-                        style={styles.chatScrollView}
-                        contentContainerStyle={styles.chatScrollContent}
-                        showsVerticalScrollIndicator={false}
-                        onScrollBeginDrag={handleScrollBeginDrag}
-                    >
-                        <View style={styles.infoCardCompact}>
-                            <View style={styles.infoHeaderCompact}>
-                                <View style={styles.infoTitleRowCompact}>
-                                    <View style={styles.infoIconContainerCompact}>
-                                        <Ionicons
-                                            name={activeTab === 'requests' ? 'document-text' : 'alert-circle'}
-                                            size={20}
-                                            color={WHATSAPP_COLORS.white}
-                                        />
-                                    </View>
-                                    <View style={styles.infoTitleContentCompact}>
-                                        <Text style={styles.infoTitleCompact} numberOfLines={1}>
-                                            {item.nature}
-                                        </Text>
-                                        <Text style={styles.infoStatusCompact}>
-                                            <Text style={{ fontWeight: '600' }}>Status: </Text>
-                                            <Text style={{ color: getStatusConfig(item.status).color }}>
-                                                {getStatusConfig(item.status).label}
-                                            </Text>
-                                        </Text>
-                                    </View>
-                                </View>
-                                {item.employee_name && (
-                                    <Text style={styles.infoEmployeeCompact}>
-                                        Submitted by: {item.employee_name}
-                                        {item.employee_email && ` (${item.employee_email})`}
-                                    </Text>
-                                )}
-                                <View style={styles.infoDateCompact}>
-                                    <Ionicons name="calendar-outline" size={12} color={WHATSAPP_COLORS.gray} />
-                                    <Text style={styles.infoDateTextCompact}>
-                                        Submitted {new Date(item.created_at).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            year: 'numeric'
-                                        })}
-                                    </Text>
-                                </View>
-                            </View>
-                            <View style={styles.descriptionContainerCompact}>
-                                <Text style={styles.descriptionLabelCompact}>Description</Text>
-                                <Text style={styles.descriptionTextCompact}>
-                                    {item.description || item.issue}
-                                </Text>
-                            </View>
-                            <View style={styles.infoFooterCompact}>
-                                <View style={styles.updateInfoCompact}>
-                                    <Ionicons name="time-outline" size={12} color={WHATSAPP_COLORS.gray} />
-                                    <Text style={styles.infoFooterTextCompact}>
-                                        Last updated: {new Date(item.updated_at).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit'
-                                        })}
-                                    </Text>
-                                </View>
-                            </View>
-                        </View>
-
-                        <View style={styles.chatMessagesContainer}>
-                            <FlatList
-                                data={getProcessedComments()}
-                                renderItem={renderCommentItem}
-                                keyExtractor={(item) => item.id}
-                                style={styles.messagesList}
-                                contentContainerStyle={styles.messagesListContent}
-                                showsVerticalScrollIndicator={false}
-                                scrollEnabled={false}
-                                ListEmptyComponent={() => (
-                                    <View style={styles.noMessages}>
-                                        <Ionicons name="chatbubble-ellipses-outline" size={48} color={WHATSAPP_COLORS.gray} />
-                                        <Text style={styles.noMessagesTitle}>No messages yet</Text>
-                                        <Text style={styles.noMessagesText}>
-                                            Start the conversation by sending a message
-                                        </Text>
-                                    </View>
-                                )}
-                            />
-                        </View>
-                    </ScrollView>
-                </View>
-
-                {attachedFiles.length > 0 && (
-                    <View style={styles.attachedFilesPreview}>
-                        <Text style={styles.attachedFilesTitle}>Attached Files ({attachedFiles.length}):</Text>
-                        {attachedFiles.map((file, index) => {
-                            if (file.type === 'image') {
-                                return (
-                                    <View key={`attached-image-${index}-${file.name}`} style={styles.previewImageWrapper}>
-                                        <Image
-                                            source={{ uri: file.uri }}
-                                            style={styles.previewImage}
-                                            resizeMode="cover"
-                                        />
-                                        <TouchableOpacity
-                                            style={styles.removeFileButton}
-                                            onPress={() => removeAttachedFile(index)}
-                                        >
-                                            <Ionicons name="close-circle" size={24} color={WHATSAPP_COLORS.red} />
-                                        </TouchableOpacity>
-                                    </View>
-                                );
-                            } else {
-                                return (
-                                    <View key={`attached-doc-${index}-${file.name}`} style={styles.previewDocumentItem}>
-                                        <Ionicons name="document-text" size={24} color={WHATSAPP_COLORS.primary} />
-                                        <View style={styles.previewDocumentInfo}>
-                                            <Text style={styles.previewDocumentName} numberOfLines={1}>
-                                                {file.name}
-                                            </Text>
-                                            <Text style={styles.previewDocumentSize}>
-                                                {formatFileSize(file.size)}
-                                            </Text>
-                                        </View>
-                                        <TouchableOpacity onPress={() => removeAttachedFile(index)}>
-                                            <Ionicons name="close-circle" size={24} color={WHATSAPP_COLORS.red} />
-                                        </TouchableOpacity>
-                                    </View>
-                                );
-                            }
-                        })}
-                    </View>
-                )}
-
-                <View style={styles.chatInputContainer}>
-                    <View style={styles.chatInputWrapper}>
-                        <TouchableOpacity
-                            style={styles.attachmentButton}
-                            onPress={() => setShowAttachmentModal(true)}
-                            disabled={uploadingFile || isPickerActive}
-                        >
-                            {uploadingFile ? (
-                                <ActivityIndicator size="small" color={WHATSAPP_COLORS.gray} />
-                            ) : (
-                                <>
-                                    <Ionicons name="attach" size={24} color={WHATSAPP_COLORS.gray} />
-                                    {attachedFiles.length > 0 && (
-                                        <View style={styles.imageCounterBadge}>
-                                            <Text style={styles.imageCounterText}>{attachedFiles.length}</Text>
-                                        </View>
-                                    )}
-                                </>
-                            )}
-                        </TouchableOpacity>
-                        <View style={styles.inputFieldContainer}>
-                            <TextInput
-                                style={styles.chatInput}
-                                value={newComment}
-                                onChangeText={onCommentChange}
-                                placeholder="Type a message..."
-                                placeholderTextColor="#999"
-                                multiline
-                                maxLength={300}
-                            />
-                        </View>
-                        <TouchableOpacity
-                            style={[
-                                styles.sendButton,
-                                (newComment.trim() || attachedFiles.length > 0) ? styles.sendButtonActive : styles.sendButtonDisabled
-                            ]}
-                            onPress={handleSendComment}
-                            disabled={(!newComment.trim() && attachedFiles.length === 0) || uploadingFile}
-                            activeOpacity={0.8}
-                        >
-                            {uploadingFile ? (
-                                <ActivityIndicator color={WHATSAPP_COLORS.white} size="small" />
-                            ) : (
-                                <Ionicons
-                                    name="send"
-                                    size={20}
-                                    color={(newComment.trim() || attachedFiles.length > 0) ? WHATSAPP_COLORS.white : WHATSAPP_COLORS.gray}
-                                />
-                            )}
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </>
+            <View style={{ flex: 1 }}>
+                {renderChatScrollArea()}
+                <Animated.View style={{ marginBottom: keyboardHeightAnim }}>
+                    {renderAttachedFilesPreview()}
+                    {renderInputBar()}
+                </Animated.View>
+            </View>
         );
     };
 
@@ -769,13 +821,12 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                                 <Ionicons name="close" size={24} color={WHATSAPP_COLORS.gray} />
                             </TouchableOpacity>
                         </View>
-
                         <Text style={styles.filterSectionTitle}>
-                            Current status: <Text style={{ color: getStatusConfig(item?.status || '').color }}>
+                            Current status:{' '}
+                            <Text style={{ color: getStatusConfig(item?.status || '').color }}>
                                 {getStatusConfig(item?.status || '').label}
                             </Text>
                         </Text>
-
                         <View style={styles.statusOptions}>
                             {['pending', 'in_progress', 'resolved', 'rejected'].map((status) => (
                                 <TouchableOpacity
@@ -806,18 +857,14 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                 transparent={true}
                 animationType="slide"
                 onRequestClose={() => {
-                    if (!isPickerActive) {
-                        setShowAttachmentModal(false);
-                    }
+                    if (!isPickerActive) setShowAttachmentModal(false);
                 }}
             >
                 <TouchableOpacity
                     style={styles.filterModalOverlay}
                     activeOpacity={1}
                     onPress={() => {
-                        if (!isPickerActive) {
-                            setShowAttachmentModal(false);
-                        }
+                        if (!isPickerActive) setShowAttachmentModal(false);
                     }}
                 >
                     <View style={[styles.filterModalContainer, { paddingBottom: 40 }]}>
@@ -827,7 +874,6 @@ export const RequestInfo: React.FC<RequestInfoProps> = ({
                                 <Ionicons name="close" size={24} color={WHATSAPP_COLORS.gray} />
                             </TouchableOpacity>
                         </View>
-
                         <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingTop: 20 }}>
                             <TouchableOpacity
                                 style={styles.attachmentOption}

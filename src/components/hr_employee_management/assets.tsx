@@ -66,25 +66,25 @@ interface AssetsProps {
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
 const C = {
-  bg:           '#ECE5DD',
-  surface:      '#FFFFFF',
-  headerBg:     '#075E54',
-  headerText:   '#FFFFFF',
-  accent:       '#00A884',
-  accentLight:  '#DCF8C6',
-  success:      '#25D366',
+  bg: '#ECE5DD',
+  surface: '#FFFFFF',
+  headerBg: '#075E54',
+  headerText: '#FFFFFF',
+  accent: '#00A884',
+  accentLight: '#DCF8C6',
+  success: '#25D366',
   successLight: '#E8FBF0',
-  danger:       '#DC2626',
-  dangerLight:  '#FEF2F2',
-  warning:      '#D97706',
+  danger: '#DC2626',
+  dangerLight: '#FEF2F2',
+  warning: '#D97706',
   warningLight: '#FFFBEB',
-  textPrimary:  '#111827',
-  textSecondary:'#6B7280',
+  textPrimary: '#111827',
+  textSecondary: '#6B7280',
   textTertiary: '#9CA3AF',
-  border:       '#E5E7EB',
-  borderFocus:  '#00A884',
-  serialBadge:  '#E8F5E9',
-  serialText:   '#075E54',
+  border: '#E5E7EB',
+  borderFocus: '#00A884',
+  serialBadge: '#E8F5E9',
+  serialText: '#075E54',
 };
 
 // ─── Small reusable components ────────────────────────────────────────────────
@@ -308,6 +308,11 @@ const AvailableAssetRow: React.FC<{
 };
 
 // ─── Serial picker sheet ───────────────────────────────────────────────────────
+// Rendered as an absolute-positioned View INSIDE the main Modal's Animated.View.
+// This is the correct cross-platform approach — iOS only supports one Modal at a
+// time, so nesting a second Modal would silently fail. By keeping this as a plain
+// View overlay inside the same Modal we avoid that constraint entirely, and the
+// behaviour is identical on Android and Web.
 
 const SerialPickerSheet: React.FC<{
   visible: boolean;
@@ -318,32 +323,58 @@ const SerialPickerSheet: React.FC<{
 }> = ({ visible, asset, onClose, onConfirm, loading }) => {
   const [selectedSerialId, setSelectedSerialId] = useState<number | null>(null);
   const slideAnim = useRef(new Animated.Value(400)).current;
+  const backdropOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
       setSelectedSerialId(null);
-      Animated.spring(slideAnim, {
-        toValue: 0, useNativeDriver: true,
-        tension: 65, friction: 11,
-      }).start();
+      Animated.parallel([
+        Animated.spring(slideAnim, {
+          toValue: 0, useNativeDriver: true,
+          tension: 65, friction: 11,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 1, duration: 200, useNativeDriver: true,
+        }),
+      ]).start();
     } else {
-      Animated.timing(slideAnim, {
-        toValue: 400, duration: 200, useNativeDriver: true,
-      }).start();
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 400, duration: 200, useNativeDriver: true,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 0, duration: 200, useNativeDriver: true,
+        }),
+      ]).start();
     }
   }, [visible]);
 
-  if (!asset) return null;
+  // Keep rendering while animating out so the slide-down plays fully.
+  // Only hard-unmount after both visible=false and asset is cleared.
+  if (!visible && !asset) return null;
 
-  const availableSerials = asset.asset_serial_id.filter(s => !s.is_assigned);
+  const availableSerials = asset ? asset.asset_serial_id.filter(s => !s.is_assigned) : [];
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
+    <View
+      pointerEvents={visible ? 'auto' : 'none'}
+      style={{
+        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+        zIndex: 9999,
+      }}
+    >
       {/* Backdrop */}
-      <Pressable
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }}
-        onPress={onClose}
-      />
+      <Animated.View
+        style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.45)',
+          opacity: backdropOpacity,
+        }}
+      >
+        <Pressable style={{ flex: 1 }} onPress={onClose} />
+      </Animated.View>
+
+      {/* Sheet */}
       <Animated.View style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
         backgroundColor: C.surface,
@@ -372,7 +403,7 @@ const SerialPickerSheet: React.FC<{
               Assign Asset
             </Text>
             <Text style={{ fontSize: 13, color: C.textSecondary, marginTop: 2 }}>
-              {asset.asset_name} · {asset.asset_type}
+              {asset?.asset_name} · {asset?.asset_type}
             </Text>
           </View>
           <TouchableOpacity onPress={onClose} style={{ padding: 2 }}>
@@ -532,7 +563,7 @@ const SerialPickerSheet: React.FC<{
           </View>
         </View>
       </Animated.View>
-    </Modal>
+    </View>
   );
 };
 
@@ -576,7 +607,7 @@ const AssetsModal: React.FC<AssetsProps> = ({
       const res = await fetch(`${BACKEND_URL}/manager/getAssets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, employee_id: employee.employee_id }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -684,19 +715,20 @@ const AssetsModal: React.FC<AssetsProps> = ({
     a.asset_type.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const isLoading = loadingAvailable || loadingAssigned;
-
   return (
-    <>
-      <Modal
-        visible={visible}
-        transparent
-        animationType="none"
-        onRequestClose={onClose}
-        statusBarTranslucent
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <Animated.View style={{
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View style={[
+        { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+        Platform.OS === 'web' && { alignItems: 'center' },
+      ]}>
+        <Animated.View style={[
+          {
             flex: 1,
             backgroundColor: C.bg,
             marginTop: 52,
@@ -704,210 +736,223 @@ const AssetsModal: React.FC<AssetsProps> = ({
             borderTopRightRadius: 20,
             overflow: 'hidden',
             transform: [{ translateY: slideAnim }],
+          },
+          Platform.OS === 'web' && {
+            width: '50%',
+            flex: undefined,
+          },
+        ]}>
+          {/* ── Header ── */}
+          <View style={{
+            backgroundColor: C.headerBg,
+            paddingTop: 16, paddingBottom: 14,
+            paddingHorizontal: 16,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
           }}>
-            {/* ── Header ── */}
-            <View style={{
-              backgroundColor: C.headerBg,
-              paddingTop: 16, paddingBottom: 14,
-              paddingHorizontal: 16,
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View>
-                  <Text style={{ fontSize: 17, fontWeight: '700', color: C.headerText }}>
-                    Asset Management
-                  </Text>
-                  <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
-                    {employee.full_name}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <TouchableOpacity
-                    onPress={fetchData}
-                    style={{
-                      width: 36, height: 36, borderRadius: 10,
-                      backgroundColor: 'rgba(255,255,255,0.12)',
-                      alignItems: 'center', justifyContent: 'center',
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="refresh" size={18} color={C.headerText} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={onClose}
-                    style={{
-                      width: 36, height: 36, borderRadius: 10,
-                      backgroundColor: 'rgba(255,255,255,0.12)',
-                      alignItems: 'center', justifyContent: 'center',
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="close" size={20} color={C.headerText} />
-                  </TouchableOpacity>
-                </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View>
+                <Text style={{ fontSize: 17, fontWeight: '700', color: C.headerText }}>
+                  Asset Management
+                </Text>
+                <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>
+                  {employee.full_name}
+                </Text>
               </View>
-
-              {/* Stats strip */}
-              <View style={{
-                flexDirection: 'row', marginTop: 14, gap: 8,
-              }}>
-                <View style={{
-                  flex: 1, backgroundColor: 'rgba(255,255,255,0.1)',
-                  borderRadius: 10, padding: 10, alignItems: 'center',
-                }}>
-                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#fff' }}>
-                    {loadingAssigned ? '—' : assignedAssets.length}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>
-                    Assigned
-                  </Text>
-                </View>
-                <View style={{
-                  flex: 1, backgroundColor: 'rgba(255,255,255,0.1)',
-                  borderRadius: 10, padding: 10, alignItems: 'center',
-                }}>
-                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#fff' }}>
-                    {assignedAssets.filter(a => a.asset_serial_id).length}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>
-                    With Serial
-                  </Text>
-                </View>
-                <View style={{
-                  flex: 1, backgroundColor: 'rgba(255,255,255,0.1)',
-                  borderRadius: 10, padding: 10, alignItems: 'center',
-                }}>
-                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#fff' }}>
-                    {loadingAvailable ? '—' : availableAssets.filter(a => a.available_count > 0).length}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>
-                    In Stock
-                  </Text>
-                </View>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={fetchData}
+                  style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    backgroundColor: 'rgba(255,255,255,0.12)',
+                    alignItems: 'center', justifyContent: 'center',
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="refresh" size={18} color={C.headerText} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={onClose}
+                  style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    backgroundColor: 'rgba(255,255,255,0.12)',
+                    alignItems: 'center', justifyContent: 'center',
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={20} color={C.headerText} />
+                </TouchableOpacity>
               </View>
             </View>
 
-            {/* ── Body ── */}
-            <ScrollView
-              style={{ flex: 1 }}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 32 }}
-            >
-              {/* Assigned section */}
-              <SectionHeader
-                title="Currently Assigned"
-                count={assignedAssets.length}
-              />
-              <View style={{ backgroundColor: C.surface, marginBottom: 8 }}>
-                {loadingAssigned ? (
-                  <View style={{ padding: 24, alignItems: 'center' }}>
-                    <ActivityIndicator color={C.accent} />
-                  </View>
-                ) : assignedAssets.length === 0 ? (
-                  <View style={{ padding: 24, alignItems: 'center' }}>
-                    <View style={{
-                      width: 52, height: 52, borderRadius: 26,
-                      backgroundColor: C.bg, alignItems: 'center',
-                      justifyContent: 'center', marginBottom: 10,
-                    }}>
-                      <Ionicons name="cube-outline" size={24} color={C.textTertiary} />
-                    </View>
-                    <Text style={{ fontSize: 14, color: C.textTertiary, fontWeight: '500' }}>
-                      No assets assigned yet
-                    </Text>
-                  </View>
-                ) : (
-                  assignedAssets.map((item, idx) => (
-                    <View key={item.id}>
-                      {idx > 0 && <Divider />}
-                      <AssignedAssetRow item={item} onRemove={handleRemoveAsset} />
-                    </View>
-                  ))
-                )}
-              </View>
-
-              {/* Available section */}
-              <SectionHeader
-                title="Available to Assign"
-                count={filteredAvailable.length}
-                right={
-                  <TouchableOpacity
-                    onPress={fetchAvailableAssets}
-                    style={{ padding: 4 }}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="refresh-outline" size={16} color={C.accent} />
-                  </TouchableOpacity>
-                }
-              />
-
-              {/* Search */}
+            {/* Stats strip */}
+            <View style={{ flexDirection: 'row', marginTop: 14, gap: 8 }}>
               <View style={{
-                backgroundColor: C.surface,
-                paddingHorizontal: 16, paddingVertical: 10,
-                borderBottomWidth: 1, borderBottomColor: C.border,
+                flex: 1, backgroundColor: 'rgba(255,255,255,0.1)',
+                borderRadius: 10, padding: 10, alignItems: 'center',
               }}>
-                <View style={{
-                  flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: C.bg, borderRadius: 10,
-                  paddingHorizontal: 10, height: 38,
-                  borderWidth: 1, borderColor: C.border,
-                }}>
-                  <Ionicons name="search-outline" size={15} color={C.textTertiary} />
-                  <TextInput
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholder="Search assets..."
-                    placeholderTextColor={C.textTertiary}
-                    style={{
-                      flex: 1, marginLeft: 8, fontSize: 14,
-                      color: C.textPrimary, paddingVertical: 0,
-                    }}
-                  />
-                  {searchQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearchQuery('')}>
-                      <Ionicons name="close-circle" size={16} color={C.textTertiary} />
-                    </TouchableOpacity>
-                  )}
-                </View>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: '#fff' }}>
+                  {loadingAssigned ? '—' : assignedAssets.length}
+                </Text>
+                <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>
+                  Assigned
+                </Text>
               </View>
+              <View style={{
+                flex: 1, backgroundColor: 'rgba(255,255,255,0.1)',
+                borderRadius: 10, padding: 10, alignItems: 'center',
+              }}>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: '#fff' }}>
+                  {assignedAssets.filter(a => a.asset_serial_id).length}
+                </Text>
+                <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>
+                  With Serial
+                </Text>
+              </View>
+              <View style={{
+                flex: 1, backgroundColor: 'rgba(255,255,255,0.1)',
+                borderRadius: 10, padding: 10, alignItems: 'center',
+              }}>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: '#fff' }}>
+                  {loadingAvailable ? '—' : availableAssets.filter(a => a.available_count > 0).length}
+                </Text>
+                <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 1 }}>
+                  In Stock
+                </Text>
+              </View>
+            </View>
+          </View>
 
-              <View style={{ backgroundColor: C.surface }}>
-                {loadingAvailable ? (
-                  <View style={{ padding: 24, alignItems: 'center' }}>
-                    <ActivityIndicator color={C.accent} />
+          {/* ── Body ── */}
+          <ScrollView
+            style={{ flex: 1 }}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 32 }}
+          >
+            {/* Assigned section */}
+            <SectionHeader
+              title="Currently Assigned"
+              count={assignedAssets.length}
+            />
+            <View style={{ backgroundColor: C.surface, marginBottom: 8 }}>
+              {loadingAssigned ? (
+                <View style={{ padding: 24, alignItems: 'center' }}>
+                  <ActivityIndicator color={C.accent} />
+                </View>
+              ) : assignedAssets.length === 0 ? (
+                <View style={{ padding: 24, alignItems: 'center' }}>
+                  <View style={{
+                    width: 52, height: 52, borderRadius: 26,
+                    backgroundColor: C.bg, alignItems: 'center',
+                    justifyContent: 'center', marginBottom: 10,
+                  }}>
+                    <Ionicons name="cube-outline" size={24} color={C.textTertiary} />
                   </View>
-                ) : filteredAvailable.length === 0 ? (
-                  <View style={{ padding: 24, alignItems: 'center' }}>
-                    <Ionicons name="search-outline" size={24} color={C.textTertiary} />
-                    <Text style={{ fontSize: 14, color: C.textTertiary, marginTop: 8 }}>
-                      {searchQuery ? 'No matching assets' : 'No assets available'}
-                    </Text>
+                  <Text style={{ fontSize: 14, color: C.textTertiary, fontWeight: '500' }}>
+                    No assets assigned yet
+                  </Text>
+                </View>
+              ) : (
+                assignedAssets.map((item, idx) => (
+                  <View key={item.id}>
+                    {idx > 0 && <Divider />}
+                    <AssignedAssetRow item={item} onRemove={handleRemoveAsset} />
                   </View>
-                ) : (
-                  filteredAvailable.map((item, idx) => (
-                    <View key={item.id}>
-                      {idx > 0 && <Divider />}
-                      <AvailableAssetRow item={item} onAssign={handleAssignPress} />
-                    </View>
-                  ))
+                ))
+              )}
+            </View>
+
+            {/* Available section */}
+            <SectionHeader
+              title="Available to Assign"
+              count={filteredAvailable.length}
+              right={
+                <TouchableOpacity
+                  onPress={fetchAvailableAssets}
+                  style={{ padding: 4 }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="refresh-outline" size={16} color={C.accent} />
+                </TouchableOpacity>
+              }
+            />
+
+            {/* Search */}
+            <View style={{
+              backgroundColor: C.surface,
+              paddingHorizontal: 16, paddingVertical: 10,
+              borderBottomWidth: 1, borderBottomColor: C.border,
+            }}>
+              <View style={{
+                flexDirection: 'row', alignItems: 'center',
+                backgroundColor: C.bg, borderRadius: 10,
+                paddingHorizontal: 10, height: 38,
+                borderWidth: 1, borderColor: C.border,
+              }}>
+                <Ionicons name="search-outline" size={15} color={C.textTertiary} />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search assets..."
+                  placeholderTextColor={C.textTertiary}
+                  style={{
+                    flex: 1, marginLeft: 8, fontSize: 14,
+                    color: C.textPrimary, paddingVertical: 0,
+                  }}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <Ionicons name="close-circle" size={16} color={C.textTertiary} />
+                  </TouchableOpacity>
                 )}
               </View>
-            </ScrollView>
-          </Animated.View>
-        </View>
-      </Modal>
+            </View>
 
-      {/* Serial picker bottom sheet (rendered outside the main modal to avoid nesting issues) */}
-      <SerialPickerSheet
-        visible={showSerialPicker}
-        asset={selectedAsset}
-        onClose={() => { setShowSerialPicker(false); setSelectedAsset(null); }}
-        onConfirm={handleConfirmAssign}
-        loading={assigning}
-      />
-    </>
+            <View style={{ backgroundColor: C.surface }}>
+              {loadingAvailable ? (
+                <View style={{ padding: 24, alignItems: 'center' }}>
+                  <ActivityIndicator color={C.accent} />
+                </View>
+              ) : filteredAvailable.length === 0 ? (
+                <View style={{ padding: 24, alignItems: 'center' }}>
+                  <Ionicons name="search-outline" size={24} color={C.textTertiary} />
+                  <Text style={{ fontSize: 14, color: C.textTertiary, marginTop: 8 }}>
+                    {searchQuery ? 'No matching assets' : 'No assets available'}
+                  </Text>
+                </View>
+              ) : (
+                filteredAvailable.map((item, idx) => (
+                  <View key={item.id}>
+                    {idx > 0 && <Divider />}
+                    <AvailableAssetRow item={item} onAssign={handleAssignPress} />
+                  </View>
+                ))
+              )}
+            </View>
+          </ScrollView>
+
+          {/*
+            ── Serial Picker Sheet ──────────────────────────────────────────────
+            CRITICAL FIX: Rendered here, INSIDE the single Modal, as an absolute-
+            positioned overlay. This is what makes it work on iOS.
+
+            iOS only allows one <Modal> to be open at a time. The original code
+            placed <SerialPickerSheet> as a sibling of <Modal> in the outer View,
+            meaning it was rendered outside the Modal's layer and invisible on iOS.
+
+            By moving it inside the Modal's Animated.View as an absolute child we
+            get a true sheet-over-sheet effect on all platforms with zero hacks.
+          */}
+          <SerialPickerSheet
+            visible={showSerialPicker}
+            asset={selectedAsset}
+            onClose={() => { setShowSerialPicker(false); setSelectedAsset(null); }}
+            onConfirm={handleConfirmAssign}
+            loading={assigning}
+          />
+        </Animated.View>
+      </View>
+    </Modal>
   );
 };
 

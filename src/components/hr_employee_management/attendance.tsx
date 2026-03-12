@@ -314,7 +314,16 @@ export const Attendance: React.FC<AttendanceProps> = ({
     fetchDayData(day);
   };
 
+  // ---- WEB FIX: use getBoundingClientRect on web, measure() on native ----
   const handleLoginTimePress = () => {
+    if (Platform.OS === 'web') {
+      const el = (loginTimeRef.current as any)?._nativeTag || loginTimeRef.current;
+      const rect = (el as HTMLElement)?.getBoundingClientRect?.();
+      setPickerPosition(rect ? { top: rect.bottom + 5, left: rect.left } : { top: 300, left: 20 });
+      setActivePicker('login');
+      setShowLoginTimePicker(true);
+      return;
+    }
     loginTimeRef.current?.measure((_fx: number, _fy: number, width: number, height: number, pageX: number, pageY: number) => {
       setPickerPosition({
         top: pageY + height + 5,
@@ -326,6 +335,14 @@ export const Attendance: React.FC<AttendanceProps> = ({
   };
 
   const handleLogoutTimePress = () => {
+    if (Platform.OS === 'web') {
+      const el = (logoutTimeRef.current as any)?._nativeTag || logoutTimeRef.current;
+      const rect = (el as HTMLElement)?.getBoundingClientRect?.();
+      setPickerPosition(rect ? { top: rect.bottom + 5, left: rect.left } : { top: 300, left: 20 });
+      setActivePicker('logout');
+      setShowLogoutTimePicker(true);
+      return;
+    }
     logoutTimeRef.current?.measure((_fx: number, _fy: number, width: number, height: number, pageX: number, pageY: number) => {
       setPickerPosition({
         top: pageY + height + 5,
@@ -335,6 +352,7 @@ export const Attendance: React.FC<AttendanceProps> = ({
       setShowLogoutTimePicker(true);
     });
   };
+  // ---- END WEB FIX ----
 
   const handleLoginTimeChange = (event: any, selectedDate?: Date) => {
     if (event.type === 'dismissed') {
@@ -684,7 +702,14 @@ export const Attendance: React.FC<AttendanceProps> = ({
       >
         <TouchableWithoutFeedback onPress={handleBackdropPress}>
           <View style={styles.assetsModalOverlay}>
-            <View style={styles.assetsModalContainer}>
+            <View style={[
+              styles.assetsModalContainer,
+              // Web-only: constrain width to 50% and center horizontally
+              Platform.OS === 'web' && {
+                width: '50%',
+                alignSelf: 'center',
+              },
+            ]}>
               {/* Modal Header */}
               <View style={styles.assetsModalHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
@@ -726,16 +751,50 @@ export const Attendance: React.FC<AttendanceProps> = ({
 
                       <View style={styles.detailCard}>
                         <Text style={styles.editLabel}>Login Time</Text>
-                        <TouchableOpacity
-                          ref={loginTimeRef}
-                          style={[styles.editInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
-                          onPress={handleLoginTimePress}
-                        >
-                          <Text style={{ color: editData.login_time ? WHATSAPP_COLORS.textPrimary : '#888', fontSize: 16 }}>
-                            {editData.login_time ? formatTimeForDisplay(editData.login_time) : 'Select time'}
-                          </Text>
-                          <MaterialIcons name="access-time" size={20} color={WHATSAPP_COLORS.primary} />
-                        </TouchableOpacity>
+                        {Platform.OS === 'web' ? (
+                          <>
+                            <View style={[styles.editInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+                              <input
+                                type="time"
+                                value={editData.login_time ? editData.login_time.substring(0, 5) : ''}
+                                onClick={(e: any) => e.currentTarget.showPicker?.()}
+                                onChange={(e: any) => {
+                                  const val = e.target.value;
+                                  if (val) {
+                                    const timeWithSeconds = val + ':00';
+                                    setEditData({ ...editData, login_time: timeWithSeconds });
+                                    setLoginTime(parseTimeString(timeWithSeconds));
+                                  } else {
+                                    setEditData({ ...editData, login_time: '' });
+                                  }
+                                }}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  fontSize: 16,
+                                  width: '100%',
+                                  outline: 'none',
+                                  color: editData.login_time ? '#000' : '#888',
+                                  cursor: 'pointer',
+                                }}
+                              />
+                            </View>
+                            <Text style={{ fontSize: 12, color: '#888', marginTop: 4, marginBottom: 4 }}>
+                              e.g. 09:30 AM or 02:45 PM
+                            </Text>
+                          </>
+                        ) : (
+                          <TouchableOpacity
+                            ref={loginTimeRef}
+                            style={[styles.editInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                            onPress={handleLoginTimePress}
+                          >
+                            <Text style={{ color: editData.login_time ? WHATSAPP_COLORS.textPrimary : '#888', fontSize: 16 }}>
+                              {editData.login_time ? formatTimeForDisplay(editData.login_time) : 'Select time'}
+                            </Text>
+                            <MaterialIcons name="access-time" size={20} color={WHATSAPP_COLORS.primary} />
+                          </TouchableOpacity>
+                        )}
 
                         {editData.login_time && (
                           <TouchableOpacity
@@ -772,16 +831,51 @@ export const Attendance: React.FC<AttendanceProps> = ({
 
                       <View style={styles.detailCard}>
                         <Text style={styles.editLabel}>Logout Time</Text>
-                        <TouchableOpacity
-                          ref={logoutTimeRef}
-                          style={[styles.editInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
-                          onPress={handleLogoutTimePress}
-                        >
-                          <Text style={{ color: editData.logout_time ? WHATSAPP_COLORS.textPrimary : '#888', fontSize: 16 }}>
-                            {editData.logout_time ? formatTimeForDisplay(editData.logout_time) : 'Select time'}
-                          </Text>
-                          <MaterialIcons name="access-time" size={20} color={WHATSAPP_COLORS.primary} />
-                        </TouchableOpacity>
+                        {Platform.OS === 'web' ? (
+                          <>
+                            <View style={[styles.editInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+                              <input
+                                type="time"
+                                value={editData.logout_time ? editData.logout_time.substring(0, 5) : ''}
+                                onClick={(e: any) => e.currentTarget.showPicker?.()}
+
+                                onChange={(e: any) => {
+                                  const val = e.target.value;
+                                  if (val) {
+                                    const timeWithSeconds = val + ':00';
+                                    setEditData({ ...editData, logout_time: timeWithSeconds });
+                                    setLogoutTime(parseTimeString(timeWithSeconds));
+                                  } else {
+                                    setEditData({ ...editData, logout_time: '' });
+                                  }
+                                }}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  fontSize: 16,
+                                  width: '100%',
+                                  outline: 'none',
+                                  color: editData.logout_time ? '#000' : '#888',
+                                  cursor: 'pointer',
+                                }}
+                              />
+                            </View>
+                            <Text style={{ fontSize: 12, color: '#888', marginTop: 4, marginBottom: 4 }}>
+                              e.g. 09:30 AM or 02:45 PM
+                            </Text>
+                          </>
+                        ) : (
+                          <TouchableOpacity
+                            ref={logoutTimeRef}
+                            style={[styles.editInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                            onPress={handleLogoutTimePress}
+                          >
+                            <Text style={{ color: editData.logout_time ? WHATSAPP_COLORS.textPrimary : '#888', fontSize: 16 }}>
+                              {editData.logout_time ? formatTimeForDisplay(editData.logout_time) : 'Select time'}
+                            </Text>
+                            <MaterialIcons name="access-time" size={20} color={WHATSAPP_COLORS.primary} />
+                          </TouchableOpacity>
+                        )}
 
                         {editData.logout_time && (
                           <TouchableOpacity
@@ -977,13 +1071,15 @@ export const Attendance: React.FC<AttendanceProps> = ({
                     minWidth: 200,
                   }}
                 >
+                  {/* ---- WEB FIX: use display="default" on web, "spinner" on native ---- */}
                   <DateTimePicker
                     value={activePicker === 'login' ? loginTime : logoutTime}
                     mode="time"
-                    display="spinner"
+                    display={Platform.OS === 'web' ? 'default' : 'spinner'}
                     onChange={activePicker === 'login' ? handleLoginTimeChange : handleLogoutTimeChange}
                     style={{ backgroundColor: 'white' }}
                   />
+                  {/* ---- END WEB FIX ---- */}
                   <TouchableOpacity
                     onPress={handleDoneButtonPress}
                     style={{
