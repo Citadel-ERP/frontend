@@ -619,38 +619,6 @@ export default function Support({ onBack, isDark = false }: SupportProps) {
               </View>
             )}
 
-            {/* ── FAQ Quick Links ── */}
-            {/* <View style={[styles.card, { backgroundColor: C.surface, borderColor: C.border }]}>
-              <View style={styles.cardHeader}>
-                <View style={[styles.iconBox, { backgroundColor: C.iconBg }]}>
-                  <Ionicons name="help-buoy-outline" size={20} color={C.accent} />
-                </View>
-                <Text style={[styles.cardTitle, { color: C.bodyText }]}>Quick Help</Text>
-              </View>
-              <View style={[styles.divider, { backgroundColor: C.border }]} />
-
-              {[
-                { icon: 'finger-print', label: 'Trouble with biometric login', color: '#25D366' },
-                { icon: 'location-outline', label: 'Attendance not marking correctly', color: '#128C7E' },
-                { icon: 'notifications-off-outline', label: 'Not receiving notifications', color: '#075E54' },
-                { icon: 'key-outline', label: 'Password reset request', color: '#25D366' },
-              ].map((item, idx, arr) => (
-                <View
-                  key={idx}
-                  style={[
-                    styles.faqRow,
-                    idx < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: C.border },
-                  ]}
-                >
-                  <View style={[styles.faqIconCircle, { backgroundColor: item.color + '18' }]}>
-                    <Ionicons name={item.icon as any} size={16} color={item.color} />
-                  </View>
-                  <Text style={[styles.faqLabel, { color: C.bodyText }]}>{item.label}</Text>
-                  <Ionicons name="chevron-forward" size={14} color={C.subText} />
-                </View>
-              ))}
-            </View> */}
-
             {/* Footer note */}
             <Text style={[styles.footerNote, { color: C.subText }]}>
               For urgent issues, contact your manager or IT administrator directly. Response times may vary during public holidays.
@@ -964,27 +932,6 @@ const styles = StyleSheet.create({
   newTicketText: {
     fontSize: 14,
     fontWeight: '600',
-  },
-
-  // ── FAQ ─────────────────────────────────────────────────────────────────
-  faqRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    gap: 12,
-  },
-  faqIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  faqLabel: {
-    flex: 1,
-    fontSize: 13.5,
-    fontWeight: '500',
   },
 
   // ── Footer ────────────────────────────────────────────────────────────
