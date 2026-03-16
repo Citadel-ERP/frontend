@@ -63,7 +63,7 @@ import UpcomingReminder from './dashboard/upcomingReminder';
 import WorkStatistics from './dashboard/workStatistics';
 import UpcomingEvents from './dashboard/upcomingEvents';
 import BottomBar from './dashboard/bottomBar';
-
+import About from './About';
 import { BackgroundAttendanceService } from '../services/backgroundAttendance';
 import { GeofencingService } from '../services/geofencing';
 import { AttendanceUtils } from '../services/attendanceUtils';
@@ -430,6 +430,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Active page state for web layout
   const [activePage, setActivePage] = useState<ActivePage>('dashboard');
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   // Menu state
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [activeMenuItem, setActiveMenuItem] = useState('Dashboard');
@@ -1463,6 +1464,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setActiveNavItem('home');
       setShowAccess(false);
       setShowPrivacy(false);
+      setShowAbout(false);
       setShowSupport(false);
     }
     // Reset profile modal state
@@ -1780,7 +1782,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     if (showPrivacy) {
       return <PrivacyPolicy onBack={handleBackFromPage} isDark={isDark} />;
     }
-
+    if (showAbout) {
+  return <About onBack={handleBackFromPage} isDark={isDark} appVersion="1.0.0" />;
+  }
     if (showHR) {
       return (
         <HR onBack={handleBackFromPage} />
@@ -1842,10 +1846,17 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     }
 
     if (showSettings) {
-      return (
-        <Settings onBack={handleBackFromPage} />
-      );
-    }
+  return (
+    <Settings
+      onBack={handleBackFromPage}
+      isDark={isDark}
+      onHelpCenter={() => { setShowSettings(false); setShowSupport(true); }}
+      onReportProblem={() => { setShowSettings(false); setShowSupport(true); }}
+      onPrivacyPolicy={() => { setShowSettings(false); setShowPrivacy(true); }}
+      onAbout={() => { setShowSettings(false); setShowAbout(true); }}
+    />
+  );
+}
 
     if (showEmployeeManagement) {
       return (
