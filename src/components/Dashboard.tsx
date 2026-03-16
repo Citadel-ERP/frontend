@@ -2310,6 +2310,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                     {activePage === 'validation' && (
                       <ValidationScreen onBack={() => setActivePage('dashboard')} />
                     )}
+                    {activePage === 'access' && (
+  <AccessModule onBack={() => setActivePage('dashboard')} />
+)}
                   </View>
                 </View>
               )}

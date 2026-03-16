@@ -2073,7 +2073,9 @@ export const Chat: React.FC<ChatProps> = ({
 
       {/* Messages List or Empty State */}
       {messagesToDisplay.length === 0 && !isLoading && !isSearchMode ? (
-        renderEmptyState()
+        <View style={Platform.OS === 'web' ? { flex: 1, minHeight: 0, paddingTop: -23500 } : { flex: 1 }}>
+          {renderEmptyState()}
+        </View>
       ) : messagesToDisplay.length === 0 && isSearchMode ? (
         <View style={styles.searchEmptyContainer}>
           <Ionicons name="search-outline" size={64} color="#8696a0" />
@@ -2157,8 +2159,12 @@ export const Chat: React.FC<ChatProps> = ({
             styles.messagesContent,
             {
               paddingBottom: Platform.OS === 'web'
-                ? 8
+                ? SCREEN_HEIGHT 
                 : INPUT_CONTAINER_HEIGHT + bottomOffset + 50,
+              ...(Platform.OS === 'web' && {
+                flexGrow: 1,
+                justifyContent: 'flex-end',
+              }),
             },
           ]}
           ListFooterComponent={
@@ -2251,6 +2257,7 @@ export const Chat: React.FC<ChatProps> = ({
             position: 'relative',
             borderTopWidth: 1,
             borderTopColor: '#e9edef',
+            flexShrink: 0,
           }
         ]}>
           <View style={styles.inputRow}>
@@ -2641,7 +2648,8 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web' && {
       display: 'flex' as any,
       flexDirection: 'column' as any,
-      height: '100%' as any,
+      height: '100vh' as any,
+      maxHeight: '100vh' as any,
       overflow: 'hidden' as any,
     }),
   },
@@ -2739,13 +2747,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#111b21',
   },
+  // AFTER
   messagesList: {
     flex: 1,
     marginBottom: 50,
     ...(Platform.OS === 'web' && {
-      flexGrow: 1,
+      flex: 1,
       marginBottom: 0,
-      maxHeight: 'calc(100vh - 120px)' as any,
+      minHeight: 0,          // critical: lets flex child shrink below content size
       overflowY: 'auto' as any,
     }),
   },
@@ -2754,6 +2763,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 8,
   },
+  // AFTER
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -2761,6 +2771,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#efeae2',
     paddingHorizontal: 40,
     paddingBottom: 100,
+    ...(Platform.OS === 'web' && {
+      minHeight: 0 as any,
+      backgroundColor: 'transparent' as any,
+    }),
   },
   emptyCircle: {
     width: 120,

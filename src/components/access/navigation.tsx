@@ -1,17 +1,15 @@
 // access/navigation.tsx
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Animated,
-  Dimensions,
+  LayoutChangeEvent,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ActiveTab, COLORS } from './types';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface NavigationProps {
   activeTab: ActiveTab;
@@ -39,6 +37,13 @@ const Navigation: React.FC<NavigationProps> = ({
   const activeIndex = TABS.findIndex((t) => t.key === activeTab);
   const pillAnim = useRef(new Animated.Value(activeIndex)).current;
 
+  // ── Measure actual container width instead of using screen width ──
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  const handleLayout = (e: LayoutChangeEvent) => {
+    setContainerWidth(e.nativeEvent.layout.width);
+  };
+
   useEffect(() => {
     Animated.spring(pillAnim, {
       toValue: activeIndex,
@@ -48,9 +53,8 @@ const Navigation: React.FC<NavigationProps> = ({
     }).start();
   }, [activeIndex]);
 
-  // pill translates across the container width (minus padding)
-  const containerInnerWidth = SCREEN_WIDTH - 32 - 8; // horizontal padding 16*2, inner padding 4*2
-  const pillWidth = containerInnerWidth / TABS.length;
+  // pill width = (container - 8px inner padding) / number of tabs
+  const pillWidth = containerWidth > 0 ? (containerWidth - 8) / TABS.length : 0;
 
   const pillTranslateX = pillAnim.interpolate({
     inputRange: [0, TABS.length - 1],
@@ -59,28 +63,23 @@ const Navigation: React.FC<NavigationProps> = ({
 
   return (
     <View style={styles.outerContainer}>
-      <View style={styles.container}>
-        {/* Animated sliding pill */}
-        <Animated.View
-          style={[
-            styles.pill,
-            {
-              width: pillWidth,
-              transform: [{ translateX: pillTranslateX }],
-            },
-          ]}
-        />
+      <View style={styles.container} onLayout={handleLayout}>
+        {/* Animated sliding pill — only render once we have a measured width */}
+        {containerWidth > 0 && (
+          <Animated.View
+            style={[
+              styles.pill,
+              {
+                width: pillWidth,
+                transform: [{ translateX: pillTranslateX }],
+              },
+            ]}
+          />
+        )}
 
-        {TABS.map((tab, idx) => {
+        {TABS.map((tab) => {
           const isActive = activeTab === tab.key;
           const count = counts[tab.key];
-
-          // Interpolate icon/label color based on pill position
-          const colorAnim = pillAnim.interpolate({
-            inputRange: TABS.map((_, i) => i),
-            outputRange: TABS.map((_, i) => (i === idx ? 1 : 0)),
-            extrapolate: 'clamp',
-          });
 
           return (
             <TouchableOpacity
@@ -94,15 +93,10 @@ const Navigation: React.FC<NavigationProps> = ({
                 size={18}
                 color={isActive ? COLORS.white : COLORS.textSecondary}
               />
-              <Animated.Text
-                style={[
-                  styles.tabLabel,
-                  isActive && styles.activeTabLabel,
-                ]}
-              >
+              <Text style={[styles.tabLabel, isActive && styles.activeTabLabel]}>
                 {tab.label}
                 {count > 0 ? ` (${count})` : ''}
-              </Animated.Text>
+              </Text>
             </TouchableOpacity>
           );
         })}

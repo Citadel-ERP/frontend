@@ -3220,9 +3220,14 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-  },
+  flex: 1,
+  backgroundColor: '#ffffff',
+  ...(Platform.OS === 'web' && {
+    height: '100%' as any,
+    maxHeight: '100%' as any,
+    overflow: 'hidden' as any,
+  }),
+},
   listView: {
     flex: 1,
   },
