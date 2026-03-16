@@ -795,7 +795,7 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: WHATSAPP_COLORS.primary },
+  safeArea: { backgroundColor: WHATSAPP_COLORS.primary, paddingTop:0 },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',

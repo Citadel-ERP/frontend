@@ -510,18 +510,20 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
+        allowsMultipleSelection: true,   // ← added
         allowsEditing: false,
         quality: 0.8,
       });
-      if (!result.canceled && result.assets?.[0]) {
-        const a = result.assets[0];
-        setBuildingPhotos((prev) => [
-          ...prev,
-          { id: Date.now(), uri: a.uri, type: a.type || 'image/jpeg' },
-        ]);
+      if (!result.canceled && result.assets?.length) {
+        const newPhotos: Photo[] = result.assets.map((a, i) => ({
+          id: Date.now() + i,
+          uri: a.uri,
+          type: a.type || 'image/jpeg',
+        }));
+        setBuildingPhotos((prev) => [...prev, ...newPhotos]);
       }
     } catch {
-      Alert.alert('Error', 'Failed to pick image');
+      Alert.alert('Error', 'Failed to pick images');
     }
   };
 

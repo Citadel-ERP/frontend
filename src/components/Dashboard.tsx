@@ -1,4 +1,4 @@
-// Dashboard.tsx - UPDATED VERSION with Real-time Reminder Updates
+// Dashboard.tsx - FIXED VERSION: Stack-based back navigation + web dashboard rendering restored
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -18,6 +18,7 @@ import {
   Alert,
   LayoutAnimation,
   Linking,
+  BackHandler,
 } from 'react-native';
 import { ImageStyle } from 'react-native';
 import Support from './Support';
@@ -45,7 +46,6 @@ import BUP from './bup/BUP';
 import { CitadelHub } from './citadel_hub/CitadelHub';
 import AssetModule from './assets/index';
 import OfficeModule from './office/index';
-// import {CitadelHubMobile} from './citadel_hub/CitadelHubMobile';
 import Settings from './Settings';
 import AttendanceWrapper from './AttendanceWrapper';
 import EmployeeManagement from './employee_management/EmployeeManagement';
@@ -71,6 +71,22 @@ import { BACKEND_URL, BACKEND_URL_WEBSOCKET } from '../config/config';
 
 const { width, height } = Dimensions.get('window');
 const TOKEN_2_KEY = 'token_2';
+
+// ============================================================================
+// NAVIGATION STACK TYPES
+// ============================================================================
+type MobilePageKey =
+  | 'attendance' | 'profile' | 'hr' | 'cab' | 'driver' | 'bdt'
+  | 'medical' | 'scoutBoy' | 'reminder' | 'bup' | 'siteManager'
+  | 'settings' | 'employeeManagement' | 'hrEmployeeManager' | 'chat'
+  | 'chatRoom' | 'notifications' | 'driverManager' | 'hrManager'
+  | 'validation' | 'asset' | 'office' | 'access' | 'privacy' | 'about'
+  | 'support' | 'dashboard';
+
+interface NavEntry {
+  page: MobilePageKey;
+  menuWasOpen: boolean;
+}
 
 // Import helper functions and types
 import {
@@ -102,277 +118,86 @@ NotificationsExpo.setNotificationHandler({
 });
 
 // ============================================================================
-// MODULE CONFIGURATION - Icons, Colors, and Display Names
+// MODULE CONFIGURATION
 // ============================================================================
 interface ModuleConfig {
   icon: string;
   iconFamily: 'FontAwesome5' | 'Ionicons' | 'MaterialCommunityIcons';
-  gradientColors: readonly [string, string, ...string[]];  // CHANGE THIS LINE
+  gradientColors: readonly [string, string, ...string[]];
   displayName: string;
 }
 
 const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
-  // Attendance
-  'attendance': {
-    icon: 'book-open',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#00d285', '#00b872'],
-    displayName: 'Attendance'
-  },
-  'Attendance': {
-    icon: 'book-open',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#00d285', '#00b872'],
-    displayName: 'Attendance'
-  },
-
-  'office': {
-    icon: 'business',
-    iconFamily: 'Ionicons',
-    gradientColors: ['#003580', '#004d69'],
-    displayName: 'Offices'
-  },
-  'offices': {
-    icon: 'business',
-    iconFamily: 'Ionicons',
-    gradientColors: ['#003580', '#004d69'],
-    displayName: 'Offices'
-  },
-
-  'asset': {
-    icon: 'hardware-chip',
-    iconFamily: 'Ionicons',
-    gradientColors: ['#80006b', '#4d0069'],
-    displayName: 'Assets'
-  },
-  'assets': {
-    icon: 'hardware-chip',
-    iconFamily: 'Ionicons',
-    gradientColors: ['#80006b', '#4d0069'],
-    displayName: 'Assets'
-  },
-
-  // Car/Cab modules
-  'cab': {
-    icon: 'car',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#ff5e7a', '#ff4168'],
-    displayName: 'Car'
-  },
-  'Cab': {
-    icon: 'car',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#ff5e7a', '#ff4168'],
-    displayName: 'Car'
-  },
-  'VehicleAdmin': {
-    icon: 'car-side',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#ff5e7a', '#ff4168'],
-    displayName: 'Vehicle Admin'
-  },
-
-  // HR modules
-  'hr': {
-    icon: 'users',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#ffb157', '#ff9d3f'],
-    displayName: 'HR'
-  },
-  'HR': {
-    icon: 'users',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#ffb157', '#ff9d3f'],
-    displayName: 'HR'
-  },
-  'hr_employee_management': {
-    icon: 'user-tie',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#ff4168', '#ff4168'],
-    displayName: 'Employees'
-  },
-  'hr_manager': {
-    icon: 'user-shield',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#ff9d3f', '#ff8c2e'],
-    displayName: 'HR Management'
-  },
-  'EmployeesAdmin': {
-    icon: 'users-cog',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#ffb157', '#ff9d3f'],
-    displayName: 'Employees'
-  },
-
-  // Driver modules
-  'driver': {
-    icon: 'steering-wheel',
-    iconFamily: 'MaterialCommunityIcons',
-    gradientColors: ['#6c5ce7', '#5f4fd1'],
-    displayName: 'Driver'
-  },
-  'driver_manager': {
-    icon: 'id-card',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#6c5ce7', '#5f4fd1'],
-    displayName: 'Duty Manager'
-  },
-
-  // Site Manager
-  'site_manager': {
-    icon: 'hard-hat',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#fd79a8', '#e84393'],
-    displayName: 'Database'
-  },
-
-  // BUP
-  'bup': {
-    icon: 'chart-line',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#ffb157', '#ff9d3f'],
-    displayName: 'BUP'
-  },
-
-  // BDT
-  'bdt': {
-    icon: 'exchange-alt',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#0984e3', '#0773d1'],
-    displayName: 'Transaction'
-  },
-
-  // Medical/Mediclaim
-  'medical': {
-    icon: 'medkit',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#d63031', '#c92a2b'],
-    displayName: 'Mediclaim'
-  },
-  'mediclaim': {
-    icon: 'medkit',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#d63031', '#c92a2b'],
-    displayName: 'Mediclaim'
-  },
-
-  // Scout Boy
-  'scout_boy': {
-    icon: 'user-alt',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#fdcb6e', '#f6b93b'],
-    displayName: 'Scout'
-  },
-
-  // Reminder
-  'reminder': {
-    icon: 'bell',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#a29bfe', '#6c5ce7'],
-    displayName: 'Reminder'
-  },
-
-  // Employee Management
-  'employee_management': {
-    icon: 'users',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#74b9ff', '#0984e3'],
-    displayName: 'Employees'
-  },
-
-  // Default fallback
-  'default': {
-    icon: 'cube',
-    iconFamily: 'FontAwesome5',
-    gradientColors: ['#636e72', '#546E7A'],
-    displayName: 'Module'
-  },
-  'access': {
-    icon: 'shield-checkmark',
-    iconFamily: 'Ionicons',
-    gradientColors: ['#00b894', '#00cec9'],
-    displayName: 'Access Control'
-  },
+  'attendance': { icon: 'book-open', iconFamily: 'FontAwesome5', gradientColors: ['#00d285', '#00b872'], displayName: 'Attendance' },
+  'Attendance': { icon: 'book-open', iconFamily: 'FontAwesome5', gradientColors: ['#00d285', '#00b872'], displayName: 'Attendance' },
+  'office':     { icon: 'business',  iconFamily: 'Ionicons',      gradientColors: ['#003580', '#004d69'], displayName: 'Offices' },
+  'offices':    { icon: 'business',  iconFamily: 'Ionicons',      gradientColors: ['#003580', '#004d69'], displayName: 'Offices' },
+  'asset':      { icon: 'hardware-chip', iconFamily: 'Ionicons',  gradientColors: ['#80006b', '#4d0069'], displayName: 'Assets' },
+  'assets':     { icon: 'hardware-chip', iconFamily: 'Ionicons',  gradientColors: ['#80006b', '#4d0069'], displayName: 'Assets' },
+  'cab':        { icon: 'car',       iconFamily: 'FontAwesome5',  gradientColors: ['#ff5e7a', '#ff4168'], displayName: 'Car' },
+  'Cab':        { icon: 'car',       iconFamily: 'FontAwesome5',  gradientColors: ['#ff5e7a', '#ff4168'], displayName: 'Car' },
+  'VehicleAdmin':{ icon: 'car-side', iconFamily: 'FontAwesome5',  gradientColors: ['#ff5e7a', '#ff4168'], displayName: 'Vehicle Admin' },
+  'hr':         { icon: 'users',     iconFamily: 'FontAwesome5',  gradientColors: ['#ffb157', '#ff9d3f'], displayName: 'HR' },
+  'HR':         { icon: 'users',     iconFamily: 'FontAwesome5',  gradientColors: ['#ffb157', '#ff9d3f'], displayName: 'HR' },
+  'hr_employee_management': { icon: 'user-tie',    iconFamily: 'FontAwesome5', gradientColors: ['#ff4168', '#ff4168'], displayName: 'Employees' },
+  'hr_manager': { icon: 'user-shield', iconFamily: 'FontAwesome5', gradientColors: ['#ff9d3f', '#ff8c2e'], displayName: 'HR Management' },
+  'EmployeesAdmin': { icon: 'users-cog', iconFamily: 'FontAwesome5', gradientColors: ['#ffb157', '#ff9d3f'], displayName: 'Employees' },
+  'driver':     { icon: 'steering-wheel', iconFamily: 'MaterialCommunityIcons', gradientColors: ['#6c5ce7', '#5f4fd1'], displayName: 'Driver' },
+  'driver_manager': { icon: 'id-card', iconFamily: 'FontAwesome5', gradientColors: ['#6c5ce7', '#5f4fd1'], displayName: 'Duty Manager' },
+  'site_manager': { icon: 'hard-hat', iconFamily: 'FontAwesome5', gradientColors: ['#fd79a8', '#e84393'], displayName: 'Database' },
+  'bup':        { icon: 'chart-line', iconFamily: 'FontAwesome5', gradientColors: ['#ffb157', '#ff9d3f'], displayName: 'BUP' },
+  'bdt':        { icon: 'exchange-alt', iconFamily: 'FontAwesome5', gradientColors: ['#0984e3', '#0773d1'], displayName: 'Transaction' },
+  'medical':    { icon: 'medkit',    iconFamily: 'FontAwesome5',  gradientColors: ['#d63031', '#c92a2b'], displayName: 'Mediclaim' },
+  'mediclaim':  { icon: 'medkit',    iconFamily: 'FontAwesome5',  gradientColors: ['#d63031', '#c92a2b'], displayName: 'Mediclaim' },
+  'scout_boy':  { icon: 'user-alt',  iconFamily: 'FontAwesome5',  gradientColors: ['#fdcb6e', '#f6b93b'], displayName: 'Scout' },
+  'reminder':   { icon: 'bell',      iconFamily: 'FontAwesome5',  gradientColors: ['#a29bfe', '#6c5ce7'], displayName: 'Reminder' },
+  'employee_management': { icon: 'users', iconFamily: 'FontAwesome5', gradientColors: ['#74b9ff', '#0984e3'], displayName: 'Employees' },
+  'default':    { icon: 'cube',      iconFamily: 'FontAwesome5',  gradientColors: ['#636e72', '#546E7A'], displayName: 'Module' },
+  'access':     { icon: 'shield-checkmark', iconFamily: 'Ionicons', gradientColors: ['#00b894', '#00cec9'], displayName: 'Access Control' },
 };
 
-// Helper function to get module config
-const getModuleConfig = (moduleUniqueName: string): ModuleConfig => {
-  return MODULE_CONFIGURATIONS[moduleUniqueName] || MODULE_CONFIGURATIONS['default'];
-};
+const getModuleConfig = (moduleUniqueName: string): ModuleConfig =>
+  MODULE_CONFIGURATIONS[moduleUniqueName] || MODULE_CONFIGURATIONS['default'];
 
 // ============================================================================
 // COMPLETE MODULE NAVIGATION MAP
-// Maps backend module_unique_name to ActivePage type
 // ============================================================================
 const COMPLETE_MODULE_MAP: Record<string, ActivePage> = {
-  // Core modules
-  'attendance': 'attendance',
-  'Attendance': 'attendance',
-
-  //asset modules
-  'asset': 'asset',
-  'assets': 'asset',
-  'Asset': 'asset',
-
-  //office modules
-  'office': 'office',
-  'Office': 'office',
-  'offices': 'office',
-
-  // HR modules
-  'hr': 'hr',
-  'HR': 'hr',
+  'attendance': 'attendance', 'Attendance': 'attendance',
+  'asset': 'asset', 'assets': 'asset', 'Asset': 'asset',
+  'office': 'office', 'Office': 'office', 'offices': 'office',
+  'hr': 'hr', 'HR': 'hr',
   'hr_employee_management': 'hrEmployeeManager',
-  'hr_manager': 'hrManager',
-  'hr_management': 'hrManager',
-
-  // Transport modules
-  'cab': 'cab',
-  'Cab': 'cab',
-  'driver': 'driver',
-  'driver_manager': 'driverManager',
-
-  // Other modules
+  'hr_manager': 'hrManager', 'hr_management': 'hrManager',
+  'cab': 'cab', 'Cab': 'cab',
+  'driver': 'driver', 'driver_manager': 'driverManager',
   'bdt': 'bdt',
-  'medical': 'medical',
-  'mediclaim': 'medical',
-  'scout_boy': 'scoutBoy',
-  'scoutboy': 'scoutBoy',
+  'medical': 'medical', 'mediclaim': 'medical',
+  'scout_boy': 'scoutBoy', 'scoutboy': 'scoutBoy',
   'reminder': 'reminder',
-  'bup': 'bup',
-  'business update': 'bup',
+  'bup': 'bup', 'business update': 'bup',
   'site_manager': 'siteManager',
   'employee_management': 'employeeManagement',
-
-  // Special cases - Profile with modals
-  'profile': 'profile',
-  'profile-assets': 'profile',
-  'profile-payslips': 'profile',
-  'profile-documents': 'profile',
-
-  'access': 'access',
-  'Access': 'access',
-  'citadel-hub': 'messages',
-  'citadel_hub': 'messages',
-  // Settings
+  'profile': 'profile', 'profile-assets': 'profile',
+  'profile-payslips': 'profile', 'profile-documents': 'profile',
+  'access': 'access', 'Access': 'access',
+  'citadel-hub': 'messages', 'citadel_hub': 'messages',
   'settings': 'settings',
-
-  // Attendance with leaves sub-screen
   'attendance-leaves': 'attendance',
   'driver_management': 'driverManager',
-  'hr-request': 'hrManager',
-  'hr-grievance': 'hrManager',
-
+  'hr-request': 'hrManager', 'hr-grievance': 'hrManager',
 };
 
-// Main Dashboard Component
+// ============================================================================
+// MAIN DASHBOARD COMPONENT
+// ============================================================================
 function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
 
-  // ============================================================================
-  // STATE MANAGEMENT
-  // ============================================================================
+  // --------------------------------------------------------------------------
+  // STATE
+  // --------------------------------------------------------------------------
   const [token, setToken] = useState<string | null>(null);
   const [expoPushToken, setExpoPushToken] = useState<string>('');
   const [notification, setNotification] = useState<NotificationsExpo.Notification | undefined>(undefined);
@@ -388,8 +213,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [attendanceKey, setAttendanceKey] = useState(0);
   const [showSupport, setShowSupport] = useState(false);
-
-
   const [attendanceOpenLeaves, setAttendanceOpenLeaves] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hoursWorked, setHoursWorked] = useState<number[]>([]);
@@ -397,9 +220,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [showAccess, setShowAccess] = useState(false);
   const [hrManagerInitialTab, setHrManagerInitialTab] = useState<'requests' | 'grievances'>('requests');
 
-  // ============================================================================
-  // NEW: Dynamic Tile Configuration State
-  // ============================================================================
+  // Dynamic tile configuration
   const [bigTile, setBigTile] = useState<string>('attendance');
   const [smallTile1, setSmallTile1] = useState<string>('cab');
   const [smallTile2, setSmallTile2] = useState<string>('hr');
@@ -427,96 +248,209 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [showHrManager, setShowHrManager] = useState(false);
   const [showValidation, setShowValidation] = useState(false);
 
-  // Active page state for web layout
+  // Web active page
   const [activePage, setActivePage] = useState<ActivePage>('dashboard');
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  // Menu state
+
+  // Menu / nav / theme
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [activeMenuItem, setActiveMenuItem] = useState('Dashboard');
   const [activeNavItem, setActiveNavItem] = useState('home');
-
-  // Theme state
   const [isDark, setIsDark] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
-  // All modules modal
+  // Modules modal / search
   const [allModulesVisible, setAllModulesVisible] = useState(false);
   const [showAsset, setShowAsset] = useState(false);
   const [showOffice, setShowOffice] = useState(false);
-
-  // Search state for modules
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Refresh state
   const [refreshing, setRefreshing] = useState(false);
 
-  // Notification badge state
+  // ── Navigation stack (mobile only) ────────────────────────────────────────
+  const [navStack, setNavStack] = useState<NavEntry[]>([]);
+
+  // Notifications badge
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const badgeCountRef = useRef(0);
 
-  // Special navigation state for Profile assets modal
+  // Profile deep-link modal
   const [profileModalToOpen, setProfileModalToOpen] = useState<string | null>(null);
 
   // Animations
   const circleScale = useRef(new Animated.Value(0)).current;
   const switchToggle = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(isWeb ? 0 : -300)).current;
-  const bulgeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim  = useRef(new Animated.Value(isWeb ? 0 : -300)).current;
+  const bulgeAnim  = useRef(new Animated.Value(0)).current;
 
-  // Current theme colors - memoized
-  const currentColors = useMemo(() =>
-    isDark ? darkColors : lightColors,
-    [isDark]
-  );
+  const currentColors = useMemo(() => isDark ? darkColors : lightColors, [isDark]);
 
-  // Dashboard theme - memoized
   const theme = useMemo(() => ({
-    bgColor: isDark ? '#050b18' : '#ece5dd',
-    cardBg: isDark ? '#111a2d' : '#f6f6f6',
-    textMain: isDark ? '#ffffff' : '#333333',
-    textSub: isDark ? '#a0a0a0' : '#666666',
+    bgColor:    isDark ? '#050b18' : '#ece5dd',
+    cardBg:     isDark ? '#111a2d' : '#f6f6f6',
+    textMain:   isDark ? '#ffffff' : '#333333',
+    textSub:    isDark ? '#a0a0a0' : '#666666',
     accentBlue: isDark ? '#008069' : '#008069',
-    navBg: isDark ? '#0a111f' : '#ffffff',
+    navBg:      isDark ? '#0a111f' : '#ffffff',
   }), [isDark]);
 
-  // ============================================================================
-  // MEMOIZED CALLBACKS & HANDLERS
-  // ============================================================================
-
-  // Badge update callback
+  // --------------------------------------------------------------------------
+  // BADGE UPDATE
+  // --------------------------------------------------------------------------
   const handleBadgeUpdate = useCallback((count: number) => {
     if (badgeCountRef.current !== count) {
       badgeCountRef.current = count;
       setUnreadNotificationCount(count);
-      console.log(`🔔 Badge count updated: ${count}`);
     }
   }, []);
 
-  // ============================================================================
-  // FIXED NAVIGATION HANDLER FOR NOTIFICATIONS
-  // ============================================================================
+  // --------------------------------------------------------------------------
+  // CLOSE ALL PAGES  (defined early — used by handleBack & BackHandler)
+  // --------------------------------------------------------------------------
+  const closeAllPages = useCallback(() => {
+    setShowAttendance(false);
+    setAttendanceOpenLeaves(false);
+    setShowAsset(false);
+    setShowOffice(false);
+    setShowProfile(false);
+    setShowHR(false);
+    setShowCab(false);
+    setShowDriver(false);
+    setShowBDT(false);
+    setShowMedical(false);
+    setShowScoutBoy(false);
+    setShowReminder(false);
+    setShowBUP(false);
+    setShowSiteManager(false);
+    setShowNotifications(false);
+    setShowSettings(false);
+    setShowEmployeeManagement(false);
+    setShowHREmployeeManagement(false);
+    setShowChat(false);
+    setShowChatRoom(false);
+    setShowValidation(false);
+    setShowDriverManager(false);
+    setShowHrManager(false);
+    setShowAccess(false);
+    setShowPrivacy(false);
+    setShowAbout(false);
+    setShowSupport(false);
+  }, []);
+
+  // --------------------------------------------------------------------------
+  // RESTORE PAGE  (defined early — used by handleBack & BackHandler)
+  // --------------------------------------------------------------------------
+  const restorePage = useCallback((page: MobilePageKey) => {
+    switch (page) {
+      case 'attendance':          setShowAttendance(true);          break;
+      case 'profile':             setShowProfile(true);             break;
+      case 'hr':                  setShowHR(true);                  break;
+      case 'cab':                 setShowCab(true);                 break;
+      case 'driver':              setShowDriver(true);              break;
+      case 'bdt':                 setShowBDT(true);                 break;
+      case 'medical':             setShowMedical(true);             break;
+      case 'scoutBoy':            setShowScoutBoy(true);            break;
+      case 'reminder':            setShowReminder(true);            break;
+      case 'bup':                 setShowBUP(true);                 break;
+      case 'siteManager':         setShowSiteManager(true);         break;
+      case 'settings':            setShowSettings(true);            break;
+      case 'employeeManagement':  setShowEmployeeManagement(true);  break;
+      case 'hrEmployeeManager':   setShowHREmployeeManagement(true);break;
+      case 'chat':                setShowChat(true);                break;
+      case 'chatRoom':            setShowChatRoom(true);            break;
+      case 'notifications':       setShowNotifications(true);       break;
+      case 'driverManager':       setShowDriverManager(true);       break;
+      case 'hrManager':           setShowHrManager(true);           break;
+      case 'validation':          setShowValidation(true);          break;
+      case 'asset':               setShowAsset(true);               break;
+      case 'office':              setShowOffice(true);              break;
+      case 'access':              setShowAccess(true);              break;
+      case 'privacy':             setShowPrivacy(true);             break;
+      case 'about':               setShowAbout(true);               break;
+      case 'support':             setShowSupport(true);             break;
+      case 'dashboard':           /* dashboard is default */        break;
+    }
+  }, []);
+
+  // --------------------------------------------------------------------------
+  // HANDLE BACK  (defined after closeAllPages & restorePage)
+  // --------------------------------------------------------------------------
+  const handleBack = useCallback(() => {
+    setProfileModalToOpen(null);
+
+    if (isWeb) {
+      setActivePage('dashboard');
+      return;
+    }
+
+    setNavStack(prev => {
+      if (prev.length === 0) {
+        closeAllPages();
+        setActiveMenuItem('Dashboard');
+        setActiveNavItem('home');
+        return prev;
+      }
+
+      const entry = prev[prev.length - 1];
+      const next  = prev.slice(0, -1);
+
+      closeAllPages();
+
+      if (entry.page === 'dashboard') {
+        if (entry.menuWasOpen) {
+          slideAnim.setValue(0);
+          setIsMenuVisible(true);
+        } else {
+          slideAnim.setValue(-300);
+          setIsMenuVisible(false);
+        }
+        setActiveMenuItem('Dashboard');
+        setActiveNavItem('home');
+      } else {
+        slideAnim.setValue(-300);
+        setIsMenuVisible(false);
+        restorePage(entry.page);
+      }
+
+      return next;
+    });
+  }, [isWeb, closeAllPages, restorePage, slideAnim]);
+
+  // Alias for child components that still use the old name
+  const handleBackFromPage = handleBack;
+
+  // --------------------------------------------------------------------------
+  // NAVIGATE TO  (defined after closeAllPages — pushes current page onto stack)
+  // --------------------------------------------------------------------------
+  const navigateTo = useCallback((
+    fromPage: MobilePageKey,
+    openFn: () => void,
+  ) => {
+    const menuWasOpen = isMenuVisible;
+    slideAnim.setValue(-300);
+    setIsMenuVisible(false);
+    setNavStack(prev => [...prev, { page: fromPage, menuWasOpen }]);
+    closeAllPages();
+    openFn();
+  }, [isMenuVisible, closeAllPages, slideAnim]);
+
+  // --------------------------------------------------------------------------
+  // NOTIFICATION NAVIGATION
+  // --------------------------------------------------------------------------
   const handleNavigateFromNotification = useCallback((
     moduleIdentifier: string,
     extraData?: { openModal?: string }
   ) => {
-    console.log(`📍 [NAVIGATION] Starting navigation to: "${moduleIdentifier}"`, extraData);
-
-    // Normalize the identifier
     const normalized = moduleIdentifier.toLowerCase().trim();
-    console.log(`📍 [NAVIGATION] Normalized: "${normalized}"`);
 
-    // Special cases: Profile with specific modals
     const profileModalMap: Record<string, string> = {
-      'profile-assets': 'assets',
-      'profile-payslips': 'payslips',
+      'profile-assets':    'assets',
+      'profile-payslips':  'payslips',
       'profile-documents': 'documents',
     };
 
     if (profileModalMap[normalized] || (normalized === 'profile' && extraData?.openModal)) {
       const modalToOpen = profileModalMap[normalized] || extraData?.openModal;
-      console.log(`📍 [NAVIGATION] Special case: Profile with ${modalToOpen} modal`);
-
       if (isWeb) {
         setActivePage('profile');
         setProfileModalToOpen(modalToOpen || null);
@@ -527,90 +461,61 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       return;
     }
 
-    // Look up the target page from our complete map
     const targetPage = COMPLETE_MODULE_MAP[normalized];
-
     if (!targetPage) {
-      console.warn(`⚠️ [NAVIGATION] No mapping found for: "${normalized}"`);
-      console.log(`📋 [NAVIGATION] Available mappings:`, Object.keys(COMPLETE_MODULE_MAP));
       Alert.alert('Navigation Error', `Cannot navigate to "${moduleIdentifier}". Module not found.`);
       return;
     }
 
-    console.log(`✅ [NAVIGATION] Found mapping: "${normalized}" → "${targetPage}"`);
-
-    // Navigate based on platform
     if (isWeb) {
-      console.log(`📍 [WEB] Setting active page to: ${targetPage}`);
       setActivePage(targetPage);
     } else {
-      console.log(`📱 [MOBILE] Opening screen: ${targetPage}`);
-
-      // Mobile navigation - comprehensive mapping
       const navigationActions: Record<ActivePage, () => void> = {
-        'dashboard': () => { /* Already on dashboard */ },
-        'attendance': () => {
+        'dashboard':          () => { },
+        'attendance':         () => {
           setAttendanceKey(prev => prev + 1);
-          // If notification was for attendance_leaves, open the leave sub-screen
-          if (normalized === 'attendance-leaves') {
-            setAttendanceOpenLeaves(true);
-          } else {
-            setAttendanceOpenLeaves(false);
-          }
+          setAttendanceOpenLeaves(normalized === 'attendance-leaves');
           setShowAttendance(true);
         },
-        'hr': () => setShowHR(true),
-        'cab': () => setShowCab(true),
-        'driver': () => setShowDriver(true),
-        'bdt': () => setShowBDT(true),
-        'medical': () => setShowMedical(true),
-        'scoutBoy': () => setShowScoutBoy(true),
-        'reminder': () => setShowReminder(true),
-        'bup': () => setShowBUP(true),
-        'siteManager': () => setShowSiteManager(true),
+        'hr':                 () => setShowHR(true),
+        'cab':                () => setShowCab(true),
+        'driver':             () => setShowDriver(true),
+        'bdt':                () => setShowBDT(true),
+        'medical':            () => setShowMedical(true),
+        'scoutBoy':           () => setShowScoutBoy(true),
+        'reminder':           () => setShowReminder(true),
+        'bup':                () => setShowBUP(true),
+        'siteManager':        () => setShowSiteManager(true),
         'employeeManagement': () => setShowEmployeeManagement(true),
-        'hrEmployeeManager': () => setShowHREmployeeManagement(true),
-        'driverManager': () => setShowDriverManager(true),
-        'hrManager': () => {
+        'hrEmployeeManager':  () => setShowHREmployeeManagement(true),
+        'driverManager':      () => setShowDriverManager(true),
+        'hrManager':          () => {
           setHrManagerInitialTab(normalized === 'hr-grievance' ? 'grievances' : 'requests');
           setShowHrManager(true);
         },
-        'profile': () => setShowProfile(true),
-        'settings': () => setShowSettings(true),
-        'notifications': () => setShowNotifications(true),
-        'validation': () => setShowValidation(true),
-        'privacy': () => setShowPrivacy(true),
-        'messages': () => setShowChat(true),
-        'chat': () => setShowChat(true),
-        'chatRoom': () => setShowChatRoom(true),
-        'assets': () => setShowAsset(true),
-        'asset': () => setShowAsset(true),
-        'office': () => setShowOffice(true),
-        // 'offices': () => setShowOffice(true),
-        'access': () => setShowAccess(true),
+        'profile':            () => setShowProfile(true),
+        'settings':           () => setShowSettings(true),
+        'notifications':      () => setShowNotifications(true),
+        'validation':         () => setShowValidation(true),
+        'privacy':            () => setShowPrivacy(true),
+        'messages':           () => setShowChat(true),
+        'chat':               () => setShowChat(true),
+        'chatRoom':           () => setShowChatRoom(true),
+        'assets':             () => setShowAsset(true),
+        'asset':              () => setShowAsset(true),
+        'office':             () => setShowOffice(true),
+        'access':             () => setShowAccess(true),
       };
-
-      const action = navigationActions[targetPage];
-      if (action) {
-        action();
-        console.log(`✅ [MOBILE] Navigation complete: ${targetPage}`);
-      } else {
-        console.error(`❌ [MOBILE] No action defined for: ${targetPage}`);
-      }
+      navigationActions[targetPage]?.();
     }
   }, [isWeb]);
 
-  // ============================================================================
-  // NEW: Callback for real-time reminder updates
-  // ============================================================================
-
-
-  // Function to refresh user data from backend
+  // --------------------------------------------------------------------------
+  // REFRESH USER DATA
+  // --------------------------------------------------------------------------
   const refreshUserData = useCallback(async () => {
     if (!token) return;
-
     try {
-      console.log('🔄 Refreshing user data...');
       setRefreshing(true);
       const response = await fetch(`${BACKEND_URL}/core/getUser`, {
         method: 'POST',
@@ -620,42 +525,23 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
       if (response.ok) {
         const data: ApiResponse = await response.json();
-        if (data.message === "Get modules successful") {
+        if (data.message === 'Get modules successful') {
           const transformedUserData: UserData = {
             ...data.user,
-            profile_picture: data.user.profile_picture || undefined
+            profile_picture: data.user.profile_picture || undefined,
           };
 
           setUserData(transformedUserData);
           setModules(data.modules || []);
-
-          // ============================================================================
-          // NEW: Extract dynamic tile configuration from backend
-          // ============================================================================
-          if (data.big_tile) {
-            setBigTile(data.big_tile);
-            console.log('🎯 Big tile set to:', data.big_tile);
-          }
-          if (data.small_tile_1) {
-            setSmallTile1(data.small_tile_1);
-            console.log('🎯 Small tile 1 set to:', data.small_tile_1);
-          }
-          if (data.small_tile_2) {
-            setSmallTile2(data.small_tile_2);
-            console.log('🎯 Small tile 2 set to:', data.small_tile_2);
-          }
-
+          if (data.big_tile)    setBigTile(data.big_tile);
+          if (data.small_tile_1) setSmallTile1(data.small_tile_1);
+          if (data.small_tile_2) setSmallTile2(data.small_tile_2);
 
           await AsyncStorage.setItem('user_data', JSON.stringify(transformedUserData));
           await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
-          if (data.city) {
-            await AsyncStorage.setItem('city', data.city);
-          }
-          // NEW: store admin status and user city
+          if (data.city)      await AsyncStorage.setItem('city', data.city);
           await AsyncStorage.setItem('is_admin', JSON.stringify(data.is_admin ?? false));
-          if (data.user_city) {
-            await AsyncStorage.setItem('user_city', data.user_city);
-          }
+          if (data.user_city) await AsyncStorage.setItem('user_city', data.user_city);
 
           setUpcomingBirthdays(data.upcoming_birthdays || []);
           setUpcomingAnniversaries(data.upcoming_anniversary || []);
@@ -670,34 +556,31 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
           setHoursWorked(data.hours_worked_last_7_attendance || []);
           setOvertimeHours(data.overtime_hours || []);
-
-          const events = getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []);
-          setUpcomingEvents(events);
+          setUpcomingEvents(getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []));
 
           const storedModules = await AsyncStorage.getItem('last_opened_modules');
           if (storedModules) {
             let modulesArray = JSON.parse(storedModules);
-            if (data.modules && data.modules.length > 0) {
+            if (data.modules?.length > 0) {
               modulesArray = modulesArray.map((storedModule: any) => {
                 const backendModule = data.modules.find(
                   (m: any) => m.module_unique_name === storedModule.module_unique_name
                 );
-                if (backendModule) {
-                  return {
-                    ...storedModule,
-                    iconUrl: backendModule.module_icon,
-                    title: backendModule.module_name.charAt(0).toUpperCase() +
-                      backendModule.module_name.slice(1).replace('_', ' ')
-                  };
-                }
-                return storedModule;
+                return backendModule
+                  ? {
+                      ...storedModule,
+                      iconUrl: backendModule.module_icon,
+                      title: backendModule.module_name.charAt(0).toUpperCase() +
+                             backendModule.module_name.slice(1).replace('_', ' '),
+                    }
+                  : storedModule;
               });
+              const seen = new Set<string>();
               const uniqueModules: any[] = [];
-              const seen = new Set();
-              for (const module of modulesArray) {
-                if (!seen.has(module.module_unique_name)) {
-                  seen.add(module.module_unique_name);
-                  uniqueModules.push(module);
+              for (const m of modulesArray) {
+                if (!seen.has(m.module_unique_name)) {
+                  seen.add(m.module_unique_name);
+                  uniqueModules.push(m);
                 }
               }
               modulesArray = uniqueModules.slice(0, 4);
@@ -705,625 +588,23 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               setLastOpenedModules(modulesArray);
             }
           }
-
-          console.log('✅ User data refreshed successfully');
         }
       }
-    } catch (error) {
-      console.error('❌ Error refreshing user data:', error);
+    } catch (err) {
+      console.error('❌ Error refreshing user data:', err);
     } finally {
       setRefreshing(false);
     }
   }, [token]);
 
   const handleReminderUpdate = useCallback(async () => {
-    console.log('🔄 Refreshing reminders via callback...');
     await refreshUserData();
   }, [refreshUserData]);
 
-  // ============================================================================
-  // EFFECTS
-  // ============================================================================
-
-  // Auto-refresh when returning from Profile screen
-  useEffect(() => {
-    if (!showProfile && userData && token) {
-      refreshUserData();
-      // Reset profile modal state
-      setProfileModalToOpen(null);
-    }
-  }, [showProfile]);
-
-  // Debug logging function
-  const debugLog = useCallback(async (message: string, data?: any) => {
-    console.log(message, data);
-    try {
-      const logs = await AsyncStorage.getItem('debug_logs') || '[]';
-      const logArray = JSON.parse(logs);
-      logArray.push({
-        timestamp: new Date().toISOString(),
-        message,
-        data: data ? JSON.stringify(data) : null
-      });
-      const recentLogs = logArray.slice(-50);
-      await AsyncStorage.setItem('debug_logs', JSON.stringify(recentLogs));
-    } catch (error) {
-      console.error('Error storing debug log:', error);
-    }
-  }, []);
-
-  // Error logging function for push token errors
-  const logPushTokenError = useCallback(async (error: string, details?: any) => {
-    console.error('[Push Token Error]', error, details);
-    try {
-      const userToken = await AsyncStorage.getItem(TOKEN_2_KEY);
-      if (!userToken) {
-        console.error('Cannot log error: No user token available');
-        return;
-      }
-
-      const errorPayload = {
-        token: userToken,
-        error: `[Push Token] ${error}`,
-        details: details ? JSON.stringify(details) : null,
-        timestamp: new Date().toISOString(),
-        platform: Platform.OS,
-        deviceInfo: {
-          isDevice: Device.isDevice,
-          modelName: Device.modelName,
-          osVersion: Device.osVersion,
-        }
-      };
-
-      const response = await fetch(`${BACKEND_URL}/core/logError`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(errorPayload),
-      });
-
-      if (response.ok) {
-        console.log('✅ Error logged to backend successfully');
-      } else {
-        console.error('❌ Failed to log error to backend:', response.status);
-      }
-    } catch (logError) {
-      console.error('❌ Failed to send error log to backend:', logError);
-    }
-  }, []);
-
-  // Setup push notifications
-  useEffect(() => {
-    let isMounted = true;
-
-    const setupNotifications = async () => {
-      if (!token) {
-        await debugLog('Setup aborted: No user token');
-        return;
-      }
-
-      try {
-        await debugLog('Starting notification setup', { token: !!token });
-
-        const pushToken = await registerForPushNotificationsAsync();
-        await debugLog('Registration result', { pushToken: !!pushToken, isMounted });
-
-        if (pushToken && isMounted) {
-          setExpoPushToken(pushToken);
-          await debugLog('Calling sendTokenToBackend');
-          await sendTokenToBackend(pushToken, token);
-        } else if (!pushToken) {
-          await logPushTokenError('Push token registration returned undefined', {
-            isMounted,
-            hasToken: !!token
-          });
-        }
-
-        try {
-          notificationListener.current = NotificationsExpo.addNotificationReceivedListener(notification => {
-            debugLog('📱 Notification received in foreground', notification);
-            setNotification(notification);
-
-            const data = notification.request.content.data;
-            if (data?.page === 'autoMarkAttendance') {
-              debugLog('🎯 AUTO-MARK: Detected autoMarkAttendance from notification');
-              AttendanceUtils.executeAttendanceFlow('manual', true);
-            }
-          });
-
-          responseListener.current = NotificationsExpo.addNotificationResponseReceivedListener(response => {
-            debugLog('👆 Notification tapped', response);
-            const data = response.notification.request.content.data;
-
-            if (data?.page === 'autoMarkAttendance') {
-              AttendanceUtils.executeAttendanceFlow('manual', true);
-            } else if (data?.go_to) {
-              // Use go_to for navigation
-              handleNavigateFromNotification(data.go_to as string);
-            } else if (data?.page) {
-              // Fallback to page
-              handleNavigateFromNotification(data.page as string);
-            }
-          });
-        } catch (listenerError: any) {
-          await logPushTokenError('Failed to setup notification listeners', {
-            error: listenerError.message,
-            stack: listenerError.stack
-          });
-        }
-
-        try {
-          const lastNotificationResponse = await NotificationsExpo.getLastNotificationResponseAsync();
-          if (lastNotificationResponse) {
-            debugLog('📬 App opened from notification', lastNotificationResponse);
-            const data = lastNotificationResponse.notification.request.content.data;
-
-            if (data?.page === 'autoMarkAttendance') {
-              setTimeout(() => {
-                AttendanceUtils.executeAttendanceFlow('manual', true);
-              }, 1000);
-            } else if (data?.go_to) {
-              setTimeout(() => {
-                handleNavigateFromNotification(data.go_to as string);
-              }, 500);
-            } else if (data?.page) {
-              setTimeout(() => {
-                handleNavigateFromNotification(data.page as string);
-              }, 500);
-            }
-          }
-        } catch (lastNotifError: any) {
-          await logPushTokenError('Failed to get last notification response', {
-            error: lastNotifError.message,
-            stack: lastNotifError.stack
-          });
-        }
-      } catch (error: any) {
-        await debugLog('Error in setupNotifications', error.message);
-        await logPushTokenError('Unhandled error in setupNotifications', {
-          error: error.message,
-          stack: error.stack,
-          name: error.name
-        });
-      }
-    };
-
-    if (!isWeb) {
-      setupNotifications().catch(async (error: any) => {
-        await logPushTokenError('setupNotifications promise rejected', {
-          error: error.message,
-          stack: error.stack
-        });
-      });
-    }
-
-    return () => {
-      isMounted = false;
-
-      try {
-        notificationListener.current?.remove();
-        responseListener.current?.remove();
-      } catch (cleanupError: any) {
-        console.error('Error cleaning up notification listeners:', cleanupError);
-        logPushTokenError('Error during notification listener cleanup', {
-          error: cleanupError.message,
-          stack: cleanupError.stack
-        });
-      }
-    };
-  }, [token, handleNavigateFromNotification]);
-
-  // Function to register for push notifications
-  const registerForPushNotificationsAsync = useCallback(async () => {
-    let token;
-    try {
-      await debugLog('[Push Token] Starting registration...');
-
-      if (!Device.isDevice) {
-        const errorMsg = 'Not a physical device - push notifications unavailable';
-        await debugLog('[Push Token] Not a physical device');
-        await logPushTokenError(errorMsg, { isDevice: Device.isDevice });
-        Alert.alert('Debug', errorMsg);
-        return undefined;
-      }
-
-      await debugLog('[Push Token] Device check passed');
-
-      if (Platform.OS === 'android') {
-        try {
-          // Default channel
-          await NotificationsExpo.setNotificationChannelAsync('default', {
-            name: 'default',
-            importance: NotificationsExpo.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#2D3748',
-          });
-
-          // Fetch notification sound configs from backend and create channels
-          const userToken = await AsyncStorage.getItem(TOKEN_2_KEY);
-          if (userToken) {
-            const res = await fetch(`${BACKEND_URL}/core/getNotificationSounds`, {
-              method: 'GET',
-              headers: { 'Content-Type': 'application/json' },
-            });
-            if (res.ok) {
-              const configs = await res.json();
-              for (const config of configs) {
-                console.log("CONFIG", config);
-                await NotificationsExpo.setNotificationChannelAsync(config.channel_id, {
-                  name: config.module_unique_name,
-                  importance: NotificationsExpo.AndroidImportance.MAX,
-                  sound: config.android_sound_name,       // e.g. "driver.mp3"
-                  vibrationPattern: config.vibration_pattern || [0, 250, 250, 250],
-                  enableVibrate: true,
-                });
-                await debugLog(`[Push Token] Channel created: ${config.channel_id} with sound: ${config.android_sound_name}`);
-              }
-            }
-          }
-
-          await debugLog('[Push Token] All notification channels created');
-        } catch (channelError: any) {
-          await logPushTokenError('Failed to create notification channel', {
-            error: channelError.message,
-            stack: channelError.stack
-          });
-          throw channelError;
-        }
-      }
-
-      try {
-        const { status: existingStatus } = await NotificationsExpo.getPermissionsAsync();
-        await debugLog('[Push Token] Existing permission status', existingStatus);
-
-        let finalStatus = existingStatus;
-        if (existingStatus !== 'granted') {
-          const { status } = await NotificationsExpo.requestPermissionsAsync();
-          finalStatus = status;
-          await debugLog('[Push Token] New permission status', status);
-        }
-
-        if (finalStatus !== 'granted') {
-          const errorMsg = 'Permission denied for notifications';
-          await debugLog('[Push Token] Permission denied');
-          await logPushTokenError(errorMsg, { status: finalStatus });
-          Alert.alert('Permission Denied', 'Please enable notifications in settings');
-          return undefined;
-        }
-      } catch (permissionError: any) {
-        await logPushTokenError('Failed to get/request notification permissions', {
-          error: permissionError.message,
-          stack: permissionError.stack
-        });
-        throw permissionError;
-      }
-
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId
-        || Constants.easConfig?.projectId;
-
-      await debugLog('[Push Token] Project ID', projectId);
-
-      if (!projectId) {
-        const errorMsg = 'No project ID found in configuration';
-        await debugLog('[Push Token] ERROR: No project ID found');
-        await logPushTokenError(errorMsg, {
-          expoConfig: Constants.expoConfig?.extra,
-          easConfig: Constants.easConfig
-        });
-        Alert.alert(
-          'Configuration Error',
-          'Project ID missing. Please contact support.'
-        );
-        return undefined;
-      }
-
-      try {
-        await debugLog('[Push Token] Getting token for project', projectId);
-        const tokenData = await NotificationsExpo.getExpoPushTokenAsync({
-          projectId
-        });
-        token = tokenData.data;
-        await debugLog('[Push Token] Success', token);
-        return token;
-      } catch (tokenError: any) {
-        await logPushTokenError('Failed to get Expo push token', {
-          error: tokenError.message,
-          stack: tokenError.stack,
-          projectId: projectId
-        });
-        throw tokenError;
-      }
-    } catch (error: any) {
-      await debugLog('[Push Token Error]', error.message);
-      await logPushTokenError('Unhandled error in registerForPushNotificationsAsync', {
-        error: error.message,
-        stack: error.stack,
-        name: error.name
-      });
-      return undefined;
-    }
-  }, [debugLog, logPushTokenError]);
-
-  // Function to send token to backend
-  const sendTokenToBackend = useCallback(async (expoToken: string, userToken: string) => {
-    await debugLog('=== SENDING TOKEN TO BACKEND ===');
-    await debugLog('Expo Token', expoToken);
-    await debugLog('User Token exists', !!userToken);
-
-    if (!expoToken || !userToken) {
-      const errorMsg = 'Missing tokens for backend submission';
-      await debugLog('ERROR: Missing tokens', { expoToken: !!expoToken, userToken: !!userToken });
-      await logPushTokenError(errorMsg, {
-        hasExpoToken: !!expoToken,
-        hasUserToken: !!userToken
-      });
-      return;
-    }
-
-    try {
-      await debugLog('Making request to', `${BACKEND_URL}/core/modifyToken`);
-      const requestBody = {
-        token: userToken,
-        expo_token: expoToken,
-      };
-      await debugLog('Request body', requestBody);
-
-      const response = await fetch(`${BACKEND_URL}/core/modifyToken`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      await debugLog('Response status', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        await logPushTokenError('Backend rejected token registration', {
-          status: response.status,
-          statusText: response.statusText,
-          responseBody: errorText
-        });
-      }
-
-      const data = await response.json();
-      await debugLog('Backend response', data);
-
-      if (response.ok) {
-        await debugLog('✅ Push token registered successfully');
-        await AsyncStorage.setItem('expo_push_token', expoToken);
-      } else {
-        await debugLog('❌ Failed to register push token', data.message);
-        await logPushTokenError('Failed to register push token with backend', {
-          message: data.message,
-          response: data
-        });
-      }
-    } catch (error: any) {
-      await debugLog('❌ Network error', error.message);
-      await logPushTokenError('Network error while sending token to backend', {
-        error: error.message,
-        stack: error.stack,
-        name: error.name
-      });
-    }
-  }, [debugLog, logPushTokenError]);
-
-  // ============================================================================
-  // FETCH USER DATA - Only runs once on mount
-  // ============================================================================
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchToken = async () => {
-      try {
-        const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
-        if (isMounted) {
-          setToken(storedToken);
-        }
-        return storedToken;
-      } catch (error) {
-        console.error('Error getting token:', error);
-        return null;
-      }
-    };
-
-    const fetchUserData = async () => {
-      try {
-        const token = await AsyncStorage.getItem(TOKEN_2_KEY);
-        if (!token) return;
-
-        if (isMounted) {
-          setLoading(true);
-        }
-
-        const response = await fetch(`${BACKEND_URL}/core/getUser`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
-        });
-
-        if (!isMounted) return;
-
-        if (response.ok) {
-          const data: ApiResponse = await response.json();
-          if (data.message === "Get modules successful") {
-            const transformedUserData: UserData = {
-              ...data.user,
-              profile_picture: data.user.profile_picture || undefined
-            };
-
-            if (isMounted) {
-              setUserData(transformedUserData);
-              setModules(data.modules || []);
-
-              // ============================================================================
-              // NEW: Extract dynamic tile configuration from backend
-              // ============================================================================
-              if (data.big_tile) {
-                setBigTile(data.big_tile);
-                console.log('🎯 Big tile set to:', data.big_tile);
-              }
-              if (data.small_tile_1) {
-                setSmallTile1(data.small_tile_1);
-                console.log('🎯 Small tile 1 set to:', data.small_tile_1);
-              }
-              if (data.small_tile_2) {
-                setSmallTile2(data.small_tile_2);
-                console.log('🎯 Small tile 2 set to:', data.small_tile_2);
-              }
-            }
-
-            try {
-              await AsyncStorage.setItem('user_data', JSON.stringify(transformedUserData));
-              await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
-              if (data.city) {
-                await AsyncStorage.setItem('city', data.city);
-              }
-              // NEW: store admin status and user city
-              await AsyncStorage.setItem('is_admin', JSON.stringify(data.is_admin ?? false));
-              if (data.user_city) {
-                await AsyncStorage.setItem('user_city', data.user_city);
-              }
-              console.log('✅ User data, city, and driver status saved to AsyncStorage');
-            } catch (storageError) {
-              console.error('❌ Error saving to AsyncStorage:', storageError);
-            }
-
-            if (isMounted) {
-              setUpcomingBirthdays(data.upcoming_birthdays || []);
-              setUpcomingAnniversaries(data.upcoming_anniversary || []);
-
-              if (Array.isArray(data.upcoming_reminder)) {
-                setReminders(data.upcoming_reminder);
-              } else if (data.upcoming_reminder && typeof data.upcoming_reminder === 'object') {
-                setReminders([data.upcoming_reminder]);
-              } else {
-                setReminders([]);
-              }
-
-              setHoursWorked(data.hours_worked_last_7_attendance || []);
-              setOvertimeHours(data.overtime_hours || []);
-
-              const events = getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []);
-              console.log('Upcoming events:', events);
-              setUpcomingEvents(events);
-
-              const storedModules = await AsyncStorage.getItem('last_opened_modules');
-              if (storedModules) {
-                let modulesArray = JSON.parse(storedModules);
-                if (data.modules && data.modules.length > 0) {
-                  modulesArray = modulesArray.map((storedModule: any) => {
-                    const backendModule = data.modules.find(
-                      (m: any) => m.module_unique_name === storedModule.module_unique_name
-                    );
-                    if (backendModule) {
-                      return {
-                        ...storedModule,
-                        iconUrl: backendModule.module_icon,
-                        title: backendModule.module_name.charAt(0).toUpperCase() +
-                          backendModule.module_name.slice(1).replace('_', ' ')
-                      };
-                    }
-                    return storedModule;
-                  });
-                  const uniqueModules: any[] = [];
-                  const seen = new Set();
-                  for (const module of modulesArray) {
-                    if (!seen.has(module.module_unique_name)) {
-                      seen.add(module.module_unique_name);
-                      uniqueModules.push(module);
-                    }
-                  }
-                  modulesArray = uniqueModules.slice(0, 4);
-                  await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
-                  setLastOpenedModules(modulesArray);
-                }
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-        if (isMounted) {
-          setError(error instanceof Error ? error.message : 'Failed to fetch user data');
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchToken();
-    fetchUserData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  // Initialize background services
-  useEffect(() => {
-    if (!token || !userData || isWeb) return;
-
-    let isMounted = true;
-
-    const initializeBackgroundServices = async () => {
-      try {
-        console.log('🚀 Initializing hybrid attendance system...');
-
-        const permissions = await AttendanceUtils.requestLocationPermissions();
-
-        if (!permissions.foreground) {
-          console.log('❌ Location permissions not granted - attendance features disabled');
-          return;
-        }
-
-        const isExpoGo = Constants.appOwnership === 'expo';
-        if (isExpoGo) {
-          console.log('⚠️ Running in Expo Go - background services limited');
-          return;
-        }
-
-        const pollingInitialized = await BackgroundAttendanceService.initialize();
-        console.log(pollingInitialized
-          ? '✅ Polling service: Active'
-          : '❌ Polling service: Failed'
-        );
-
-        if (permissions.background) {
-          const geofencingInitialized = await GeofencingService.initialize();
-          console.log(geofencingInitialized
-            ? '✅ Geofencing service: Active'
-            : '⚠️ Geofencing service: Inactive'
-          );
-        } else {
-          console.log('⚠️ Background permission not granted - geofencing disabled');
-          console.log('   Polling will still work within working hours');
-        }
-
-        console.log('✅ Hybrid attendance system initialized');
-      } catch (error) {
-        console.warn('⚠️ Failed to initialize attendance services:', error);
-      }
-    };
-
-    initializeBackgroundServices();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [token, userData, isWeb]);
-
-  // ============================================================================
-  // HELPER FUNCTIONS
-  // ============================================================================
-
+  // --------------------------------------------------------------------------
+  // HELPERS
+  // --------------------------------------------------------------------------
   const getUpcomingEvents = useCallback((birthdays: any[], anniversaries: any[]): UpcomingEvent[] => {
-    console.log('🎉 Getting upcoming events...', birthdays, anniversaries);
     const events: UpcomingEvent[] = [];
     const today = new Date();
     const threeMonthsFromNow = new Date();
@@ -1332,78 +613,355 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     birthdays.forEach(user => {
       if (user.birth_date) {
         const birthDate = new Date(user.birth_date);
-        const nextBirthday = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
-        if (nextBirthday < today) {
-          nextBirthday.setFullYear(today.getFullYear() + 1);
-        }
-        if (nextBirthday <= threeMonthsFromNow) {
-          events.push({
-            full_name: user.full_name,
-            date: user.birth_date,
-            type: 'birthday'
-          });
-        }
+        const next = new Date(today.getFullYear(), birthDate.getMonth(), birthDate.getDate());
+        if (next < today) next.setFullYear(today.getFullYear() + 1);
+        if (next <= threeMonthsFromNow)
+          events.push({ full_name: user.full_name, date: user.birth_date, type: 'birthday' });
       }
     });
 
     anniversaries.forEach(user => {
       if (user.joining_date) {
-        const anniversaryDate = new Date(user.joining_date);
-        const nextAnniversary = new Date(today.getFullYear(), anniversaryDate.getMonth(), anniversaryDate.getDate());
-        if (nextAnniversary < today) {
-          nextAnniversary.setFullYear(today.getFullYear() + 1);
-        }
-        if (nextAnniversary <= threeMonthsFromNow) {
-          const years = today.getFullYear() - anniversaryDate.getFullYear();
-          events.push({
-            full_name: user.full_name,
-            date: user.joining_date,
-            type: 'anniversary',
-            years: years,
-            anniversaryYears: years + 1
-          });
+        const annDate = new Date(user.joining_date);
+        const next = new Date(today.getFullYear(), annDate.getMonth(), annDate.getDate());
+        if (next < today) next.setFullYear(today.getFullYear() + 1);
+        if (next <= threeMonthsFromNow) {
+          const years = today.getFullYear() - annDate.getFullYear();
+          events.push({ full_name: user.full_name, date: user.joining_date, type: 'anniversary', years, anniversaryYears: years + 1 });
         }
       }
     });
 
     events.sort((a, b) => {
-      const dateA = new Date(a.date);
-      const dateB = new Date(b.date);
-      const thisYearA = new Date(today.getFullYear(), dateA.getMonth(), dateA.getDate());
-      const thisYearB = new Date(today.getFullYear(), dateB.getMonth(), dateB.getDate());
-      const eventDateA = thisYearA >= today ? thisYearA : new Date(today.getFullYear() + 1, dateA.getMonth(), dateA.getDate());
-      const eventDateB = thisYearB >= today ? thisYearB : new Date(today.getFullYear() + 1, dateB.getMonth(), dateB.getDate());
-      return eventDateA.getTime() - eventDateB.getTime();
+      const dA = new Date(a.date), dB = new Date(b.date);
+      const tA = new Date(today.getFullYear(), dA.getMonth(), dA.getDate());
+      const tB = new Date(today.getFullYear(), dB.getMonth(), dB.getDate());
+      const eA = tA >= today ? tA : new Date(today.getFullYear() + 1, dA.getMonth(), dA.getDate());
+      const eB = tB >= today ? tB : new Date(today.getFullYear() + 1, dB.getMonth(), dB.getDate());
+      return eA.getTime() - eB.getTime();
     });
 
-    console.log(`Found ${events.length} upcoming events within next 3 months`);
     return events.slice(0, 3);
   }, []);
 
-  // ============================================================================
-  // UI HANDLERS
-  // ============================================================================
+  const debugLog = useCallback(async (message: string, data?: any) => {
+    console.log(message, data);
+    try {
+      const logs = await AsyncStorage.getItem('debug_logs') || '[]';
+      const logArray = JSON.parse(logs);
+      logArray.push({ timestamp: new Date().toISOString(), message, data: data ? JSON.stringify(data) : null });
+      await AsyncStorage.setItem('debug_logs', JSON.stringify(logArray.slice(-50)));
+    } catch { /* non-critical */ }
+  }, []);
 
+  const logPushTokenError = useCallback(async (error: string, details?: any) => {
+    console.error('[Push Token Error]', error, details);
+    try {
+      const userToken = await AsyncStorage.getItem(TOKEN_2_KEY);
+      if (!userToken) return;
+      await fetch(`${BACKEND_URL}/core/logError`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: userToken,
+          error: `[Push Token] ${error}`,
+          details: details ? JSON.stringify(details) : null,
+          timestamp: new Date().toISOString(),
+          platform: Platform.OS,
+          deviceInfo: { isDevice: Device.isDevice, modelName: Device.modelName, osVersion: Device.osVersion },
+        }),
+      });
+    } catch { /* non-critical */ }
+  }, []);
+
+  // --------------------------------------------------------------------------
+  // EFFECTS
+  // --------------------------------------------------------------------------
+
+  // Auto-refresh when returning from Profile
+  useEffect(() => {
+    if (!showProfile && userData && token) {
+      refreshUserData();
+      setProfileModalToOpen(null);
+    }
+  }, [showProfile]);
+
+  // Push notifications setup
+  useEffect(() => {
+    if (isWeb) return;
+    let isMounted = true;
+
+    const setupNotifications = async () => {
+      if (!token) return;
+      try {
+        const pushToken = await registerForPushNotificationsAsync();
+        if (pushToken && isMounted) {
+          setExpoPushToken(pushToken);
+          await sendTokenToBackend(pushToken, token);
+        }
+
+        notificationListener.current = NotificationsExpo.addNotificationReceivedListener(n => {
+          setNotification(n);
+          if (n.request.content.data?.page === 'autoMarkAttendance')
+            AttendanceUtils.executeAttendanceFlow('manual', true);
+        });
+
+        responseListener.current = NotificationsExpo.addNotificationResponseReceivedListener(r => {
+          const data = r.notification.request.content.data;
+          if (data?.page === 'autoMarkAttendance') AttendanceUtils.executeAttendanceFlow('manual', true);
+          else if (data?.go_to) handleNavigateFromNotification(data.go_to as string);
+          else if (data?.page)  handleNavigateFromNotification(data.page as string);
+        });
+
+        const lastResp = await NotificationsExpo.getLastNotificationResponseAsync();
+        if (lastResp) {
+          const data = lastResp.notification.request.content.data;
+          if (data?.page === 'autoMarkAttendance')      setTimeout(() => AttendanceUtils.executeAttendanceFlow('manual', true), 1000);
+          else if (data?.go_to) setTimeout(() => handleNavigateFromNotification(data.go_to as string), 500);
+          else if (data?.page)  setTimeout(() => handleNavigateFromNotification(data.page as string), 500);
+        }
+      } catch (err: any) {
+        await logPushTokenError('Unhandled error in setupNotifications', { error: err.message });
+      }
+    };
+
+    setupNotifications();
+
+    return () => {
+      isMounted = false;
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
+    };
+  }, [token, handleNavigateFromNotification]);
+
+  const registerForPushNotificationsAsync = useCallback(async () => {
+    try {
+      if (!Device.isDevice) { Alert.alert('Debug', 'Not a physical device'); return undefined; }
+
+      if (Platform.OS === 'android') {
+        await NotificationsExpo.setNotificationChannelAsync('default', {
+          name: 'default',
+          importance: NotificationsExpo.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#2D3748',
+        });
+        const userToken = await AsyncStorage.getItem(TOKEN_2_KEY);
+        if (userToken) {
+          const res = await fetch(`${BACKEND_URL}/core/getNotificationSounds`, { method: 'GET', headers: { 'Content-Type': 'application/json' } });
+          if (res.ok) {
+            const configs = await res.json();
+            for (const cfg of configs) {
+              await NotificationsExpo.setNotificationChannelAsync(cfg.channel_id, {
+                name: cfg.module_unique_name,
+                importance: NotificationsExpo.AndroidImportance.MAX,
+                sound: cfg.android_sound_name,
+                vibrationPattern: cfg.vibration_pattern || [0, 250, 250, 250],
+                enableVibrate: true,
+              });
+            }
+          }
+        }
+      }
+
+      const { status: existing } = await NotificationsExpo.getPermissionsAsync();
+      let finalStatus = existing;
+      if (existing !== 'granted') {
+        const { status } = await NotificationsExpo.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') {
+        Alert.alert('Permission Denied', 'Please enable notifications in settings');
+        return undefined;
+      }
+
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId || Constants.easConfig?.projectId;
+      if (!projectId) { Alert.alert('Configuration Error', 'Project ID missing.'); return undefined; }
+
+      const { data } = await NotificationsExpo.getExpoPushTokenAsync({ projectId });
+      return data;
+    } catch (err: any) {
+      await logPushTokenError('registerForPushNotificationsAsync failed', { error: err.message });
+      return undefined;
+    }
+  }, [logPushTokenError]);
+
+  const sendTokenToBackend = useCallback(async (expoToken: string, userToken: string) => {
+    if (!expoToken || !userToken) return;
+    try {
+      const response = await fetch(`${BACKEND_URL}/core/modifyToken`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: userToken, expo_token: expoToken }),
+      });
+      if (response.ok) await AsyncStorage.setItem('expo_push_token', expoToken);
+    } catch (err: any) {
+      await logPushTokenError('Network error sending token', { error: err.message });
+    }
+  }, [logPushTokenError]);
+
+  // Fetch user data on mount
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchUserData = async () => {
+      try {
+        const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
+        if (isMounted) setToken(storedToken);
+        if (!storedToken) return;
+        if (isMounted) setLoading(true);
+
+        const response = await fetch(`${BACKEND_URL}/core/getUser`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: storedToken }),
+        });
+        if (!isMounted) return;
+
+        if (response.ok) {
+          const data: ApiResponse = await response.json();
+          if (data.message === 'Get modules successful') {
+            const transformedUserData: UserData = {
+              ...data.user,
+              profile_picture: data.user.profile_picture || undefined,
+            };
+
+            if (isMounted) {
+              setUserData(transformedUserData);
+              setModules(data.modules || []);
+              if (data.big_tile)    setBigTile(data.big_tile);
+              if (data.small_tile_1) setSmallTile1(data.small_tile_1);
+              if (data.small_tile_2) setSmallTile2(data.small_tile_2);
+            }
+
+            try {
+              await AsyncStorage.setItem('user_data', JSON.stringify(transformedUserData));
+              await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
+              if (data.city)      await AsyncStorage.setItem('city', data.city);
+              await AsyncStorage.setItem('is_admin', JSON.stringify(data.is_admin ?? false));
+              if (data.user_city) await AsyncStorage.setItem('user_city', data.user_city);
+            } catch (e) { console.error('AsyncStorage error:', e); }
+
+            if (isMounted) {
+              setUpcomingBirthdays(data.upcoming_birthdays || []);
+              setUpcomingAnniversaries(data.upcoming_anniversary || []);
+
+              if (Array.isArray(data.upcoming_reminder)) setReminders(data.upcoming_reminder);
+              else if (data.upcoming_reminder && typeof data.upcoming_reminder === 'object') setReminders([data.upcoming_reminder]);
+              else setReminders([]);
+
+              setHoursWorked(data.hours_worked_last_7_attendance || []);
+              setOvertimeHours(data.overtime_hours || []);
+              setUpcomingEvents(getUpcomingEvents(data.upcoming_birthdays || [], data.upcoming_anniversary || []));
+
+              const storedModules = await AsyncStorage.getItem('last_opened_modules');
+              if (storedModules) {
+                let modulesArray = JSON.parse(storedModules);
+                if (data.modules?.length > 0) {
+                  modulesArray = modulesArray.map((sm: any) => {
+                    const bm = data.modules.find((m: any) => m.module_unique_name === sm.module_unique_name);
+                    return bm ? { ...sm, iconUrl: bm.module_icon, title: bm.module_name.charAt(0).toUpperCase() + bm.module_name.slice(1).replace('_', ' ') } : sm;
+                  });
+                  const seen = new Set<string>();
+                  const unique: any[] = [];
+                  for (const m of modulesArray) {
+                    if (!seen.has(m.module_unique_name)) { seen.add(m.module_unique_name); unique.push(m); }
+                  }
+                  modulesArray = unique.slice(0, 4);
+                  await AsyncStorage.setItem('last_opened_modules', JSON.stringify(modulesArray));
+                  setLastOpenedModules(modulesArray);
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching user data:', err);
+        if (isMounted) setError(err instanceof Error ? err.message : 'Failed to fetch user data');
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchUserData();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Background services
+  useEffect(() => {
+    if (!token || !userData || isWeb) return;
+    let isMounted = true;
+
+    const init = async () => {
+      try {
+        const perms = await AttendanceUtils.requestLocationPermissions();
+        if (!perms.foreground) return;
+        if (Constants.appOwnership === 'expo') return;
+
+        await BackgroundAttendanceService.initialize();
+        if (perms.background) await GeofencingService.initialize();
+      } catch (e) { console.warn('Background services failed:', e); }
+    };
+
+    init();
+    return () => { isMounted = false; };
+  }, [token, userData, isWeb]);
+
+  // Android hardware back button
+  useEffect(() => {
+    if (isWeb || Platform.OS !== 'android') return;
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (navStack.length === 0) return false;
+
+      setNavStack(prev => {
+        if (prev.length === 0) return prev;
+        const entry = prev[prev.length - 1];
+        const next  = prev.slice(0, -1);
+
+        closeAllPages();
+
+        if (entry.page === 'dashboard') {
+          if (entry.menuWasOpen) { slideAnim.setValue(0); setIsMenuVisible(true); }
+          else                   { slideAnim.setValue(-300); setIsMenuVisible(false); }
+          setActiveMenuItem('Dashboard');
+          setActiveNavItem('home');
+        } else {
+          slideAnim.setValue(-300);
+          setIsMenuVisible(false);
+          restorePage(entry.page);
+        }
+
+        setProfileModalToOpen(null);
+        return next;
+      });
+
+      return true;
+    });
+
+    return () => sub.remove();
+  }, [isWeb, navStack.length, closeAllPages, restorePage, slideAnim]);
+
+  // --------------------------------------------------------------------------
+  // UI HANDLERS
+  // --------------------------------------------------------------------------
   const handleThemeToggle = useCallback(() => {
     if (isAnimating) return;
     setIsAnimating(true);
-    Animated.timing(switchToggle, {
-      toValue: isDark ? 0 : 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-    Animated.timing(circleScale, {
-      toValue: 1,
-      duration: 600,
-      useNativeDriver: true,
-    }).start(() => {
-      setIsDark(!isDark);
+    Animated.timing(switchToggle, { toValue: isDark ? 0 : 1, duration: 300, useNativeDriver: true }).start();
+    Animated.timing(circleScale,  { toValue: 1, duration: 600, useNativeDriver: true }).start(() => {
+      setIsDark(d => !d);
       circleScale.setValue(0);
       setIsAnimating(false);
     });
   }, [isAnimating, isDark, circleScale, switchToggle]);
 
   const handleModulePressWrapper = useCallback((moduleName: string, moduleUniqueName?: string) => {
+    if (!isWeb) {
+      const menuWasOpen = isMenuVisible;
+      slideAnim.setValue(-300);
+      setIsMenuVisible(false);
+      setNavStack(prev => [...prev, { page: 'dashboard', menuWasOpen }]);
+    }
     handleModulePress({
       moduleName,
       moduleUniqueName,
@@ -1429,62 +987,23 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setShowAsset,
       setShowOffice,
       setShowAccess,
-      Alert
+      Alert,
     });
-  }, [modules, isWeb, setShowAsset]);
-
-  const handleBackFromPage = useCallback(() => {
-    if (isWeb) {
-      setActivePage('dashboard');
-    } else {
-      setShowAttendance(false);
-      setAttendanceOpenLeaves(false);
-      setShowAsset(false);
-      setShowOffice(false);
-      setShowProfile(false);
-      setShowHR(false);
-      setShowCab(false);
-      setShowDriver(false);
-      setShowBDT(false);
-      setShowMedical(false);
-      setShowScoutBoy(false);
-      setShowReminder(false);
-      setShowBUP(false);
-      setShowSiteManager(false);
-      setShowNotifications(false);
-      setShowSettings(false);
-      setShowEmployeeManagement(false);
-      setShowHREmployeeManagement(false);
-      setShowChat(false);
-      setShowChatRoom(false);
-      setShowValidation(false);
-      setShowDriverManager(false);
-      setShowHrManager(false);
-      setActiveMenuItem('Dashboard');
-      setActiveNavItem('home');
-      setShowAccess(false);
-      setShowPrivacy(false);
-      setShowAbout(false);
-      setShowSupport(false);
-    }
-    // Reset profile modal state
-    setProfileModalToOpen(null);
-  }, [isWeb]);
+  }, [modules, isWeb, isMenuVisible, slideAnim]);
 
   const handleLogout = useCallback(async () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Logout',
-        style: 'destructive',
+        text: 'Logout', style: 'destructive',
         onPress: async () => {
           if (!isWeb) {
             await BackgroundAttendanceService.stop();
             await GeofencingService.stop();
-            console.log('✅ All attendance services stopped');
           }
+          setNavStack([]);
           onLogout();
-        }
+        },
       },
     ]);
   }, [isWeb, onLogout]);
@@ -1497,136 +1016,94 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   const closeMenu = useCallback(() => {
     if (!isWeb) {
-      Animated.timing(slideAnim, { toValue: -300, duration: 300, useNativeDriver: true }).start(() => setIsMenuVisible(false));
+      Animated.timing(slideAnim, { toValue: -300, duration: 300, useNativeDriver: true })
+        .start(() => setIsMenuVisible(false));
     } else {
       setIsMenuVisible(false);
     }
   }, [isWeb, slideAnim]);
 
+  // handleNavItemPress — defined after navigateTo
   const handleNavItemPress = useCallback((navItem: string) => {
     setActiveNavItem(navItem);
-    setActiveNavItem(navItem);
     if (navItem === 'message') {
-      if (isWeb) {
-        setActivePage('messages');
-      } else {
-        setShowChat(true);  // This opens CitadelHub on mobile
-      }
+      if (isWeb) setActivePage('messages');
+      else navigateTo('dashboard', () => setShowChat(true));
     } else if (navItem === 'hr') {
-
-      if (isWeb) {
-        setActivePage('hr');
-      } else {
-        setShowHR(true);
-      }
+      if (isWeb) setActivePage('hr');
+      else navigateTo('dashboard', () => setShowHR(true));
     } else if (navItem === 'assets' || navItem === 'asset') {
-      if (isWeb) {
-        setActivePage('assets');
-      } else {
-        setShowAsset(true);
-      }
-    }
-    else if (navItem === 'support') {
-      if (isWeb) {
-        setActivePage('support'); // optional web support
-      } else {
-        setShowSupport(true);
-      }
+      if (isWeb) setActivePage('assets');
+      else navigateTo('dashboard', () => setShowAsset(true));
+    } else if (navItem === 'support') {
+      if (isWeb) setActivePage('support' as ActivePage);
+      else navigateTo('dashboard', () => setShowSupport(true));
     } else if (navItem !== 'home') {
       Alert.alert('Coming Soon', `${navItem} feature will be available soon!`);
     }
-  }, [isWeb]);
-
-  // ============================================================================
-  // COMPUTED VALUES
-  // ============================================================================
-
-  const displayModules = useMemo(() => getDisplayModules(modules), [modules]);
-
-  const filteredModules = useMemo(() =>
-    displayModules.filter(module =>
-      module.title.toLowerCase().includes(searchQuery.toLowerCase())
-    ), [displayModules, searchQuery]
-  );
+  }, [isWeb, navigateTo]);
 
   const drawerMenuItems = useMemo(() => [
-    { id: 'profile', title: 'Profile', icon: 'user', color: '#3B82F6' },
-    { id: 'settings', title: 'Settings', icon: 'settings', color: '#3B82F6' },
-    { id: 'notifications', title: 'Notifications', icon: 'notification', color: '#F59E0B' },
-    { id: 'privacy', title: 'Privacy Policy', icon: 'shield', color: '#1E40AF' },
-    { id: 'messages', title: 'Messages', icon: 'chatbubbles', color: '#10B981' },
+    { id: 'profile',       title: 'Profile',        icon: 'user',         color: '#3B82F6' },
+    { id: 'settings',      title: 'Settings',        icon: 'settings',     color: '#3B82F6' },
+    { id: 'notifications', title: 'Notifications',   icon: 'notification', color: '#F59E0B' },
+    { id: 'privacy',       title: 'Privacy Policy',  icon: 'shield',       color: '#1E40AF' },
+    { id: 'messages',      title: 'Messages',        icon: 'chatbubbles',  color: '#10B981' },
   ], []);
 
   const handleMenuItemPress = useCallback((item: any) => {
     setActiveMenuItem(item.title);
     closeMenu();
-    const pageMap: Record<string, ActivePage> = {
-      'profile': 'profile',
-      'settings': 'settings',
-      'validation': 'validation',
-      'notifications': 'notifications',
-      'messages': 'messages',
-      'privacy': 'privacy',
-      'logout': 'dashboard'
+
+    const pageMap: Partial<Record<string, ActivePage>> = {
+      profile: 'profile', settings: 'settings', validation: 'validation',
+      notifications: 'notifications', messages: 'messages', privacy: 'privacy',
     };
 
     const targetPage = pageMap[item.id];
-    if (targetPage) {
-      if (isWeb) {
-        setActivePage(targetPage);
-      } else {
-        const mobileHandlers: Record<ActivePage, () => void> = {
-          'profile': () => setShowProfile(true),
-          'messages': () => setShowChat(true),
-          'settings': () => setShowSettings(true),
-          'notifications': () => setShowNotifications(true),
-          'validation': () => setShowValidation(true),
-          'dashboard': () => { },
-          'attendance': () => { },
-          'hr': () => { },
-          'cab': () => { },
-          'driver': () => { },
-          'bdt': () => { },
-          'medical': () => { },
-          'scoutBoy': () => { },
-          'reminder': () => { },
-          'bup': () => { },
-          'siteManager': () => { },
-          'employeeManagement': () => { },
-          'driverManager': () => { },
-          'hrManager': () => { },
-          'hrEmployeeManager': () => { },
-          'privacy': () => setShowPrivacy(true),
-          'chat': () => { },
-          'chatRoom': () => { },
-          'assets': () => setShowAsset(true),
-        };
-        mobileHandlers[targetPage]();
-      }
-    }
-  }, [isWeb, closeMenu]);
+    if (!targetPage) return;
 
-  const maxRadius = Math.sqrt(screenWidth * screenWidth + screenHeight * screenHeight);
-  const circleSize = circleScale.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, maxRadius * 2.5],
-  });
+    if (isWeb) {
+      setActivePage(targetPage);
+    } else {
+      // All menu navigation originates from 'dashboard'
+      const handlers: Partial<Record<ActivePage, () => void>> = {
+        'profile':       () => navigateTo('dashboard', () => setShowProfile(true)),
+        'messages':      () => navigateTo('dashboard', () => setShowChat(true)),
+        'settings':      () => navigateTo('dashboard', () => setShowSettings(true)),
+        'notifications': () => navigateTo('dashboard', () => setShowNotifications(true)),
+        'validation':    () => navigateTo('dashboard', () => setShowValidation(true)),
+        'privacy':       () => navigateTo('dashboard', () => setShowPrivacy(true)),
+        'assets':        () => navigateTo('dashboard', () => setShowAsset(true)),
+      };
+      handlers[targetPage]?.();
+    }
+  }, [isWeb, closeMenu, navigateTo]);
+
+  // --------------------------------------------------------------------------
+  // COMPUTED VALUES
+  // --------------------------------------------------------------------------
+  const displayModules  = useMemo(() => getDisplayModules(modules), [modules]);
+  const filteredModules = useMemo(() =>
+    displayModules.filter(m => m.title.toLowerCase().includes(searchQuery.toLowerCase())),
+    [displayModules, searchQuery]
+  );
 
   const switchTranslate = switchToggle.interpolate({
     inputRange: [0, 1],
     outputRange: [4, screenWidth * 0.43 - 54],
   });
 
-  // ============================================================================
-  // NEW: Dynamic Tile Rendering Component
-  // ============================================================================
+  // --------------------------------------------------------------------------
+  // DYNAMIC TILE RENDERER
+  // --------------------------------------------------------------------------
   const renderModuleTile = (moduleUniqueName: string, size: 'big' | 'small') => {
     const config = getModuleConfig(moduleUniqueName);
-    const IconComponent = config.iconFamily === 'Ionicons' ? Ionicons :
+    const IconComponent =
+      config.iconFamily === 'Ionicons' ? Ionicons :
       config.iconFamily === 'MaterialCommunityIcons' ? MaterialCommunityIcons :
-        FontAwesome5;
-
-    const iconSize = size === 'big' ? 22 : 18;
+      FontAwesome5;
+    const iconSize      = size === 'big' ? 22 : 18;
     const containerStyle = size === 'big' ? styles.moduleAttendance : styles.moduleSmall;
 
     return (
@@ -1656,10 +1133,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     );
   };
 
-  // ============================================================================
-  // RENDER STATES
-  // ============================================================================
-
+  // --------------------------------------------------------------------------
+  // LOADING / ERROR STATES
+  // --------------------------------------------------------------------------
   if (loading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: theme.bgColor }, isWeb && styles.loadingContainerWeb]}>
@@ -1672,7 +1148,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   if (error || !userData) {
     return (
       <View style={[styles.container, styles.centerContent, { backgroundColor: currentColors.headerBg }, isWeb && styles.containerWeb]}>
-        <StatusBar barStyle={isDark ? "light-content" : "light-content"} backgroundColor={currentColors.headerBg} />
+        <StatusBar barStyle="light-content" backgroundColor={currentColors.headerBg} />
         <Text style={[styles.errorText, { color: currentColors.text }, isWeb && styles.errorTextWeb]}>Failed to load data</Text>
         <TouchableOpacity style={[styles.retryButton, { backgroundColor: currentColors.info }]}>
           <Text style={[styles.retryButtonText, { color: currentColors.white }]}>Retry</Text>
@@ -1681,211 +1157,69 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     );
   }
 
-  if (showValidation && !isWeb) {
-    return (
-      <ValidationScreen onBack={handleBackFromPage} />
-    );
-  }
-
-
+  // --------------------------------------------------------------------------
+  // MOBILE PAGE RENDERS  (early returns before the main dashboard shell)
+  // --------------------------------------------------------------------------
   if (!isWeb) {
-    if (showChatRoom && selectedChatRoom) {
-      return (
-        <CitadelHub
-          apiBaseUrl={BACKEND_URL}
-          wsBaseUrl={BACKEND_URL_WEBSOCKET}
-          token={token}
-          currentUser={userData}
-        />
-      );
-    }
-
-    if (showChat) {
-      return (
-        <CitadelHub
-          apiBaseUrl={BACKEND_URL}
-          wsBaseUrl={BACKEND_URL_WEBSOCKET}
-          token={token}
-          onBack={handleBackFromPage}
-          currentUser={userData}
-        />
-      );
-    }
-
-    if (showNotifications) {
-      return (
-        <Notifications
-          onBack={handleBackFromPage}
-          isDark={isDark}
-          onBadgeUpdate={handleBadgeUpdate}
-          onNavigateToModule={handleNavigateFromNotification}
-        />
-      );
-    }
-
-    if (showDriverManager) {
-      return (
-        <DriverManager onBack={handleBackFromPage} />
-      );
-    }
-    if (showAsset) {
-      return (
-        <AssetModule
-          onBack={handleBackFromPage}
-          isDark={isDark}
-        />
-      );
-    }
-    if (showAccess) {
-      return (
-        <AccessModule onBack={handleBackFromPage} />
-      );
-    }
-    if (showOffice) {
-      return (
-        <OfficeModule
-          onBack={handleBackFromPage}
-          isDark={isDark}
-        />
-      );
-    }
-
-    if (showHrManager) {
-      return (
-        <HR_Manager onBack={handleBackFromPage} initialTab={hrManagerInitialTab} />
-      );
-    }
-
-    if (showAttendance) {
-      return (
-        <AttendanceWrapper key={attendanceKey} onBack={handleBackFromPage} attendanceKey={attendanceKey} initialShowLeaves={attendanceOpenLeaves} />
-      );
-    }
-
-    if (showProfile) {
+    if (showValidation)                  return <ValidationScreen onBack={handleBack} />;
+    if (showChatRoom && selectedChatRoom)
+      return <CitadelHub apiBaseUrl={BACKEND_URL} wsBaseUrl={BACKEND_URL_WEBSOCKET} token={token} currentUser={userData} />;
+    if (showChat)
+      return <CitadelHub apiBaseUrl={BACKEND_URL} wsBaseUrl={BACKEND_URL_WEBSOCKET} token={token} onBack={handleBack} currentUser={userData} />;
+    if (showNotifications)
+      return <Notifications onBack={handleBack} isDark={isDark} onBadgeUpdate={handleBadgeUpdate} onNavigateToModule={handleNavigateFromNotification} />;
+    if (showDriverManager)       return <DriverManager onBack={handleBack} />;
+    if (showAsset)               return <AssetModule onBack={handleBack} isDark={isDark} />;
+    if (showAccess)              return <AccessModule onBack={handleBack} />;
+    if (showOffice)              return <OfficeModule onBack={handleBack} isDark={isDark} />;
+    if (showHrManager)           return <HR_Manager onBack={handleBack} initialTab={hrManagerInitialTab} />;
+    if (showAttendance)
+      return <AttendanceWrapper key={attendanceKey} onBack={handleBack} attendanceKey={attendanceKey} initialShowLeaves={attendanceOpenLeaves} />;
+    if (showProfile)
       return (
         <Profile
-          onBack={handleBackFromPage}
+          onBack={handleBack}
           userData={userData}
           onProfileUpdate={(updatedData: UserData) => {
-            const completeData: UserData = {
-              ...userData!,
-              ...updatedData
-            };
-            setUserData(completeData);
+            setUserData({ ...userData!, ...updatedData });
             refreshUserData();
           }}
           initialModalToOpen={profileModalToOpen}
         />
       );
-    }
-    if (showPrivacy) {
-      return <PrivacyPolicy onBack={handleBackFromPage} isDark={isDark} />;
-    }
-    if (showAbout) {
-  return <About onBack={handleBackFromPage} isDark={isDark} appVersion="1.0.0" />;
-  }
-    if (showHR) {
+    if (showPrivacy)  return <PrivacyPolicy onBack={handleBack} isDark={isDark} />;
+    if (showAbout)    return <About onBack={handleBack} isDark={isDark} appVersion="1.0.0" />;
+    if (showHR)       return <HR onBack={handleBack} />;
+    if (showCab)      return <Cab onBack={handleBack} />;
+    if (showDriver)   return <Driver onBack={handleBack} />;
+    if (showBDT)      return <BDT onBack={handleBack} />;
+    if (showMedical)  return <Medical onBack={handleBack} />;
+    if (showScoutBoy) return <ScoutBoy onBack={handleBack} />;
+    if (showReminder) return <Reminder onBack={handleBack} onReminderUpdate={handleReminderUpdate} />;
+    if (showBUP)      return <BUP onBack={handleBack} />;
+    if (showSiteManager) return <SiteManager onBack={handleBack} />;
+    if (showSettings)
       return (
-        <HR onBack={handleBackFromPage} />
-      );
-    }
-
-    if (showCab) {
-      return (
-        <Cab onBack={handleBackFromPage} />
-      );
-    }
-
-    if (showDriver) {
-      return (
-        <Driver onBack={handleBackFromPage} />
-      );
-    }
-
-    if (showBDT) {
-      return (
-        <BDT onBack={handleBackFromPage} />
-      );
-    }
-
-    if (showMedical) {
-      return (
-        <Medical onBack={handleBackFromPage} />
-      );
-    }
-
-    if (showScoutBoy) {
-      return (
-        <ScoutBoy onBack={handleBackFromPage} />
-      );
-    }
-
-    // ============================================================================
-    // UPDATED: Reminder component with callback for real-time updates
-    // ============================================================================
-    if (showReminder) {
-      return (
-        <Reminder
-          onBack={handleBackFromPage}
-          onReminderUpdate={handleReminderUpdate}  // Add this prop
+        <Settings
+          onBack={handleBack}
+          isDark={isDark}
+          onHelpCenter={()     => navigateTo('settings', () => setShowSupport(true))}
+          onReportProblem={()  => navigateTo('settings', () => setShowSupport(true))}
+          onPrivacyPolicy={()  => navigateTo('settings', () => setShowPrivacy(true))}
+          onAbout={()          => navigateTo('settings', () => setShowAbout(true))}
         />
       );
-    }
-
-    if (showBUP) {
-      return (
-        <BUP onBack={handleBackFromPage} />
-      );
-    }
-
-    if (showSiteManager) {
-      return (
-        <SiteManager onBack={handleBackFromPage} />
-      );
-    }
-
-    if (showSettings) {
-  return (
-    <Settings
-      onBack={handleBackFromPage}
-      isDark={isDark}
-      onHelpCenter={() => { setShowSettings(false); setShowSupport(true); }}
-      onReportProblem={() => { setShowSettings(false); setShowSupport(true); }}
-      onPrivacyPolicy={() => { setShowSettings(false); setShowPrivacy(true); }}
-      onAbout={() => { setShowSettings(false); setShowAbout(true); }}
-    />
-  );
-}
-
-    if (showEmployeeManagement) {
-      return (
-        <EmployeeManagement onBack={handleBackFromPage} />
-      );
-    }
-
-    if (showHREmployeeManager) {
-      return (
-        <HREmployeeManager onBack={handleBackFromPage} />
-      );
-    }
-
-    if (showSupport) {
-      return <Support onBack={handleBackFromPage} isDark={isDark} />;
-    }
+    if (showEmployeeManagement) return <EmployeeManagement onBack={handleBack} />;
+    if (showHREmployeeManager)  return <HREmployeeManager onBack={handleBack} />;
+    if (showSupport)             return <Support onBack={handleBack} isDark={isDark} />;
   }
 
-  // ============================================================================
-  // MAIN DASHBOARD RENDER
-  // ============================================================================
-
+  // --------------------------------------------------------------------------
+  // MAIN DASHBOARD SHELL  (web + mobile scaffold)
+  // --------------------------------------------------------------------------
   return (
     <View style={[styles.safeContainer, { backgroundColor: theme.bgColor }, isWeb && styles.safeContainerWeb]}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'light-content'}
-        backgroundColor={currentColors.headerBg}
-        translucent={false}
-      />
+      <StatusBar barStyle="light-content" backgroundColor={currentColors.headerBg} translucent={false} />
 
       <HamburgerMenu
         isVisible={isMenuVisible}
@@ -1918,247 +1252,77 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             pointerEvents="none"
             style={[
               styles.circleOverlay,
-              {
-                opacity: circleScale,
-                transform: [{ scale: circleScale }],
-                backgroundColor: isDark ? '#e7e6e5' : '#050b18',
-              },
+              { opacity: circleScale, transform: [{ scale: circleScale }], backgroundColor: isDark ? '#e7e6e5' : '#050b18' },
             ]}
           />
         )}
 
         {isWeb ? (
-          // WEB LAYOUT
+          /* ================================================================
+             WEB LAYOUT
+          ================================================================ */
           <View style={[styles.webContainer, { backgroundColor: theme.bgColor }]}>
-            {/* Left Side - User Profile & Navigation */}
+            {/* Left sidebar */}
             <View style={[styles.webLeftSide, { backgroundColor: theme.navBg }]}>
               <View style={[styles.webUserProfile, { backgroundColor: theme.navBg }]}>
                 {userData?.profile_picture ? (
-                  <Image
-                    source={{ uri: userData.profile_picture }}
-                    style={styles.webUserAvatar}
-                  />
+                  <Image source={{ uri: userData.profile_picture }} style={styles.webUserAvatar} />
                 ) : (
                   <View style={[styles.webAvatarPlaceholder, { backgroundColor: currentColors.primaryBlue }]}>
-                    <Text style={styles.webAvatarText}>
-                      {getInitials(userData?.full_name || 'User')}
-                    </Text>
+                    <Text style={styles.webAvatarText}>{getInitials(userData?.full_name || 'User')}</Text>
                   </View>
                 )}
                 <View style={styles.webUserInfo}>
-                  <Text style={[styles.webUserName, { color: theme.textMain }]}>
-                    {userData?.full_name || 'User'}
-                  </Text>
-                  <Text style={[styles.webUserDesignation, { color: theme.textSub }]}>
-                    {userData?.designation || 'Employee'}
-                  </Text>
+                  <Text style={[styles.webUserName, { color: theme.textMain }]}>{userData?.full_name || 'User'}</Text>
+                  <Text style={[styles.webUserDesignation, { color: theme.textSub }]}>{userData?.designation || 'Employee'}</Text>
                 </View>
-                <TouchableOpacity
-                  style={[styles.webSettingsButton, { backgroundColor: theme.navBg }]}
-                  onPress={() => setActivePage('settings')}
-                >
+                <TouchableOpacity style={[styles.webSettingsButton, { backgroundColor: theme.navBg }]} onPress={() => setActivePage('settings')}>
                   <Ionicons name="settings-outline" size={24} color={theme.textMain} />
                 </TouchableOpacity>
               </View>
 
               <View style={styles.webNavigation}>
-                <TouchableOpacity
-                  style={[
-                    styles.webNavItem,
-                    { backgroundColor: theme.navBg },
-                    activePage === 'dashboard' && styles.webNavItemActive
-                  ]}
-                  onPress={() => {
-                    setActiveNavItem('home');
-                    setActivePage('dashboard');
-                  }}
-                >
-                  <Ionicons
-                    name="home"
-                    size={24}
-                    color={activePage === 'dashboard' ? currentColors.primaryBlue : theme.textSub}
-                  />
-                  <Text style={[
-                    styles.webNavText,
-                    {
-                      color: activePage === 'dashboard' ? currentColors.primaryBlue : theme.textSub,
-                      fontWeight: activePage === 'dashboard' ? '600' : '400'
-                    }
-                  ]}>
-                    Home
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.webNavItem,
-                    { backgroundColor: theme.navBg },
-                    activePage === 'profile' && styles.webNavItemActive
-                  ]}
-                  onPress={() => {
-                    setActiveNavItem('profile');
-                    setActivePage('profile');
-                  }}
-                >
-                  <Ionicons
-                    name="person-circle-outline"
-                    size={24}
-                    color={activePage === 'profile' ? currentColors.primaryBlue : theme.textSub}
-                  />
-
-                  {/* {activePage === 'privacy' && (
-                    <PrivacyPolicy
-                      onBack={() => setActivePage('dashboard')}
-                      isDark={isDark}
-                    />
-                  )} */}
-                  <Text style={[
-                    styles.webNavText,
-                    {
-                      color: activePage === 'profile' ? currentColors.primaryBlue : theme.textSub,
-                      fontWeight: activePage === 'profile' ? '600' : '400'
-                    }
-                  ]}>
-                    Profile
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.webNavItem,
-                    { backgroundColor: theme.navBg },
-                    activePage === 'settings' && styles.webNavItemActive
-                  ]}
-                  onPress={() => {
-                    setActiveNavItem('settings');
-                    setActivePage('settings');
-                  }}
-                >
-                  <Ionicons
-                    name="settings-outline"
-                    size={24}
-                    color={activePage === 'settings' ? currentColors.primaryBlue : theme.textSub}
-                  />
-                  <Text style={[
-                    styles.webNavText,
-                    {
-                      color: activePage === 'settings' ? currentColors.primaryBlue : theme.textSub,
-                      fontWeight: activePage === 'settings' ? '600' : '400'
-                    }
-                  ]}>
-                    Settings
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.webNavItem,
-                    { backgroundColor: theme.navBg },
-                    activePage === 'notifications' && styles.webNavItemActive
-                  ]}
-                  onPress={() => {
-                    setActiveNavItem('notifications');
-                    setActivePage('notifications');
-                  }}
-                >
-                  <Ionicons
-                    name="notifications-outline"
-                    size={24}
-                    color={activePage === 'notifications' ? currentColors.warning : theme.textSub}
-                  />
-                  <Text style={[
-                    styles.webNavText,
-                    {
-                      color: activePage === 'notifications' ? currentColors.warning : theme.textSub,
-                      fontWeight: activePage === 'notifications' ? '600' : '400'
-                    }
-                  ]}>
-                    Notifications
-                    {unreadNotificationCount > 0 && (
-                      <View style={styles.badgeContainer}>
-                        <Text style={styles.badgeText}>{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</Text>
-                      </View>
-                    )}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.webNavItem,
-                    { backgroundColor: theme.navBg },
-                    activePage === 'privacy' && styles.webNavItemActive
-                  ]}
-                  onPress={() => {
-                    setActiveNavItem('privacy');
-                    setActivePage('privacy');
-                  }}
-                >
-                  <Ionicons
-                    name="shield-checkmark-outline"
-                    size={24}
-                    color={activePage === 'privacy' ? '#1E40AF' : theme.textSub}
-                  />
-                  <Text style={[
-                    styles.webNavText,
-                    {
-                      color: activePage === 'privacy' ? '#1E40AF' : theme.textSub,
-                      fontWeight: activePage === 'privacy' ? '600' : '400'
-                    }
-                  ]}>
-                    Privacy Policy
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[
-                    styles.webNavItem,
-                    { backgroundColor: theme.navBg },
-                    activePage === 'messages' && styles.webNavItemActive
-                  ]}
-                  onPress={() => {
-                    setActiveNavItem('messages');
-                    setActivePage('messages');
-                  }}
-                >
-                  <Ionicons
-                    name="chatbubbles-outline"
-                    size={24}
-                    color={activePage === 'messages' ? currentColors.success : theme.textSub}
-                  />
-                  <Text style={[
-                    styles.webNavText,
-                    {
-                      color: activePage === 'messages' ? currentColors.success : theme.textSub,
-                      fontWeight: activePage === 'messages' ? '600' : '400'
-                    }
-                  ]}>
-                    Messages
-                  </Text>
-                </TouchableOpacity>
+                {[
+                  { id: 'dashboard',     label: 'Home',           icon: 'home',                    activeColor: currentColors.primaryBlue },
+                  { id: 'profile',       label: 'Profile',         icon: 'person-circle-outline',   activeColor: currentColors.primaryBlue },
+                  { id: 'settings',      label: 'Settings',        icon: 'settings-outline',        activeColor: currentColors.primaryBlue },
+                  { id: 'notifications', label: 'Notifications',   icon: 'notifications-outline',   activeColor: currentColors.warning },
+                  { id: 'privacy',       label: 'Privacy Policy',  icon: 'shield-checkmark-outline', activeColor: '#1E40AF' },
+                  { id: 'messages',      label: 'Messages',        icon: 'chatbubbles-outline',     activeColor: currentColors.success },
+                ].map(item => {
+                  const isActive = activePage === item.id;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[styles.webNavItem, { backgroundColor: theme.navBg }, isActive && styles.webNavItemActive]}
+                      onPress={() => { setActiveNavItem(item.id); setActivePage(item.id as ActivePage); }}
+                    >
+                      <Ionicons name={item.icon as any} size={24} color={isActive ? item.activeColor : theme.textSub} />
+                      <Text style={[styles.webNavText, { color: isActive ? item.activeColor : theme.textSub, fontWeight: isActive ? '600' : '400' }]}>
+                        {item.label}
+                        {item.id === 'notifications' && unreadNotificationCount > 0 && (
+                          <View style={styles.badgeContainer}>
+                            <Text style={styles.badgeText}>{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</Text>
+                          </View>
+                        )}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
 
-            {/* Center Content */}
-            <ScrollView
-              style={[styles.webCenterContent, { backgroundColor: theme.bgColor }]}
-              showsVerticalScrollIndicator={false}
-            >
+            {/* Center content */}
+            <ScrollView style={[styles.webCenterContent, { backgroundColor: theme.bgColor }]} showsVerticalScrollIndicator={false}>
               {activePage === 'dashboard' ? (
                 <View style={styles.dashboardContainer}>
                   <LinearGradient
                     colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                     style={styles.webHeader}
                   >
-                    <Image
-                      source={require('../assets/bg.jpeg')}
-                      style={styles.webHeaderImage}
-                      resizeMode="cover"
-                    />
-                    <View style={[styles.webHeaderOverlay, {
-                      backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.3)'
-                    }]} />
+                    <Image source={require('../assets/bg.jpeg')} style={styles.webHeaderImage} resizeMode="cover" />
+                    <View style={[styles.webHeaderOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.3)' }]} />
                     <View style={styles.webHeaderContent}>
                       <View style={styles.webTopNav}>
                         <View style={styles.webLogoContainer}>
@@ -2167,190 +1331,80 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                       </View>
                       <View style={{ marginTop: 40 }}>
                         <Text style={styles.webWelcomeText}>Welcome back!</Text>
-                        <Text style={styles.webEmployeeText}>
-                          {userData?.first_name + ' ' + userData?.last_name || 'User'}
-                        </Text>
+                        <Text style={styles.webEmployeeText}>{(userData?.first_name ?? '') + ' ' + (userData?.last_name ?? '')}</Text>
                       </View>
                     </View>
                   </LinearGradient>
 
                   <View style={{ paddingHorizontal: 20 }}>
-                    <QuickActions
-                      lastOpenedModules={lastOpenedModules}
-                      modules={modules}
-                      theme={theme}
-                      handleModulePress={handleModulePressWrapper}
-                    />
+                    <QuickActions lastOpenedModules={lastOpenedModules} modules={modules} theme={theme} handleModulePress={handleModulePressWrapper} />
                   </View>
-
                   <View style={{ paddingHorizontal: 20 }}>
-                    <UpcomingReminder
-                      reminders={reminders}
-                      theme={theme}
-                      currentColors={currentColors}
-                      onPress={() => handleModulePressWrapper('Reminder')}
-                    />
+                    <UpcomingReminder reminders={reminders} theme={theme} currentColors={currentColors} onPress={() => handleModulePressWrapper('Reminder')} />
                   </View>
-
                   <View style={{ paddingHorizontal: 20 }}>
-                    <WorkStatistics
-                      hoursWorked={hoursWorked}
-                      overtimeHours={overtimeHours}
-                      userData={userData}
-                      theme={theme}
-                      currentColors={currentColors}
-                    />
+                    <WorkStatistics hoursWorked={hoursWorked} overtimeHours={overtimeHours} userData={userData} theme={theme} currentColors={currentColors} />
                   </View>
-
                   <View style={{ paddingHorizontal: 20 }}>
-                    <UpcomingEvents
-                      upcomingEvents={upcomingEvents}
-                      theme={theme}
-                      currentColors={currentColors}
-                      getInitials={getInitials}
-                      formatEventDate={formatEventDate}
-                      formatAnniversaryYears={formatAnniversaryYears}
-                    />
+                    <UpcomingEvents upcomingEvents={upcomingEvents} theme={theme} currentColors={currentColors} getInitials={getInitials} formatEventDate={formatEventDate} formatAnniversaryYears={formatAnniversaryYears} />
                   </View>
                 </View>
               ) : (
                 <View style={styles.embeddedPageWrapper}>
                   <View style={styles.webEmbeddedPage}>
                     {activePage === 'profile' && (
-                      <Profile
-                        onBack={() => setActivePage('dashboard')}
-                        userData={userData}
-                        onProfileUpdate={(updatedData) => {
-                          setUserData(updatedData);
-                          refreshUserData();
-                        }}
-                        initialModalToOpen={profileModalToOpen}
-                      />
+                      <Profile onBack={() => setActivePage('dashboard')} userData={userData}
+                        onProfileUpdate={d => { setUserData(d); refreshUserData(); }}
+                        initialModalToOpen={profileModalToOpen} />
                     )}
                     {activePage === 'settings' && (
                       <Settings onBack={() => setActivePage('dashboard')} isDark={isDark} />
                     )}
                     {activePage === 'notifications' && (
-                      <Notifications
-                        onBack={() => setActivePage('dashboard')}
-                        isDark={isDark}
-                        onBadgeUpdate={handleBadgeUpdate}
-                        onNavigateToModule={handleNavigateFromNotification}
-                      />
+                      <Notifications onBack={() => setActivePage('dashboard')} isDark={isDark}
+                        onBadgeUpdate={handleBadgeUpdate} onNavigateToModule={handleNavigateFromNotification} />
                     )}
                     {activePage === 'privacy' && (
-                      <PrivacyPolicy
-                        onBack={() => setActivePage('dashboard')}
-                        isDark={isDark}
-                      />
+                      <PrivacyPolicy onBack={() => setActivePage('dashboard')} isDark={isDark} />
                     )}
                     {activePage === 'messages' && (
-                      <CitadelHub
-                        apiBaseUrl={BACKEND_URL}
-                        wsBaseUrl={BACKEND_URL_WEBSOCKET}
-                        token={token}
-                        currentUser={userData}
-                      />
+                      <CitadelHub apiBaseUrl={BACKEND_URL} wsBaseUrl={BACKEND_URL_WEBSOCKET} token={token} currentUser={userData} />
                     )}
-
                     {activePage === 'attendance' && (
-                      <AttendanceWrapper
-                        onBack={() => { setActivePage('dashboard'); setAttendanceOpenLeaves(false); }}
-                        attendanceKey={attendanceKey}
-                        initialShowLeaves={attendanceOpenLeaves}
-                      />
+                      <AttendanceWrapper onBack={() => { setActivePage('dashboard'); setAttendanceOpenLeaves(false); }}
+                        attendanceKey={attendanceKey} initialShowLeaves={attendanceOpenLeaves} />
                     )}
-
-                    {activePage === 'asset' && (
-                      <AssetModule
-                        onBack={() => setActivePage('dashboard')}
-                        isDark={isDark}
-                      />
-                    )}
-                    {activePage === 'office' && (
-                      <OfficeModule
-                        onBack={() => setActivePage('dashboard')}
-                        isDark={isDark}
-                      />
-                    )}
-                    {activePage === 'hr' && (
-                      <HR onBack={() => setActivePage('dashboard')} />
-                    )}
-                    {activePage === 'cab' && (
-                      <Cab onBack={() => setActivePage('dashboard')} />
-                    )}
-                    {activePage === 'driver' && (
-                      <Driver onBack={() => setActivePage('dashboard')} />
-                    )}
-                    {activePage === 'bdt' && (
-                      <BDT onBack={() => setActivePage('dashboard')} />
-                    )}
-                    {activePage === 'medical' && (
-                      <Medical onBack={() => setActivePage('dashboard')} />
-                    )}
-                    {activePage === 'scoutBoy' && (
-                      <ScoutBoy onBack={() => setActivePage('dashboard')} />
-                    )}
-                    {/* ============================================================================
-                    // UPDATED: Reminder component with callback for real-time updates
-                    // ============================================================================ */}
-                    {activePage === 'reminder' && (
-                      <Reminder
-                        onBack={() => setActivePage('dashboard')}
-                        onReminderUpdate={handleReminderUpdate}  // Add this prop
-                      />
-                    )}
-                    {activePage === 'bup' && (
-                      <BUP onBack={() => setActivePage('dashboard')} />
-                    )}
-                    {activePage === 'siteManager' && (
-                      <SiteManager onBack={() => setActivePage('dashboard')} />
-                    )}
-                    {activePage === 'employeeManagement' && (
-                      <EmployeeManagement onBack={() => setActivePage('dashboard')} />
-                    )}
-                    {activePage === 'hrEmployeeManager' && (
-                      <HREmployeeManager onBack={() => setActivePage('dashboard')} />
-                    )}
-                    {activePage === 'driverManager' && (
-                      <DriverManager onBack={() => setActivePage('dashboard')} />
-                    )}
-                    {activePage === 'hrManager' && (
-                       <HR_Manager onBack={() => setActivePage('dashboard')} initialTab={hrManagerInitialTab} />
-                    )}
-                    {activePage === 'validation' && (
-                      <ValidationScreen onBack={() => setActivePage('dashboard')} />
-                    )}
-                    {activePage === 'access' && (
-  <AccessModule onBack={() => setActivePage('dashboard')} />
-)}
+                    {activePage === 'asset'              && <AssetModule onBack={() => setActivePage('dashboard')} isDark={isDark} />}
+                    {activePage === 'office'             && <OfficeModule onBack={() => setActivePage('dashboard')} isDark={isDark} />}
+                    {activePage === 'hr'                 && <HR onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'cab'                && <Cab onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'driver'             && <Driver onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'bdt'                && <BDT onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'medical'            && <Medical onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'scoutBoy'           && <ScoutBoy onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'reminder'           && <Reminder onBack={() => setActivePage('dashboard')} onReminderUpdate={handleReminderUpdate} />}
+                    {activePage === 'bup'                && <BUP onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'siteManager'        && <SiteManager onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'employeeManagement' && <EmployeeManagement onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'hrEmployeeManager'  && <HREmployeeManager onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'driverManager'      && <DriverManager onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'hrManager'          && <HR_Manager onBack={() => setActivePage('dashboard')} initialTab={hrManagerInitialTab} />}
+                    {activePage === 'validation'         && <ValidationScreen onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'access'             && <AccessModule onBack={() => setActivePage('dashboard')} />}
                   </View>
                 </View>
               )}
             </ScrollView>
 
-            {/* Right Side - All Modules Grid */}
+            {/* Right sidebar — all modules grid */}
             <View style={[styles.webRightSide, { backgroundColor: theme.navBg }]}>
               <View style={styles.modulesHeader}>
-                <Text style={[styles.modulesGridTitle, { color: theme.textMain }]}>
-                  All Modules
-                </Text>
-                <TouchableOpacity
-                  style={styles.refreshButton}
-                  onPress={refreshUserData}
-                  disabled={refreshing}
-                >
-                  <Ionicons
-                    name="refresh"
-                    size={20}
-                    color={refreshing ? theme.textSub : theme.accentBlue}
-                  />
+                <Text style={[styles.modulesGridTitle, { color: theme.textMain }]}>All Modules</Text>
+                <TouchableOpacity style={styles.refreshButton} onPress={refreshUserData} disabled={refreshing}>
+                  <Ionicons name="refresh" size={20} color={refreshing ? theme.textSub : theme.accentBlue} />
                 </TouchableOpacity>
               </View>
-              <ScrollView
-                style={styles.modulesGridScroll}
-                showsVerticalScrollIndicator={false}
-              >
+              <ScrollView style={styles.modulesGridScroll} showsVerticalScrollIndicator={false}>
                 <View style={styles.modulesGridContainer}>
                   {filteredModules.map((module, index) => (
                     <TouchableOpacity
@@ -2359,22 +1413,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                       onPress={() => handleModulePressWrapper(module.title, module.module_unique_name)}
                       activeOpacity={0.7}
                     >
-                      <View style={[
-                        styles.moduleGridIconContainer,
-                        { backgroundColor: theme.cardBg === '#111a2d' ? 'rgba(255, 255, 255, 0.05)' : '#f8f9fa' }
-                      ]}>
-                        <Image
-                          source={{ uri: module.iconUrl || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }}
-                          style={styles.moduleGridIcon}
-                          resizeMode="contain"
-                        />
+                      <View style={[styles.moduleGridIconContainer, { backgroundColor: theme.cardBg === '#111a2d' ? 'rgba(255,255,255,0.05)' : '#f8f9fa' }]}>
+                        <Image source={{ uri: module.iconUrl || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' }} style={styles.moduleGridIcon} resizeMode="contain" />
                       </View>
-                      <Text
-                        style={[styles.moduleGridTitle, { color: theme.textMain }]}
-                        numberOfLines={2}
-                      >
-                        {module.title}
-                      </Text>
+                      <Text style={[styles.moduleGridTitle, { color: theme.textMain }]} numberOfLines={2}>{module.title}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -2382,86 +1424,50 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             </View>
           </View>
         ) : (
-          // MOBILE LAYOUT
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-          >
+          /* ================================================================
+             MOBILE LAYOUT
+          ================================================================ */
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             <LinearGradient
               colors={isDark ? ['#000D24', '#000D24'] : ['#4A5568', '#2D3748']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
               style={styles.headerBanner}
             >
               <Image
                 source={require('../assets/background_dashboard.jpeg')}
-                style={{
-                  position: 'absolute',
-                  width: '100%',
-                  height: '100%',
-                  opacity: 1,
-                }}
+                style={{ position: 'absolute', width: '100%', height: '100%', opacity: 1 }}
                 resizeMode="cover"
               />
-              <View style={[styles.headerOverlay, {
-                backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.3)'
-              }]} />
+              <View style={[styles.headerOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.3)' }]} />
               <View style={[styles.headerContent, { paddingTop: Platform.OS === 'ios' ? 40 : 20 }]}>
                 <View style={[styles.topNav, { marginBottom: 10, marginTop: Platform.OS === 'ios' ? 10 : 20 }]}>
                   <TouchableOpacity onPress={openMenu} style={styles.menuButton}>
-                    {[1, 2, 3].map(i => (
-                      <View key={i} style={[styles.menuLine, { backgroundColor: 'white' }]} />
-                    ))}
+                    {[1, 2, 3].map(i => <View key={i} style={[styles.menuLine, { backgroundColor: 'white' }]} />)}
                   </TouchableOpacity>
                   <Text style={styles.logoText}>CITADEL</Text>
                   <View style={styles.headerSpacer} />
                 </View>
                 <View style={{ marginTop: 75 }}>
                   <Text style={styles.welcomeText}>Welcome!</Text>
-                  <Text style={styles.employeeText}>{userData?.first_name + ' ' + userData?.last_name || 'User'}</Text>
+                  <Text style={styles.employeeText}>{(userData?.first_name ?? '') + ' ' + (userData?.last_name ?? '')}</Text>
                 </View>
               </View>
             </LinearGradient>
 
-            <QuickActions
-              lastOpenedModules={lastOpenedModules}
-              modules={modules}
-              theme={theme}
-              handleModulePress={handleModulePressWrapper}
-            />
+            <QuickActions lastOpenedModules={lastOpenedModules} modules={modules} theme={theme} handleModulePress={handleModulePressWrapper} />
+            <UpcomingReminder reminders={reminders} theme={theme} currentColors={currentColors} onPress={() => handleModulePressWrapper('Reminder')} />
 
-            <UpcomingReminder
-              reminders={reminders}
-              theme={theme}
-              currentColors={currentColors}
-              onPress={() => handleModulePressWrapper('Reminder')}
-            />
-
-            {/* ============================================================================ */}
-            {/* NEW: DYNAMIC MODULE TILES */}
-            {/* ============================================================================ */}
+            {/* Dynamic module tiles */}
             <View style={styles.moduleGrid}>
-              {/* Big Tile (from backend) */}
               {renderModuleTile(bigTile, 'big')}
-
-              {/* Small Tiles Column (from backend) */}
               <View style={styles.moduleColumn}>
                 {renderModuleTile(smallTile1, 'small')}
                 {renderModuleTile(smallTile2, 'small')}
               </View>
             </View>
 
-            <TouchableOpacity
-              style={[styles.viewAllContainer, { marginHorizontal: 20 }]}
-              onPress={() => setAllModulesVisible(true)}
-              activeOpacity={0.7}
-            >
-              <LinearGradient
-                colors={[currentColors.gradientStart, currentColors.gradientEnd]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.viewAllButton}
-              >
+            <TouchableOpacity style={[styles.viewAllContainer, { marginHorizontal: 20 }]} onPress={() => setAllModulesVisible(true)} activeOpacity={0.7}>
+              <LinearGradient colors={[currentColors.gradientStart, currentColors.gradientEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.viewAllButton}>
                 <Text style={styles.viewAllText}>View all modules</Text>
                 <View style={styles.chevronGroup}>
                   <Ionicons name="chevron-forward" size={16} color="white" />
@@ -2471,22 +1477,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
               </LinearGradient>
             </TouchableOpacity>
 
-            <WorkStatistics
-              hoursWorked={hoursWorked}
-              overtimeHours={overtimeHours}
-              userData={userData}
-              theme={theme}
-              currentColors={currentColors}
-            />
-
-            <UpcomingEvents
-              upcomingEvents={upcomingEvents}
-              theme={theme}
-              currentColors={currentColors}
-              getInitials={getInitials}
-              formatEventDate={formatEventDate}
-              formatAnniversaryYears={formatAnniversaryYears}
-            />
+            <WorkStatistics hoursWorked={hoursWorked} overtimeHours={overtimeHours} userData={userData} theme={theme} currentColors={currentColors} />
+            <UpcomingEvents upcomingEvents={upcomingEvents} theme={theme} currentColors={currentColors} getInitials={getInitials} formatEventDate={formatEventDate} formatAnniversaryYears={formatAnniversaryYears} />
 
             <View style={styles.footer}>
               <Text style={styles.footerLogo}>CITADEL</Text>
@@ -2520,7 +1512,7 @@ export default function CitadelDashboard({ onLogout }: { onLogout: () => void })
 }
 
 // ============================================================================
-// STYLES (unchanged)
+// STYLES
 // ============================================================================
 const styles = StyleSheet.create({
   safeContainer: { flex: 1, backgroundColor: '#000D24' },
@@ -2539,17 +1531,19 @@ const styles = StyleSheet.create({
   mainContent: { flex: 1 },
   mainContentWeb: { maxWidth: 1400, marginHorizontal: 'auto', width: '100%' },
   circleOverlay: {
-    position: 'absolute', top: height / 2, left: width / 2,
-    width: Math.sqrt(width * width + height * height) * 2.5,
+    position: 'absolute',
+    top:  height / 2,
+    left: width  / 2,
+    width:  Math.sqrt(width * width + height * height) * 2.5,
     height: Math.sqrt(width * width + height * height) * 2.5,
     borderRadius: Math.sqrt(width * width + height * height) * 1.25,
     marginLeft: -Math.sqrt(width * width + height * height) * 1.25,
-    marginTop: -Math.sqrt(width * width + height * height) * 1.25,
+    marginTop:  -Math.sqrt(width * width + height * height) * 1.25,
     zIndex: 1000,
   },
   scrollContent: { paddingBottom: 100 },
   webContainer: { flex: 1, flexDirection: 'row', alignItems: 'stretch', minHeight: '100vh' as any, backgroundColor: 'transparent' },
-  webLeftSide: { width: 280, height: '100vh', flexDirection: 'column', borderRightWidth: 1, borderRightColor: 'rgba(0,0,0,0.1)', overflow: 'hidden' },
+  webLeftSide:  { width: 280, height: '100vh' as any, flexDirection: 'column', borderRightWidth: 1, borderRightColor: 'rgba(0,0,0,0.1)', overflow: 'hidden' },
   embeddedPageWrapper: { flex: 1, backgroundColor: 'transparent', overflow: 'hidden', maxWidth: '100%', width: '100%' },
   dashboardContainer: { flex: 1, backgroundColor: 'transparent', maxWidth: '100%', width: '100%' },
   webEmbeddedPage: { flex: 1, backgroundColor: 'transparent', overflow: 'hidden', maxWidth: '100%', width: '100%' },
@@ -2561,12 +1555,12 @@ const styles = StyleSheet.create({
   webUserName: { fontSize: 16, fontWeight: '600', marginBottom: 2 },
   webUserDesignation: { fontSize: 12, opacity: 0.7 },
   webSettingsButton: { padding: 8, borderRadius: 8 },
-  webNavigation: { flex: 1, overflow: 'auto', paddingVertical: 16 },
+  webNavigation: { flex: 1, overflow: 'auto' as any, paddingVertical: 16 },
   webNavItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 20, marginVertical: 2, position: 'relative' },
   webNavItemActive: { backgroundColor: 'rgba(0, 128, 105, 0.1)', borderLeftWidth: 3, borderLeftColor: '#008069' },
   webNavText: { marginLeft: 12, fontSize: 14, flex: 1 },
-  webCenterContent: { flex: 1, maxHeight: '100vh', overflow: 'auto', backgroundColor: 'transparent' },
-  webRightSide: { width: 280, height: '100vh', flexDirection: 'column', borderLeftWidth: 1, borderLeftColor: 'rgba(0,0,0,0.1)', overflow: 'hidden' },
+  webCenterContent: { flex: 1, maxHeight: '100vh' as any, overflow: 'auto' as any, backgroundColor: 'transparent' },
+  webRightSide: { width: 280, height: '100vh' as any, flexDirection: 'column', borderLeftWidth: 1, borderLeftColor: 'rgba(0,0,0,0.1)', overflow: 'hidden' },
   webHeader: { height: 220, overflow: 'hidden', position: 'relative' },
   webHeaderImage: { position: 'absolute', width: '100%', height: '100%', opacity: 1 } as ImageStyle,
   webHeaderOverlay: { position: 'absolute', width: '100%', height: '100%' },
@@ -2603,8 +1597,8 @@ const styles = StyleSheet.create({
   moduleSmall: { flex: 1, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
   moduleGradient: { flex: 1, padding: 16, justifyContent: 'space-between' },
   moduleArrow: { position: 'absolute', top: 12, right: 12 },
-  moduleIconCircle: { width: 45, height: 45, backgroundColor: 'rgba(255, 255, 255, 0.25)', borderRadius: 22.5, alignItems: 'center', justifyContent: 'center' },
-  moduleTitle: { color: 'white', fontSize: 16, fontWeight: '600', textShadowColor: 'rgba(0, 0, 0, 0.2)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 },
+  moduleIconCircle: { width: 45, height: 45, backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 22.5, alignItems: 'center', justifyContent: 'center' },
+  moduleTitle: { color: 'white', fontSize: 16, fontWeight: '600', textShadowColor: 'rgba(0,0,0,0.2)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 },
   viewAllContainer: { marginBottom: 15 },
   viewAllButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, borderRadius: 12, shadowColor: '#008069', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
   viewAllText: { fontSize: 14, fontWeight: '600', color: 'white', marginRight: 8 },

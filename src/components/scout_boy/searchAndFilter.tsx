@@ -7,14 +7,17 @@ import {
   ScrollView,
   TextInput,
 } from 'react-native';
-import { ThemeColors, FilterOption } from './types';
-import DropdownModal from './dropdownModal';
+import { ThemeColors } from './types';
 import { Ionicons } from '@expo/vector-icons';
 
 interface SearchAndFilterProps {
   onSearch: (query: string) => void;
   onFilter: (filterBy: string, filterValue: string) => void;
   theme: ThemeColors;
+  // ─── Controlled filter props (owned by parent ScoutBoy) ───────────────────────
+  filterBy: string;
+  filterValue: string;
+  // ─────────────────────────────────────────────────────────────────────────────
   selectionMode?: boolean;
   selectedCount?: number;
   onSettingsPress?: () => void;
@@ -45,14 +48,17 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
   onSearch,
   onFilter,
   theme,
+  // Controlled from parent — no local state for these
+  filterBy,
+  filterValue,
   selectionMode = false,
   selectedCount = 0,
   onSettingsPress,
   onCancelSelection,
 }) => {
+  // Search is the only truly local UI state — it hasn't been lifted yet
+  // because search submits on demand (not on every keystroke).
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterBy, setFilterBy] = useState('');
-  const [filterValue, setFilterValue] = useState('all');
   const [isSearchMode, setIsSearchMode] = useState(false);
 
   const tabs = [
@@ -74,17 +80,25 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
     onSearch('');
   };
 
+  /**
+   * Tab press delegates entirely to parent via onFilter.
+   * The active tab highlight reads from the controlled `filterValue` prop,
+   * so it always reflects parent state — no desync possible.
+   */
   const handleTabPress = (tabId: string) => {
     if (tabId === 'all') {
-      setFilterBy('');
-      setFilterValue('all');
       onFilter('', '');
     } else {
-      setFilterBy('status');
-      setFilterValue(tabId);
       onFilter('status', tabId);
     }
   };
+
+  /**
+   * Determine which tab is visually active.
+   * - If filterBy is empty → 'all' tab is active
+   * - Otherwise use filterValue directly
+   */
+  const activeTabId = filterBy === '' ? 'all' : filterValue;
 
   return (
     <View style={styles.container}>
@@ -95,7 +109,7 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
             {selectedCount} visit(s) selected
           </Text>
           <View style={styles.selectionActions}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.settingsButtonLarge}
               onPress={onSettingsPress}
             >
@@ -116,11 +130,11 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
           {/* Search Section */}
           <View style={styles.searchContainer}>
             <View style={styles.searchInputWrapper}>
-              <Ionicons 
-                name="search" 
-                size={20} 
-                color={WHATSAPP_COLORS.textTertiary} 
-                style={styles.searchIcon} 
+              <Ionicons
+                name="search"
+                size={20}
+                color={WHATSAPP_COLORS.textTertiary}
+                style={styles.searchIcon}
               />
               <TextInput
                 style={styles.searchInput}
@@ -133,57 +147,54 @@ const SearchAndFilter: React.FC<SearchAndFilterProps> = ({
               />
               {searchQuery ? (
                 <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
-                  <Ionicons 
-                    name="close-circle" 
-                    size={20} 
-                    color={WHATSAPP_COLORS.textTertiary} 
+                  <Ionicons
+                    name="close-circle"
+                    size={20}
+                    color={WHATSAPP_COLORS.textTertiary}
                   />
                 </TouchableOpacity>
               ) : null}
             </View>
           </View>
 
-          {/* Status Tabs */}
+          {/* Status Tabs — highlight driven by controlled activeTabId */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             style={styles.tabsContainer}
             contentContainerStyle={styles.tabsContent}
           >
-            {tabs.map((tab) => (
-              <TouchableOpacity
-                key={tab.id}
-                style={[
-                  styles.tab,
-                  filterValue === tab.id && [
-                    styles.activeTab, 
-                    { backgroundColor: WHATSAPP_COLORS.primary }
-                  ]
-                ]}
-                onPress={() => handleTabPress(tab.id)}
-              >
-                <Text style={[
-                  styles.tabText,
-                  { color: WHATSAPP_COLORS.textSecondary },
-                  filterValue === tab.id && [
-                    styles.activeTabText, 
-                    { color: WHATSAPP_COLORS.white }
-                  ]
-                ]}>
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            {tabs.map((tab) => {
+              const isActive = activeTabId === tab.id;
+              return (
+                <TouchableOpacity
+                  key={tab.id}
+                  style={[
+                    styles.tab,
+                    isActive && [styles.activeTab, { backgroundColor: WHATSAPP_COLORS.primary }]
+                  ]}
+                  onPress={() => handleTabPress(tab.id)}
+                >
+                  <Text style={[
+                    styles.tabText,
+                    { color: WHATSAPP_COLORS.textSecondary },
+                    isActive && [styles.activeTabText, { color: WHATSAPP_COLORS.white }]
+                  ]}>
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
 
           {/* Search Mode Indicator */}
           {isSearchMode && (
             <View style={styles.searchModeIndicator}>
               <View style={styles.searchModeBadge}>
-                <Ionicons 
-                  name="search" 
-                  size={14} 
-                  color={WHATSAPP_COLORS.success} 
+                <Ionicons
+                  name="search"
+                  size={14}
+                  color={WHATSAPP_COLORS.success}
                 />
                 <Text style={styles.searchModeText}>
                   Search: "{searchQuery}"

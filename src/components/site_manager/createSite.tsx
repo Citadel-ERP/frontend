@@ -347,12 +347,21 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
         const { status: ns } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (ns !== 'granted') { Alert.alert('Permission Denied', 'Gallery permission required.'); return; }
       }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 0.8 });
-      if (!result.canceled && result.assets?.[0]) {
-        const a = result.assets[0];
-        setBuildingPhotos((prev) => [...prev, { id: Date.now(), uri: a.uri, type: a.type || 'image/jpeg' }]);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets?.length) {
+        const newPhotos = result.assets.map((a, i) => ({
+          id: Date.now() + i,
+          uri: a.uri,
+          type: a.type || 'image/jpeg',
+        }));
+        setBuildingPhotos((prev) => [...prev, ...newPhotos]);
       }
-    } catch { Alert.alert('Error', 'Failed to pick image'); }
+    } catch { Alert.alert('Error', 'Failed to pick images'); }
   };
 
   // ─── Submit ──────────────────────────────────────────────────────────────────
@@ -603,7 +612,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
         placeholderTextColor={WHATSAPP_COLORS.textTertiary}
         onSubmitEditing={onSubmit}
         returnKeyType="done"
-        // Allow all characters — no keyboardType restriction
+      // Allow all characters — no keyboardType restriction
       />
       {entries.length > 0 && (
         <View style={styles.floorEntriesContainer}>
