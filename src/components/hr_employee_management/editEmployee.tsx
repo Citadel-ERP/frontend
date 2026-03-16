@@ -654,13 +654,13 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
       {/* ─── OVERLAY ─────────────────────────────── */}
       <View style={styles.assetsModalOverlay}>
         <View style={[
-              styles.assetsModalContainer,
-              // Web-only: constrain width to 50% and center horizontally
-              Platform.OS === 'web' && {
-                width: '50%',
-                alignSelf: 'center',
-              },
-            ]}>
+          styles.assetsModalContainer,
+          // Web-only: constrain width to 50% and center horizontally
+          Platform.OS === 'web' && {
+            width: '50%',
+            alignSelf: 'center',
+          },
+        ]}>
 
           {/* ─── HEADER ──────────────────────────────── */}
           <View style={styles.assetsModalHeader}>
@@ -811,7 +811,7 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
                           >
                             {selectedOfficeId
                               ? offices.find(o => o.id === selectedOfficeId)?.name ||
-                                'Select Office'
+                              'Select Office'
                               : 'Select Office'}
                           </Text>
                           <Ionicons
@@ -823,14 +823,19 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
 
                         {showOfficePicker && (
                           <View style={styles.pickerContainer}>
-                            <ScrollView style={{ maxHeight: 200 }}>
+                            <ScrollView
+                              style={{ maxHeight: 200 }}
+                              nestedScrollEnabled={true}
+                              scrollEnabled={true}
+                              showsVerticalScrollIndicator={true}
+                            >
                               {offices.map(office => (
                                 <TouchableOpacity
                                   key={office.id}
                                   style={[
                                     styles.officeOption,
                                     selectedOfficeId === office.id &&
-                                      styles.officeOptionSelected,
+                                    styles.officeOptionSelected,
                                   ]}
                                   onPress={() => {
                                     setSelectedOfficeId(office.id);
@@ -841,7 +846,7 @@ const EditEmployeeModal: React.FC<EditEmployeeProps> = ({
                                     style={[
                                       styles.officeName,
                                       selectedOfficeId === office.id &&
-                                        styles.officeNameSelected,
+                                      styles.officeNameSelected,
                                     ]}
                                   >
                                     {office.name}
