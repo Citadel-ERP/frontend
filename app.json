@@ -30,32 +30,24 @@
           "location",
           "fetch",
           "remote-notification",
-          "processing",
-          "location",
-          "fetch",
-          "remote-notification",
           "processing"
         ],
         "BGTaskSchedulerPermittedIdentifiers": [
           "com.citadelnetinc.app.background",
           "com.citadelnetinc.app.refresh",
           "com.citadelnetinc.app.location",
-          "com.citadelnetinc.app.processing",
-          "com.citadelnetinc.app.background",
-          "com.citadelnetinc.app.refresh",
-          "com.citadelnetinc.app.location",
           "com.citadelnetinc.app.processing"
         ],
-        "NSLocationWhenInUseUsageDescription": "Citadel uses your location to mark attendance when you are at the office.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Citadel requires background location access to automatically detect office entry and exit for attendance.",
-        "NSLocationAlwaysUsageDescription": "Citadel uses your location even when the app is closed to enable geofencing-based attendance.",
-        "NSCameraUsageDescription": "Citadel needs access to your camera to take photos for profile pictures and document uploads.",
-        "NSPhotoLibraryUsageDescription": "Citadel needs access to your photo library to select photos for profile pictures and document uploads.",
-        "NSPhotoLibraryAddUsageDescription": "Citadel needs permission to save photos to your photo library.",
-        "NSFaceIDUsageDescription": "Face ID is used to securely authenticate you.",
-        "NSContactsUsageDescription": "Citadel needs access to your contacts so you can share them in chats.",
+        "NSLocationWhenInUseUsageDescription": "Citadel uses your location while the app is in use to verify your presence at assigned work sites and mark your attendance. For example, when you log in or mark attendance, your location is checked to ensure you are within the permitted office or site area.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Citadel uses your location in the background to automatically detect when you enter or leave assigned work locations for attendance tracking. For example, the app can mark your check-in when you arrive at the office and check-out when you leave.",
+        "NSLocationAlwaysUsageDescription": "Citadel uses your location even when the app is not in use to support geofencing-based attendance. For example, your attendance is automatically updated when you enter or exit designated office locations without opening the app.",
+        "NSCameraUsageDescription": "Citadel uses your camera to capture profile photos and upload documents. For example, you can take a photo for your profile or scan required documents.",
+        "NSPhotoLibraryUsageDescription": "Citadel uses your photo library to allow you to select images for profile pictures and document uploads. For example, you can upload an existing image as your profile photo.",
+        "NSPhotoLibraryAddUsageDescription": "Citadel saves images such as downloaded documents or generated media to your photo library when you choose to save them.",
+        "NSFaceIDUsageDescription": "Citadel uses Face ID to securely authenticate you and provide quick access to your account.",
+        "NSContactsUsageDescription": "Citadel uses your contacts to help you share information with colleagues. For example, you can select contacts to share details through the app.",
         "NSLocationTemporaryUsageDescriptionDictionary": {
-          "attendance": "Your location is needed to verify you are at the office for attendance."
+          "attendance": "Your location is temporarily used to verify your presence at the assigned office or work site when marking attendance."
         },
         "ITSAppUsesNonExemptEncryption": false
       }
