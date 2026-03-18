@@ -159,6 +159,8 @@ interface SiteData {
   car_parking_slots: string;
   rental_escalation: string;
   meta: Record<string, any>;
+  floor_wise_area: string;
+  micro_market: string;
 }
 
 interface SiteVisit {
@@ -1278,7 +1280,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    marginTop:10,
+    marginTop: 10,
     backgroundColor: WHATSAPP_COLORS.primary,
   },
   // Header Styles
@@ -1352,7 +1354,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
     marginBottom: 1,
-    marginTop:10,
+    marginTop: 10,
   },
   headerSubtitle: {
     fontSize: 12,

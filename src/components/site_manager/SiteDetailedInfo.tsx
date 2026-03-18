@@ -8,13 +8,14 @@ import {
   Dimensions,
   Image,
   Linking,
-  Platform,
   ScrollView,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width: screenWidth } = Dimensions.get('window');
+
+// ─── Theme ────────────────────────────────────────────────────────────────────
 
 const WHATSAPP_COLORS = {
   primary: '#075E54',
@@ -38,6 +39,8 @@ const WHATSAPP_COLORS = {
   outgoing: '#DCF8C6',
 };
 
+// ─── Interfaces ───────────────────────────────────────────────────────────────
+
 interface SiteData {
   id: number;
   building_name: string;
@@ -50,6 +53,8 @@ interface SiteData {
   number_of_basements: string;
   total_area: string;
   area_per_floor: string;
+  floor_wise_area: string;
+  micro_market: string;
   availble_floors: string;
   area_offered: string;
   rent: string;
@@ -125,6 +130,80 @@ interface SiteDetailedInfoProps {
   siteData: SiteData | null;
 }
 
+// ─── BulletList ───────────────────────────────────────────────────────────────
+//
+// Pure display component for newline-separated string data.
+// Splits on '\n', renders each non-empty line as a read-only bullet row.
+// No touch handlers, no TextInput — completely inert.
+
+const BulletList: React.FC<{ raw: string }> = ({ raw }) => {
+  const lines = raw ? raw.split('\n').filter((l) => l.trim()) : [];
+
+  if (lines.length === 0) {
+    return (
+      <View style={blStyles.wrapper}>
+        <Text style={blStyles.emptyText}>-</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={blStyles.wrapper}>
+      {lines.map((line, idx) => (
+        <View
+          key={idx}
+          style={[blStyles.row, idx < lines.length - 1 && blStyles.rowDivider]}
+        >
+          <View style={blStyles.dot} />
+          <Text style={blStyles.lineText}>{line}</Text>
+        </View>
+      ))}
+    </View>
+  );
+};
+
+const blStyles = StyleSheet.create({
+  wrapper: {
+    backgroundColor: WHATSAPP_COLORS.background,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
+    overflow: 'hidden',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  rowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: WHATSAPP_COLORS.border,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: WHATSAPP_COLORS.primary,
+    marginRight: 10,
+    flexShrink: 0,
+  },
+  lineText: {
+    flex: 1,
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textPrimary,
+    lineHeight: 20,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textPrimary,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+});
+
+// ─── SiteDetailedInfo ─────────────────────────────────────────────────────────
+
 const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
   visible,
   onClose,
@@ -132,22 +211,26 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
   const beautifyName = (name: string): string => {
     if (!name) return '-';
     return name
       .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
       .join(' ');
   };
 
   const formatCurrency = (value: string): string => {
     if (!value || value.trim() === '') return '-';
     const num = parseFloat(value.replace(/[^0-9.]/g, ''));
+    // If the value contains non-numeric text (e.g. "Inclusive"), return it as-is.
     if (isNaN(num)) return value;
     return '₹' + num.toLocaleString('en-IN');
   };
 
   const formatDate = (dateString: string): string => {
+    if (!dateString) return '-';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-IN', {
       day: '2-digit',
@@ -158,63 +241,70 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
 
   const getInitials = (name: string): string => {
     if (!name || name.trim().length === 0) return '?';
-    const nameParts = name.trim().split(/\s+/);
-    if (nameParts.length === 1) {
-      return nameParts[0].charAt(0).toUpperCase();
-    } else {
-      return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
-    }
-  };
-
-  const openLocationLink = () => {
-    if (siteData?.location_link) {
-      Linking.openURL(siteData.location_link).catch(err =>
-        console.error('Failed to open location link:', err)
-      );
-    }
+    const parts = name.trim().split(/\s+/);
+    return parts.length === 1
+      ? parts[0].charAt(0).toUpperCase()
+      : (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
   };
 
   const openGoogleMaps = () => {
-    if (siteData?.location_link){
-      const url = siteData.location_link;
-      Linking.openURL(url).catch(err =>
-        console.error('Failed to open Google Maps:', err)
+    if (siteData?.location_link) {
+      Linking.openURL(siteData.location_link).catch((err) =>
+        console.error('Failed to open Maps:', err),
       );
     }
   };
 
-  // Function to extract other amenities from meta field
-  const getOtherAmenities = () => {
+  const getOtherAmenities = (): Array<{ key: string; value: string }> => {
     if (!siteData?.meta) return [];
-    
     const amenities: Array<{ key: string; value: string }> = [];
-    
-    // Extract other_amenity_* fields from meta
-    Object.keys(siteData.meta).forEach(key => {
-      // Match pattern: other_amenity_1_key, other_amenity_2_key, etc.
-      const keyMatch = key.match(/^other_amenity_(\d+)_key$/);
-      if (keyMatch) {
-        const index = keyMatch[1];
-        const valueKey = `other_amenity_${index}_value`;
-        
-        if (siteData?.meta[valueKey]) {
-          amenities.push({
-            key: siteData.meta[key],
-            value: siteData.meta[valueKey]
-          });
+    Object.keys(siteData.meta).forEach((key) => {
+      const match = key.match(/^other_amenity_(\d+)_key$/);
+      if (match) {
+        const valueKey = `other_amenity_${match[1]}_value`;
+        if (siteData.meta[valueKey]) {
+          amenities.push({ key: siteData.meta[key], value: siteData.meta[valueKey] });
         }
       }
     });
-    
-    // Sort by index to maintain order
     amenities.sort((a, b) => {
-      const aIndex = parseInt(Object.keys(siteData?.meta || {}).find(k => k.match(/^other_amenity_(\d+)_key$/) && siteData?.meta[k] === a.key)?.match(/^other_amenity_(\d+)_key$/)?.[1] || '0');
-      const bIndex = parseInt(Object.keys(siteData?.meta || {}).find(k => k.match(/^other_amenity_(\d+)_key$/) && siteData?.meta[k] === b.key)?.match(/^other_amenity_(\d+)_key$/)?.[1] || '0');
-      return aIndex - bIndex;
+      const getIdx = (name: string) =>
+        parseInt(
+          Object.keys(siteData.meta)
+            .find(
+              (k) =>
+                k.match(/^other_amenity_(\d+)_key$/) && siteData.meta[k] === name,
+            )
+            ?.match(/^other_amenity_(\d+)_key$/)?.[1] ?? '0',
+        );
+      return getIdx(a.key) - getIdx(b.key);
     });
-    
     return amenities;
   };
+
+  // ── Shared display atoms ───────────────────────────────────────────────────
+  //
+  // renderRow    — label above a plain grey box containing a Text node.
+  // renderBullet — label above a BulletList (for multi-line / newline data).
+  //
+  // Neither contains any interactive element. React Native's <Text> is not
+  // focusable and does not open the keyboard.
+
+  const renderRow = (label: string, value: string) => (
+    <View style={styles.infoItem}>
+      <Text style={styles.infoItemLabel}>{label}</Text>
+      <View style={styles.infoItemBox}>
+        <Text style={styles.infoItemValue}>{value || '-'}</Text>
+      </View>
+    </View>
+  );
+
+  const renderBullet = (label: string, raw: string) => (
+    <View style={styles.infoItem}>
+      <Text style={styles.infoItemLabel}>{label}</Text>
+      <BulletList raw={raw} />
+    </View>
+  );
 
   const renderPropertyType = () => {
     if (siteData?.managed_property) {
@@ -226,7 +316,8 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
           </Text>
         </View>
       );
-    } else if (siteData?.conventional_property) {
+    }
+    if (siteData?.conventional_property) {
       return (
         <View style={[styles.typeBadge, { backgroundColor: WHATSAPP_COLORS.primary + '20' }]}>
           <Ionicons name="home" size={14} color={WHATSAPP_COLORS.primary} />
@@ -239,64 +330,83 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
     return null;
   };
 
+  // ─── Step 0: Site Overview ────────────────────────────────────────────────
+
   const renderStep0 = () => (
     <View style={styles.stepContent}>
       <View style={styles.containerBox}>
+        {/* Avatar + name */}
         <View style={styles.siteInfoContainer}>
           <View style={styles.siteAvatarSection}>
             <View style={styles.siteAvatar}>
               <Text style={styles.siteAvatarText}>
-                {getInitials(siteData?.building_name || 'S')}
+                {getInitials(siteData?.building_name ?? 'S')}
               </Text>
             </View>
           </View>
           <View style={styles.siteHeaderSection}>
             <Text style={styles.siteNameText}>{siteData?.building_name}</Text>
-            {siteData?.location && (
+            {siteData?.location ? (
               <View style={styles.locationContainer}>
                 <Ionicons name="location" size={14} color={WHATSAPP_COLORS.textSecondary} />
                 <Text style={styles.locationText} numberOfLines={2}>
                   {siteData.location}
                 </Text>
               </View>
-            )}
+            ) : null}
           </View>
         </View>
 
+        {/* Badges */}
         <View style={styles.statusBadgesContainer}>
           {renderPropertyType()}
-          <View style={[styles.statusBadgeBox, { backgroundColor: WHATSAPP_COLORS.primary + '15', borderColor: WHATSAPP_COLORS.primary + '30' }]}>
+          <View
+            style={[
+              styles.statusBadgeBox,
+              {
+                backgroundColor: WHATSAPP_COLORS.primary + '15',
+                borderColor: WHATSAPP_COLORS.primary + '30',
+              },
+            ]}
+          >
             <Text style={[styles.stepLabel, { color: WHATSAPP_COLORS.primary }]}>
-              Status: {beautifyName(siteData?.building_status || '')}
+              Status: {beautifyName(siteData?.building_status ?? '')}
             </Text>
           </View>
+          {siteData?.micro_market ? (
+            <View
+              style={[
+                styles.statusBadgeBox,
+                {
+                  backgroundColor: WHATSAPP_COLORS.info + '15',
+                  borderColor: WHATSAPP_COLORS.info + '30',
+                },
+              ]}
+            >
+              <Ionicons
+                name="map"
+                size={13}
+                color={WHATSAPP_COLORS.info}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={[styles.stepLabel, { color: WHATSAPP_COLORS.info }]}>
+                {siteData.micro_market}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
-        {/* ADDED: Nearest Metro Station */}
-        {siteData?.nearest_metro_station && (
-          <View style={styles.metroStationContainer}>
-            <View style={styles.metroStationHeader}>
-              <Ionicons name="train" size={16} color={WHATSAPP_COLORS.primary} />
-              <Text style={styles.metroStationTitle}>Nearest Metro Station</Text>
-            </View>
-            <View style={styles.metroStationContent}>
-              <Text style={styles.metroStationName}>{siteData.nearest_metro_station.name}</Text>
-              {siteData.nearest_metro_station.city && (
-                <Text style={styles.metroStationCity}>{siteData.nearest_metro_station.city}</Text>
-              )}
-            </View>
-          </View>
-        )}
-
-        {siteData?.location_link && (
+        {/* Map CTA — intentionally interactive: opens external Maps app */}
+        {siteData?.location_link ? (
           <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.mapButton} onPress={openGoogleMaps}>
-                <Ionicons name="map" size={16} color={WHATSAPP_COLORS.white} />
-                <Text style={styles.mapButtonText}>View on Map</Text>
-              </TouchableOpacity>
+            <TouchableOpacity style={styles.mapButton} onPress={openGoogleMaps}>
+              <Ionicons name="map" size={16} color={WHATSAPP_COLORS.white} />
+              <Text style={styles.mapButtonText}>View on Map</Text>
+            </TouchableOpacity>
           </View>
-        )}
+        ) : null}
 
+        {/* Metadata */}
         <View style={styles.metadataSection}>
           <View style={styles.metadataItem}>
             <Text style={styles.metadataLabel}>Created By</Text>
@@ -306,7 +416,9 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
           </View>
           <View style={styles.metadataItem}>
             <Text style={styles.metadataLabel}>Created On</Text>
-            <Text style={styles.metadataValue}>{formatDate(siteData?.created_at || '')}</Text>
+            <Text style={styles.metadataValue}>
+              {formatDate(siteData?.created_at ?? '')}
+            </Text>
           </View>
           <View style={styles.metadataItem}>
             <Text style={styles.metadataLabel}>Site ID</Text>
@@ -317,6 +429,10 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
     </View>
   );
 
+  // ─── Step 1: Basic Information ────────────────────────────────────────────
+  // Nearest Metro Station moved here from Step 0.
+  // area_offered and floor_wise_area rendered as BulletList.
+
   const renderStep1 = () => (
     <View style={styles.stepContent}>
       <View style={styles.containerBox}>
@@ -325,27 +441,83 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
           <Text style={styles.containerTitle}>Basic Information</Text>
         </View>
         <View style={styles.containerContent}>
-          {[
-            { label: 'Building Status', value: beautifyName(siteData?.building_status || '') },
-            { label: 'Floor Condition', value: beautifyName(siteData?.floor_condition || '') },
-            { label: 'Total Floors', value: siteData?.total_floors || '-' },
-            { label: 'Basements', value: siteData?.number_of_basements || '-' },
-            { label: 'Total Area', value: siteData?.total_area ? `${siteData.total_area} sq ft` : '-' },
-            { label: 'Area per Floor', value: siteData?.area_per_floor ? `${siteData.area_per_floor} sq ft` : '-' },
-            { label: 'Available Floors', value: siteData?.availble_floors || '-' },
-            { label: 'Efficiency', value: siteData?.efficiency ? `${siteData.efficiency}%` : '-' },
-          ].map((field, idx) => (
-            <View key={idx} style={styles.infoItem}>
-              <Text style={styles.infoItemLabel}>{field.label}</Text>
-              <View style={styles.infoItemBox}>
-                <Text style={styles.infoItemValue}>{field.value || '-'}</Text>
+          {renderRow('Building Status', beautifyName(siteData?.building_status ?? ''))}
+          {renderRow('Floor Condition', beautifyName(siteData?.floor_condition ?? ''))}
+          {renderRow('Total Floors', siteData?.total_floors ?? '')}
+          {renderRow('Basements', siteData?.number_of_basements ?? '')}
+          {renderRow(
+            'Total Area',
+            siteData?.total_area ? `${siteData.total_area} sq ft` : '-',
+          )}
+          {renderRow(
+            'Efficiency',
+            siteData?.efficiency ? `${siteData.efficiency}%` : '-',
+          )}
+          {renderRow('Available Floors', siteData?.availble_floors ?? '')}
+
+          {/* Total Available Area — bullet list */}
+          {renderBullet('Total Available Area', siteData?.area_offered ?? '')}
+
+          {renderRow(
+            'Area Per Floor — Typical Floor Plate',
+            siteData?.area_per_floor ? `${siteData.area_per_floor} sq ft` : '-',
+          )}
+
+          {/* Floor-wise Availability — bullet list */}
+          {renderBullet('Floor-wise Availability', siteData?.floor_wise_area ?? '')}
+
+          {/* Micro Market */}
+          {siteData?.micro_market ? (
+            <View style={styles.infoItem}>
+              <Text style={styles.infoItemLabel}>Micro Market</Text>
+              <View style={[styles.infoItemBox, styles.microMarketBox]}>
+                <Ionicons
+                  name="map"
+                  size={14}
+                  color={WHATSAPP_COLORS.info}
+                  style={{ marginRight: 6 }}
+                />
+                <Text
+                  style={[
+                    styles.infoItemValue,
+                    { color: WHATSAPP_COLORS.info, fontWeight: '600' },
+                  ]}
+                >
+                  {siteData.micro_market}
+                </Text>
               </View>
             </View>
-          ))}
+          ) : null}
+
+          {/* Nearest Metro Station */}
+          {siteData?.nearest_metro_station ? (
+            <View style={styles.infoItem}>
+              <Text style={styles.infoItemLabel}>Nearest Metro Station</Text>
+              <View style={[styles.infoItemBox, styles.metroInlineBox]}>
+                <Ionicons
+                  name="train"
+                  size={16}
+                  color={WHATSAPP_COLORS.primary}
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={[styles.infoItemValue, { fontWeight: '600' }]}>
+                  {siteData.nearest_metro_station.name}
+                </Text>
+                {siteData.nearest_metro_station.city ? (
+                  <Text style={styles.metroInlineCity}>
+                    {siteData.nearest_metro_station.city}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
         </View>
       </View>
     </View>
   );
+
+  // ─── Step 2: Financial Details ────────────────────────────────────────────
+  // CAM displayed as plain text — supports alphanumeric stored values.
 
   const renderStep2 = () => (
     <View style={styles.stepContent}>
@@ -355,26 +527,24 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
           <Text style={styles.containerTitle}>Financial Details</Text>
         </View>
         <View style={styles.containerContent}>
-          {[
-            { label: 'Monthly Rent', value: formatCurrency(siteData?.rent || '') },
-            { label: 'Rent per Seat', value: formatCurrency(siteData?.rent_per_seat || '') },
-            { label: 'CAM', value: formatCurrency(siteData?.cam || '') },
-            { label: 'CAM Deposit', value: siteData?.cam_deposit || '-' },
-            { label: 'Maintenance Rate', value: siteData?.maintenance_rate || '-' },
-            { label: 'Security Deposit', value: siteData?.security_deposit ? `${siteData.security_deposit} months` : '-' },
-            { label: 'Rental Escalation', value: siteData?.rental_escalation || '-' },
-          ].map((field, idx) => (
-            <View key={idx} style={styles.infoItem}>
-              <Text style={styles.infoItemLabel}>{field.label}</Text>
-              <View style={styles.infoItemBox}>
-                <Text style={styles.infoItemValue}>{field.value || '-'}</Text>
-              </View>
-            </View>
-          ))}
+          {renderRow('Monthly Rent', formatCurrency(siteData?.rent ?? ''))}
+          {renderRow('Rent per Seat', formatCurrency(siteData?.rent_per_seat ?? ''))}
+          {renderRow('CAM', siteData?.cam || '-')}
+          {renderRow('CAM Deposit', siteData?.cam_deposit ?? '')}
+          {renderRow('Maintenance Rate', siteData?.maintenance_rate ?? '')}
+          {renderRow(
+            'Security Deposit',
+            siteData?.security_deposit
+              ? `${siteData.security_deposit} months`
+              : '-',
+          )}
+          {renderRow('Rental Escalation', siteData?.rental_escalation ?? '')}
         </View>
       </View>
     </View>
   );
+
+  // ─── Step 3: Contact Information ─────────────────────────────────────────
 
   const renderStep3 = () => (
     <View style={styles.stepContent}>
@@ -384,25 +554,18 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
           <Text style={styles.containerTitle}>Contact Information</Text>
         </View>
         <View style={styles.containerContent}>
-          {[
-            { label: 'Building Owner', value: siteData?.building_owner_name || '-' },
-            { label: 'Owner Contact', value: siteData?.building_owner_contact || '-' },
-            { label: 'Contact Person', value: siteData?.contact_person_name || '-' },
-            { label: 'Designation', value: siteData?.contact_person_designation || '-' },
-            { label: 'Phone', value: siteData?.contact_person_number || '-' },
-            { label: 'Email', value: siteData?.contact_person_email || '-' },
-          ].map((field, idx) => (
-            <View key={idx} style={styles.infoItem}>
-              <Text style={styles.infoItemLabel}>{field.label}</Text>
-              <View style={styles.infoItemBox}>
-                <Text style={styles.infoItemValue}>{field.value || '-'}</Text>
-              </View>
-            </View>
-          ))}
+          {renderRow('Building Owner', siteData?.building_owner_name ?? '')}
+          {renderRow('Owner Contact', siteData?.building_owner_contact ?? '')}
+          {renderRow('Contact Person', siteData?.contact_person_name ?? '')}
+          {renderRow('Designation', siteData?.contact_person_designation ?? '')}
+          {renderRow('Phone', siteData?.contact_person_number ?? '')}
+          {renderRow('Email', siteData?.contact_person_email ?? '')}
         </View>
       </View>
     </View>
   );
+
+  // ─── Step 4: Parking & Utilities ─────────────────────────────────────────
 
   const renderStep4 = () => (
     <View style={styles.stepContent}>
@@ -412,30 +575,22 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
           <Text style={styles.containerTitle}>Parking & Utilities</Text>
         </View>
         <View style={styles.containerContent}>
-          {[
-            { label: 'Car Parking Slots', value: siteData?.car_parking_slots || '-' },
-            { label: 'Car Parking Charges', value: formatCurrency(siteData?.car_parking_charges || '') },
-            { label: 'Car Parking Ratio', value: siteData?.car_parking_ratio || '-' },
-            { label: 'Two-Wheeler Slots', value: siteData?.two_wheeler_slots || '-' },
-            { label: 'Two-Wheeler Charges', value: formatCurrency(siteData?.two_wheeler_charges || '') },
-            { label: 'Power', value: siteData?.power || '-' },
-            { label: 'Power Backup', value: siteData?.power_backup || '-' },
-          ].map((field, idx) => (
-            <View key={idx} style={styles.infoItem}>
-              <Text style={styles.infoItemLabel}>{field.label}</Text>
-              <View style={styles.infoItemBox}>
-                <Text style={styles.infoItemValue}>{field.value || '-'}</Text>
-              </View>
-            </View>
-          ))}
+          {renderRow('Car Parking Slots', siteData?.car_parking_slots ?? '')}
+          {renderRow('Car Parking Charges', formatCurrency(siteData?.car_parking_charges ?? ''))}
+          {renderRow('Car Parking Ratio', siteData?.car_parking_ratio ?? '')}
+          {renderRow('Two-Wheeler Slots', siteData?.two_wheeler_slots ?? '')}
+          {renderRow('Two-Wheeler Charges', formatCurrency(siteData?.two_wheeler_charges ?? ''))}
+          {renderRow('Power', siteData?.power ?? '')}
+          {renderRow('Power Backup', siteData?.power_backup ?? '')}
         </View>
       </View>
     </View>
   );
 
+  // ─── Step 5: Workspace Amenities ─────────────────────────────────────────
+
   const renderStep5 = () => {
     const otherAmenities = getOtherAmenities();
-    
     return (
       <View style={styles.stepContent}>
         <View style={styles.containerBox}>
@@ -444,46 +599,32 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
             <Text style={styles.containerTitle}>Workspace Amenities</Text>
           </View>
           <View style={styles.containerContent}>
-            {[
-              { label: 'Number of Cabins', value: siteData?.number_of_cabins || '-' },
-              { label: 'Number of Workstations', value: siteData?.number_of_workstations || '-' },
-              { label: 'Size of Workstation', value: siteData?.size_of_workstation || '-' },
-              { label: 'Server Room', value: siteData?.server_room || '-' },
-              { label: 'Training Room', value: siteData?.training_room || '-' },
-              { label: 'Pantry', value: siteData?.pantry || '-' },
-              { label: 'Electrical UPS Room', value: siteData?.electrical_ups_room || '-' },
-              { label: 'Cafeteria', value: siteData?.cafeteria || '-' },
-              { label: 'Gym', value: siteData?.gym || '-' },
-              { label: 'Discussion Room', value: siteData?.discussion_room || '-' },
-              { label: 'Meeting Room', value: siteData?.meeting_room || '-' },
-            ].map((field, idx) => (
-              <View key={idx} style={styles.infoItem}>
-                <Text style={styles.infoItemLabel}>{field.label}</Text>
-                <View style={styles.infoItemBox}>
-                  <Text style={styles.infoItemValue}>{field.value || '-'}</Text>
-                </View>
-              </View>
-            ))}
-            
-            {/* ADDED: Other Amenities from Meta */}
-            {otherAmenities.length > 0 && (
+            {renderRow('Number of Cabins', siteData?.number_of_cabins ?? '')}
+            {renderRow('Number of Workstations', siteData?.number_of_workstations ?? '')}
+            {renderRow('Size of Workstation', siteData?.size_of_workstation ?? '')}
+            {renderRow('Server Room', siteData?.server_room ?? '')}
+            {renderRow('Training Room', siteData?.training_room ?? '')}
+            {renderRow('Pantry', siteData?.pantry ?? '')}
+            {renderRow('Electrical UPS Room', siteData?.electrical_ups_room ?? '')}
+            {renderRow('Cafeteria', siteData?.cafeteria ?? '')}
+            {renderRow('Gym', siteData?.gym ?? '')}
+            {renderRow('Discussion Room', siteData?.discussion_room ?? '')}
+            {renderRow('Meeting Room', siteData?.meeting_room ?? '')}
+            {otherAmenities.length > 0 ? (
               <View style={styles.otherAmenitiesSection}>
                 <Text style={styles.otherAmenitiesTitle}>Other Amenities</Text>
-                {otherAmenities.map((amenity, index) => (
-                  <View key={index} style={styles.infoItem}>
-                    <Text style={styles.infoItemLabel}>{amenity.key}</Text>
-                    <View style={styles.infoItemBox}>
-                      <Text style={styles.infoItemValue}>{amenity.value || '-'}</Text>
-                    </View>
-                  </View>
-                ))}
+                {otherAmenities.map((a, idx) => renderRow(a.key, a.value))}
               </View>
-            )}
+            ) : null}
           </View>
         </View>
       </View>
     );
   };
+
+  // ─── Step 6: Additional Details ───────────────────────────────────────────
+  // Number of Units and Seats per Unit use BulletList when managed_property
+  // is true, plain text otherwise.
 
   const renderStep6 = () => (
     <View style={styles.stepContent}>
@@ -493,37 +634,41 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
           <Text style={styles.containerTitle}>Additional Information</Text>
         </View>
         <View style={styles.containerContent}>
-          {[
-            { label: 'Business Hours', value: siteData?.business_hours_of_operation || '-' },
-            { label: 'Premises Access', value: siteData?.premises_access || '-' },
-            { label: 'Total Seats', value: siteData?.total_seats || '-' },
-            { label: 'Seats Available', value: siteData?.seats_available || '-' },
-            { label: 'Number of Units', value: siteData?.number_of_units || '-' },
-            { label: 'Seats per Unit', value: siteData?.number_of_seats_per_unit || '-' },
-            { label: 'Notice Period', value: siteData?.notice_period || '-' },
-            { label: 'Lease Term', value: siteData?.lease_term || '-' },
-            { label: 'Lock-in Period', value: siteData?.lock_in_period || '-' },
-            { label: 'Will Developer Do Fitouts', value: siteData?.will_developer_do_fitouts ? 'Yes' : 'No' },
-            { label: 'OC Available', value: siteData?.oc ? 'Yes' : 'No' },
-          ].map((field, idx) => (
-            <View key={idx} style={styles.infoItem}>
-              <Text style={styles.infoItemLabel}>{field.label}</Text>
-              <View style={styles.infoItemBox}>
-                <Text style={styles.infoItemValue}>{field.value || '-'}</Text>
-              </View>
-            </View>
-          ))}
+          {renderRow('Business Hours', siteData?.business_hours_of_operation ?? '')}
+          {renderRow('Premises Access', siteData?.premises_access ?? '')}
+          {renderRow('Total Seats', siteData?.total_seats ?? '')}
+          {renderRow('Seats Available', siteData?.seats_available ?? '')}
+
+          {siteData?.managed_property
+            ? renderBullet('Number of Units', siteData.number_of_units ?? '')
+            : renderRow('Number of Units', siteData?.number_of_units ?? '')}
+
+          {siteData?.managed_property
+            ? renderBullet('Seats per Unit', siteData.number_of_seats_per_unit ?? '')
+            : renderRow('Seats per Unit', siteData?.number_of_seats_per_unit ?? '')}
+
+          {renderRow('Notice Period', siteData?.notice_period ?? '')}
+          {renderRow('Lease Term', siteData?.lease_term ?? '')}
+          {renderRow('Lock-in Period', siteData?.lock_in_period ?? '')}
+          {renderRow(
+            'Will Developer Do Fitouts',
+            siteData?.will_developer_do_fitouts ? 'Yes' : 'No',
+          )}
+          {renderRow('OC Available', siteData?.oc ? 'Yes' : 'No')}
+          {siteData?.remarks ? renderRow('Remarks', siteData.remarks) : null}
         </View>
       </View>
 
-      {siteData?.building_photos && siteData.building_photos.length > 0 && (
+      {siteData?.building_photos && siteData.building_photos.length > 0 ? (
         <View style={[styles.containerBox, { marginTop: 12 }]}>
           <View style={styles.containerHeader}>
             <MaterialIcons name="photo-library" size={20} color={WHATSAPP_COLORS.primary} />
-            <Text style={styles.containerTitle}>Building Photos ({siteData.building_photos.length})</Text>
+            <Text style={styles.containerTitle}>
+              Building Photos ({siteData.building_photos.length})
+            </Text>
           </View>
           <View style={styles.photosGridContainer}>
-            {siteData.building_photos.map((photo, index) => (
+            {siteData.building_photos.map((photo) => (
               <View key={photo.id} style={styles.photoGridItem}>
                 <Image
                   source={{ uri: photo.file_url }}
@@ -534,31 +679,26 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
             ))}
           </View>
         </View>
-      )}
+      ) : null}
     </View>
   );
+
+  // ─── Step Indicator ───────────────────────────────────────────────────────
 
   const renderStepIndicator = () => (
     <View style={styles.stepIndicator}>
       {[0, 1, 2, 3, 4, 5, 6].map((step, index) => (
         <View key={step} style={styles.stepIndicatorItem}>
-          <View style={[
-            styles.stepCircle,
-            currentStep >= step && styles.stepCircleActive
-          ]}>
-            <Text style={[
-              styles.stepNumber,
-              currentStep >= step && styles.stepNumberActive
-            ]}>
+          <View style={[styles.stepCircle, currentStep >= step && styles.stepCircleActive]}>
+            <Text
+              style={[styles.stepNumber, currentStep >= step && styles.stepNumberActive]}
+            >
               {step + 1}
             </Text>
           </View>
-          {index < 6 && (
-            <View style={[
-              styles.stepLine,
-              currentStep > step && styles.stepLineActive
-            ]} />
-          )}
+          {index < 6 ? (
+            <View style={[styles.stepLine, currentStep > step && styles.stepLineActive]} />
+          ) : null}
         </View>
       ))}
     </View>
@@ -571,7 +711,7 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
     'Contact Information',
     'Parking & Utilities',
     'Workspace Amenities',
-    'Additional Details'
+    'Additional Details',
   ];
 
   const renderCurrentStep = () => {
@@ -587,18 +727,6 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
     }
   };
 
-  const handleNextStep = () => {
-    if (currentStep < 6) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
-
-  const handlePrevStep = () => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
   if (!siteData) return null;
 
   return (
@@ -611,10 +739,7 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
     >
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.modalHeader}>
-          <TouchableOpacity
-            onPress={onClose}
-            style={styles.modalBackButton}
-          >
+          <TouchableOpacity onPress={onClose} style={styles.modalBackButton}>
             <Ionicons name="close" size={24} color="#FFF" />
           </TouchableOpacity>
           <Text style={styles.modalTitle}>Site Details</Text>
@@ -623,7 +748,7 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
 
       <View style={styles.contentContainer}>
         {renderStepIndicator()}
-        
+
         <View style={styles.stepTitleContainer}>
           <Text style={styles.stepTitle}>{stepTitles[currentStep]}</Text>
           <Text style={styles.stepDescription}>
@@ -631,33 +756,29 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
           </Text>
         </View>
 
-        <ScrollView 
+        <ScrollView
           style={styles.scrollContainer}
           contentContainerStyle={styles.scrollContentContainer}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="never"
         >
           {renderCurrentStep()}
         </ScrollView>
 
         <View style={styles.navigationButtons}>
-          {currentStep > 0 && (
+          {currentStep > 0 ? (
             <TouchableOpacity
               style={[styles.navButton, { flex: currentStep < 6 ? 1 : 0 }]}
-              onPress={handlePrevStep}
+              onPress={() => setCurrentStep((s) => s - 1)}
             >
               <Ionicons name="arrow-back" size={18} color={WHATSAPP_COLORS.primary} />
               <Text style={styles.navButtonText}>Previous</Text>
             </TouchableOpacity>
-          )}
-          
+          ) : null}
           {currentStep < 6 ? (
             <TouchableOpacity
-              style={[
-                styles.navButton,
-                styles.navButtonPrimary,
-                { flex: currentStep === 0 ? 1 : 1 }
-              ]}
-              onPress={handleNextStep}
+              style={[styles.navButton, styles.navButtonPrimary, { flex: 1 }]}
+              onPress={() => setCurrentStep((s) => s + 1)}
             >
               <Text style={styles.navButtonTextPrimary}>Next</Text>
               <Ionicons name="arrow-forward" size={18} color="#FFF" />
@@ -671,32 +792,21 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
   );
 };
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  safeArea: {
-    backgroundColor: WHATSAPP_COLORS.primary,
-  },
+  safeArea: { backgroundColor: WHATSAPP_COLORS.primary, paddingTop:0 },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
     backgroundColor: WHATSAPP_COLORS.primary,
-    marginTop:50,
   },
-  modalBackButton: {
-    padding: 8,
-    marginRight: 12
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFF',
-    flex: 1
-  },
-  contentContainer: {
-    flex: 1,
-    backgroundColor: WHATSAPP_COLORS.background,
-  },
+  modalBackButton: { padding: 8, marginRight: 12 },
+  modalTitle: { fontSize: 18, fontWeight: '600', color: '#FFF', flex: 1 },
+  contentContainer: { flex: 1, backgroundColor: WHATSAPP_COLORS.background },
+
   stepIndicator: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -707,10 +817,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: WHATSAPP_COLORS.border,
   },
-  stepIndicatorItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  stepIndicatorItem: { flexDirection: 'row', alignItems: 'center' },
   stepCircle: {
     width: 32,
     height: 32,
@@ -719,25 +826,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  stepCircleActive: {
-    backgroundColor: WHATSAPP_COLORS.primary,
-  },
-  stepNumber: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: WHATSAPP_COLORS.textSecondary,
-  },
-  stepNumberActive: {
-    color: WHATSAPP_COLORS.white,
-  },
-  stepLine: {
-    width: 20,
-    height: 2,
-    backgroundColor: WHATSAPP_COLORS.border,
-  },
-  stepLineActive: {
-    backgroundColor: WHATSAPP_COLORS.primary,
-  },
+  stepCircleActive: { backgroundColor: WHATSAPP_COLORS.primary },
+  stepNumber: { fontSize: 12, fontWeight: '700', color: WHATSAPP_COLORS.textSecondary },
+  stepNumberActive: { color: WHATSAPP_COLORS.white },
+  stepLine: { width: 20, height: 2, backgroundColor: WHATSAPP_COLORS.border },
+  stepLineActive: { backgroundColor: WHATSAPP_COLORS.primary },
+
   stepTitleContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -751,32 +845,20 @@ const styles = StyleSheet.create({
     color: WHATSAPP_COLORS.textPrimary,
     marginBottom: 4,
   },
-  stepDescription: {
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textSecondary,
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  scrollContentContainer: {
-    paddingBottom: 20,
-  },
-  stepContent: {
-    padding: 16,
-  },
-  stepLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textSecondary,
-  },
-  // Container Box Styles
+  stepDescription: { fontSize: 14, color: WHATSAPP_COLORS.textSecondary },
+
+  scrollContainer: { flex: 1 },
+  scrollContentContainer: { paddingBottom: 20 },
+  stepContent: { padding: 16 },
+  stepLabel: { fontSize: 13, fontWeight: '600', color: WHATSAPP_COLORS.textSecondary },
+
   containerBox: {
     backgroundColor: WHATSAPP_COLORS.surface,
     marginBottom: 12,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: WHATSAPP_COLORS.border,
-    overflow: 'hidden'
+    overflow: 'hidden',
   },
   containerHeader: {
     flexDirection: 'row',
@@ -786,20 +868,11 @@ const styles = StyleSheet.create({
     backgroundColor: WHATSAPP_COLORS.primary + '08',
     borderBottomWidth: 1,
     borderBottomColor: WHATSAPP_COLORS.border,
-    gap: 10
+    gap: 10,
   },
-  containerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.primary,
-    flex: 1
-  },
-  containerContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12
-  },
-  // Site Info Styles
+  containerTitle: { fontSize: 16, fontWeight: '600', color: WHATSAPP_COLORS.primary, flex: 1 },
+  containerContent: { paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+
   siteInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -807,11 +880,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: WHATSAPP_COLORS.border,
-    gap: 16
+    gap: 16,
   },
-  siteAvatarSection: {
-    alignItems: 'center'
-  },
+  siteAvatarSection: { alignItems: 'center' },
   siteAvatar: {
     width: 60,
     height: 60,
@@ -820,40 +891,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: WHATSAPP_COLORS.primary
+    borderColor: WHATSAPP_COLORS.primary,
   },
-  siteAvatarText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFF'
-  },
-  siteHeaderSection: {
-    flex: 1,
-    justifyContent: 'center'
-  },
+  siteAvatarText: { fontSize: 24, fontWeight: '700', color: '#FFF' },
+  siteHeaderSection: { flex: 1, justifyContent: 'center' },
   siteNameText: {
     fontSize: 20,
     fontWeight: '700',
     color: WHATSAPP_COLORS.textPrimary,
-    marginBottom: 4
+    marginBottom: 4,
   },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-  },
+  locationContainer: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   locationText: {
     fontSize: 13,
     color: WHATSAPP_COLORS.textSecondary,
     flex: 1,
     lineHeight: 18,
   },
+
   statusBadgesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    gap: 10
+    gap: 10,
   },
   statusBadgeBox: {
     paddingHorizontal: 12,
@@ -862,7 +923,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
   typeBadge: {
     flexDirection: 'row',
@@ -872,65 +933,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     gap: 4,
   },
-  typeText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  // Metro Station Styles
-  metroStationContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.border,
-  },
-  metroStationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  metroStationTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.primary,
-  },
-  metroStationContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  metroStationName: {
-  fontSize: 15,
-  fontWeight: '600',
-  color: WHATSAPP_COLORS.textPrimary,
-  flex: 1, 
-  flexWrap: 'wrap',  
-},
-  metroStationCity: {
-    fontSize: 13,
-    color: WHATSAPP_COLORS.textSecondary,
-    backgroundColor: WHATSAPP_COLORS.border,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  locationButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: WHATSAPP_COLORS.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 8,
-  },
+  typeText: { fontSize: 12, fontWeight: '600' },
+
+  actionButtons: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, paddingBottom: 16 },
   mapButton: {
     flex: 1,
     flexDirection: 'row',
@@ -942,16 +947,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 8,
   },
-  locationButtonText: {
-    color: WHATSAPP_COLORS.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  mapButtonText: {
-    color: WHATSAPP_COLORS.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  mapButtonText: { color: WHATSAPP_COLORS.white, fontSize: 14, fontWeight: '600' },
+
   metadataSection: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -964,25 +961,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
   },
-  metadataLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textSecondary,
-  },
-  metadataValue: {
-    fontSize: 13,
-    color: WHATSAPP_COLORS.textPrimary,
-    fontWeight: '500',
-  },
-  // Info Item Styles
-  infoItem: {
-    marginBottom: 12
-  },
+  metadataLabel: { fontSize: 13, fontWeight: '600', color: WHATSAPP_COLORS.textSecondary },
+  metadataValue: { fontSize: 13, color: WHATSAPP_COLORS.textPrimary, fontWeight: '500' },
+
+  infoItem: { marginBottom: 12 },
   infoItemLabel: {
     fontSize: 13,
     fontWeight: '600',
     color: WHATSAPP_COLORS.textSecondary,
-    marginBottom: 6
+    marginBottom: 6,
   },
   infoItemBox: {
     flexDirection: 'row',
@@ -992,14 +979,28 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.border
+    borderColor: WHATSAPP_COLORS.border,
   },
-  infoItemValue: {
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textPrimary,
-    flex: 1
+  infoItemValue: { fontSize: 14, color: WHATSAPP_COLORS.textPrimary, flex: 1 },
+
+  microMarketBox: {
+    backgroundColor: WHATSAPP_COLORS.info + '10',
+    borderColor: WHATSAPP_COLORS.info + '40',
   },
-  // Other Amenities Styles
+  metroInlineBox: {
+    backgroundColor: WHATSAPP_COLORS.primary + '08',
+    borderColor: WHATSAPP_COLORS.primary + '30',
+  },
+  metroInlineCity: {
+    fontSize: 12,
+    color: WHATSAPP_COLORS.textSecondary,
+    backgroundColor: WHATSAPP_COLORS.border,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+
   otherAmenitiesSection: {
     marginTop: 8,
     paddingTop: 12,
@@ -1012,24 +1013,16 @@ const styles = StyleSheet.create({
     color: WHATSAPP_COLORS.primary,
     marginBottom: 12,
   },
-  // Photo Grid
-  photosGridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 8,
-    gap: 8,
-  },
+
+  photosGridContainer: { flexDirection: 'row', flexWrap: 'wrap', padding: 8, gap: 8 },
   photoGridItem: {
     width: (screenWidth - 48) / 3,
     height: (screenWidth - 48) / 3,
     borderRadius: 8,
     overflow: 'hidden',
   },
-  gridThumbnailImage: {
-    width: '100%',
-    height: '100%',
-  },
-  // Navigation Buttons
+  gridThumbnailImage: { width: '100%', height: '100%' },
+
   navigationButtons: {
     flexDirection: 'row',
     gap: 12,
@@ -1049,14 +1042,8 @@ const styles = StyleSheet.create({
     borderColor: WHATSAPP_COLORS.primary,
     gap: 4,
   },
-  navButtonPrimary: {
-    backgroundColor: WHATSAPP_COLORS.primary,
-  },
-  navButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: WHATSAPP_COLORS.primary,
-  },
+  navButtonPrimary: { backgroundColor: WHATSAPP_COLORS.primary },
+  navButtonText: { fontSize: 14, fontWeight: '700', color: WHATSAPP_COLORS.primary },
   navButtonTextPrimary: {
     fontSize: 14,
     fontWeight: '700',

@@ -72,7 +72,9 @@ export const AssetList: React.FC<AssetListProps> = ({
               {location && location !== 'Unknown' && (
                 <View style={[styles.badge, { backgroundColor: T.accent + '20' }]}>
                   <Ionicons name="location-outline" size={11} color={T.accent} />
-                  <Text style={[styles.badgeText, { color: T.accent }]}>{location}</Text>
+                  <Text style={[styles.badgeText, { color: T.accent }]}>
+                    {location.charAt(0).toUpperCase() + location.slice(1)}
+                  </Text>
                 </View>
               )}
             </View>
@@ -118,8 +120,10 @@ export const AssetList: React.FC<AssetListProps> = ({
                 {serials.slice(0, 3).map(s => (
                   <View key={s.id} style={[
                     styles.serialChip,
-                    { backgroundColor: s.is_assigned ? '#FFF7ED' : '#F0F9FF',
-                      borderColor: s.is_assigned ? '#FED7AA' : '#BAE6FD' }
+                    {
+                      backgroundColor: s.is_assigned ? '#FFF7ED' : '#F0F9FF',
+                      borderColor: s.is_assigned ? '#FED7AA' : '#BAE6FD'
+                    }
                   ]}>
                     <Text style={{
                       fontSize: 11, fontWeight: '600',
@@ -202,20 +206,20 @@ export const AssetList: React.FC<AssetListProps> = ({
           ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[T.accent]} tintColor={T.accent} />
           : undefined
       }
-      ListHeaderComponent={assets.length > 0 ? (
-        <View style={{ flexDirection: 'row', gap: 12, marginTop: 8, marginBottom: 16 }}>
-          {[
-            { label: 'Asset Types', value: assets.length },
-            { label: 'Total Count', value: assets.reduce((s, a) => s + (a.asset_count || 0), 0) },
-            { label: 'Serials Reg.', value: assets.reduce((s, a) => s + (a.asset_serial_id?.length || 0), 0) },
-          ].map(stat => (
-            <View key={stat.label} style={[styles.statBox, { backgroundColor: isDark ? '#111a2d' : '#fff' }]}>
-              <Text style={[styles.statNum, { color: T.accent }]}>{stat.value}</Text>
-              <Text style={[styles.statLabel, { color: T.sub }]}>{stat.label}</Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
+      // ListHeaderComponent={assets.length > 0 ? (
+        // <View style={{ flexDirection: 'row', gap: 12, marginTop: 8, marginBottom: 16 }}>
+        //   {[
+        //     { label: 'Asset Types', value: assets.length },
+        //     { label: 'Assigned', value: assets.reduce((s, a) => s + (a.asset_serial_id?.filter(s => s.is_assigned).length || 0), 0) },
+        //     { label: 'Serials Reg.', value: assets.reduce((s, a) => s + (a.asset_serial_id?.length || 0), 0) },
+        //   ].map(stat => (
+        //     <View key={stat.label} style={[styles.statBox, { backgroundColor: isDark ? '#111a2d' : '#fff' }]}>
+        //       <Text style={[styles.statNum, { color: T.accent }]}>{stat.value}</Text>
+        //       <Text style={[styles.statLabel, { color: T.sub }]}>{stat.label}</Text>
+        //     </View>
+        //   ))}
+        // </View>
+      // ) : null}
       ListEmptyComponent={!loading ? (
         <View style={styles.center}>
           <View style={[styles.emptyIcon, { backgroundColor: T.accent + '20' }]}>

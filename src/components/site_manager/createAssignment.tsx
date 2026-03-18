@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -113,12 +113,12 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
   onAssignmentCreated,
   theme,
 }) => {
-  // State Management
+  // ── Core State ─────────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(false);
   const [loadingScouts, setLoadingScouts] = useState(false);
   const [loadingSites, setLoadingSites] = useState(false);
   const [loadingMoreSites, setLoadingMoreSites] = useState(false);
-  
+
   const [sites, setSites] = useState<Site[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [selectedSites, setSelectedSites] = useState<Site[]>([]);
@@ -126,7 +126,8 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedTime, setSelectedTime] = useState<string>('09:00');
   const [scouts, setScouts] = useState<Scout[]>([]);
-  
+
+  // ── Modal Visibility ───────────────────────────────────────────────────────
   const [showSiteSearch, setShowSiteSearch] = useState(false);
   const [showScoutSearch, setShowScoutSearch] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -135,18 +136,23 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
   const [showStatusFilter, setShowStatusFilter] = useState(false);
   const [showFloorConditionFilter, setShowFloorConditionFilter] = useState(false);
   const [showPropertyTypeFilter, setShowPropertyTypeFilter] = useState(false);
-  
+  const [showMicroMarketFilter, setShowMicroMarketFilter] = useState(false); // NEW
+
+  // ── Search State ───────────────────────────────────────────────────────────
   const [siteSearchQuery, setSiteSearchQuery] = useState('');
   const [searchTags, setSearchTags] = useState<string[]>([]);
   const [scoutSearchQuery, setScoutSearchQuery] = useState('');
-  
+
+  // ── Filters — now includes micro_market and oc ────────────────────────────
   const [localFilters, setLocalFilters] = useState({
     building_status: [] as string[],
     floor_condition: [] as string[],
     property_type: [] as string[],
+    micro_market: [] as string[],      // NEW
+    oc: null as boolean | null,        // NEW
   });
 
-  // Filter Options
+  // ── Filter Options ─────────────────────────────────────────────────────────
   const BUILDING_STATUS_OPTIONS: FilterOption[] = [
     { value: 'available', label: 'Available' },
     { value: 'leased_out', label: 'Leased Out' },
@@ -169,7 +175,19 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     { value: 'for_sale', label: 'For Sale' },
   ];
 
-  // Helper functions
+  // NEW
+  const MICRO_MARKET_OPTIONS: FilterOption[] = [
+    { value: 'CBD', label: 'CBD' },
+    { value: 'North', label: 'North' },
+    { value: 'South', label: 'South' },
+    { value: 'East', label: 'East' },
+    { value: 'West', label: 'West' },
+    { value: 'ORR', label: 'ORR' },
+    { value: 'Electronic City/Hosur Road', label: 'Electronic City / Hosur Road' },
+    { value: 'HSR', label: 'HSR' },
+  ];
+
+  // ── Helper Functions ───────────────────────────────────────────────────────
   const beautifyName = useCallback((name: string): string => {
     if (!name) return '';
     return name
@@ -193,13 +211,9 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     if (!value) return '';
     const num = typeof value === 'string' ? parseFloat(value) : value;
     if (isNaN(num)) return '';
-    if (num >= 10000000) {
-      return `₹${(num / 10000000).toFixed(2)}Cr`;
-    } else if (num >= 100000) {
-      return `₹${(num / 100000).toFixed(2)}L`;
-    } else if (num >= 1000) {
-      return `₹${(num / 1000).toFixed(2)}K`;
-    }
+    if (num >= 10000000) return `₹${(num / 10000000).toFixed(2)}Cr`;
+    else if (num >= 100000) return `₹${(num / 100000).toFixed(2)}L`;
+    else if (num >= 1000) return `₹${(num / 1000).toFixed(2)}K`;
     return `₹${num.toLocaleString('en-IN')}`;
   }, []);
 
@@ -217,7 +231,7 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     return '🏢 Office';
   }, []);
 
-  // API Call: Search and Filter Sites
+  // ── API: Search and Filter Sites ───────────────────────────────────────────
   const searchAndFilterSites = useCallback(async (
     tags: string[] = [],
     filters: any = {},
@@ -225,54 +239,42 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     append: boolean = false
   ) => {
     if (!token) return;
-
     try {
-      if (append) {
-        setLoadingMoreSites(true);
-      } else {
-        setLoadingSites(true);
-      }
+      if (append) setLoadingMoreSites(true);
+      else setLoadingSites(true);
 
-      // Build filters object for API
       const apiFilters: any = {};
-      
-      if (filters.building_status && filters.building_status.length > 0) {
+      if (filters.building_status?.length > 0)
         apiFilters.building_status = filters.building_status.join(',');
-      }
-      if (filters.floor_condition && filters.floor_condition.length > 0) {
+      if (filters.floor_condition?.length > 0)
         apiFilters.floor_condition = filters.floor_condition.join(',');
-      }
-      if (filters.property_type && filters.property_type.length > 0) {
+      if (filters.property_type?.length > 0)
         apiFilters.property_type = filters.property_type.join(',');
-      }
+      // NEW
+      if (filters.micro_market?.length > 0)
+        apiFilters.micro_market = filters.micro_market.join(',');
+      if (filters.oc === true)
+        apiFilters.oc = true;
 
       const response = await fetch(`${BACKEND_URL}/manager/searchAndFilterSites`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
-          queries: tags, // Send array of search queries
+          queries: tags,
           page,
           page_size: 20,
-          filters: apiFilters
-        })
+          filters: apiFilters,
+        }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-
-      if (data.message !== "Sites search successful") {
+      if (data.message !== 'Sites search successful')
         throw new Error(data.message || 'Failed to fetch sites');
-      }
 
-      if (append) {
-        setSites(prev => [...prev, ...data.sites]);
-      } else {
-        setSites(data.sites);
-      }
+      if (append) setSites(prev => [...prev, ...data.sites]);
+      else setSites(data.sites);
       setPagination(data.pagination);
     } catch (error) {
       console.error('Error fetching sites:', error);
@@ -290,7 +292,7 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     }
   }, [showSiteSearch, token]);
 
-  // Search Tag Handlers
+  // ── Search Tag Handlers ────────────────────────────────────────────────────
   const addSearchTag = useCallback(() => {
     const trimmedQuery = siteSearchQuery.trim();
     if (trimmedQuery && !searchTags.includes(trimmedQuery)) {
@@ -313,19 +315,13 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     searchAndFilterSites([], localFilters, 1, false);
   }, [localFilters, searchAndFilterSites]);
 
-  // Handle Enter key press to add tag
   const handleSearchKeyPress = useCallback((e: any) => {
-    if (e.nativeEvent.key === 'Enter') {
-      addSearchTag();
-    }
+    if (e.nativeEvent.key === 'Enter') addSearchTag();
   }, [addSearchTag]);
 
-  // Filter Handlers
+  // ── Filter Handlers ────────────────────────────────────────────────────────
   const handleFilterChange = useCallback((key: string, values: string[]) => {
-    setLocalFilters(prev => ({
-      ...prev,
-      [key]: values
-    }));
+    setLocalFilters(prev => ({ ...prev, [key]: values }));
   }, []);
 
   const applyFilters = useCallback(() => {
@@ -338,30 +334,45 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
       building_status: [],
       floor_condition: [],
       property_type: [],
+      micro_market: [],          // NEW
+      oc: null as boolean | null, // NEW
     };
     setLocalFilters(emptyFilters);
     searchAndFilterSites(searchTags, emptyFilters, 1, false);
     setShowFilterModal(false);
   }, [searchTags, searchAndFilterSites]);
 
-  // Remove individual filter
   const removeFilter = useCallback((filterKey: string, value: string) => {
     const newFilters = {
       ...localFilters,
-      [filterKey]: (localFilters as any)[filterKey].filter((v: string) => v !== value)
+      [filterKey]: (localFilters as any)[filterKey].filter((v: string) => v !== value),
     };
     setLocalFilters(newFilters);
     searchAndFilterSites(searchTags, newFilters, 1, false);
   }, [localFilters, searchTags, searchAndFilterSites]);
 
-  // Load More Handler
+  // NEW: OC toggle (inside filter modal — doesn't search immediately)
+  const toggleOcFilter = useCallback(() => {
+    const newOc = localFilters.oc === true ? null : true;
+    setLocalFilters(prev => ({ ...prev, oc: newOc }));
+  }, [localFilters]);
+
+  // NEW: Remove OC chip from active filters bar (searches immediately)
+  const removeOcFilter = useCallback(() => {
+    const newFilters = { ...localFilters, oc: null };
+    setLocalFilters(newFilters);
+    searchAndFilterSites(searchTags, newFilters, 1, false);
+  }, [localFilters, searchTags, searchAndFilterSites]);
+
+  // ── Load More ──────────────────────────────────────────────────────────────
   const handleLoadMore = useCallback(() => {
-    if (pagination && pagination.has_next && !loadingMoreSites) {
+    if (pagination?.has_next && !loadingMoreSites) {
       searchAndFilterSites(searchTags, localFilters, pagination.current_page + 1, true);
     }
   }, [pagination, loadingMoreSites, searchAndFilterSites, searchTags, localFilters]);
 
-  const filteredScouts = scouts.filter(scout => 
+  // ── Scout Helpers ──────────────────────────────────────────────────────────
+  const filteredScouts = scouts.filter(scout =>
     scout.first_name.toLowerCase().includes(scoutSearchQuery.toLowerCase()) ||
     scout.last_name.toLowerCase().includes(scoutSearchQuery.toLowerCase()) ||
     scout.employee_id.toLowerCase().includes(scoutSearchQuery.toLowerCase())
@@ -374,13 +385,9 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
       const response = await fetch(`${BACKEND_URL}/manager/getScoutBoys`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token })
+        body: JSON.stringify({ token }),
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
       setScouts(data);
     } catch (error) {
@@ -391,10 +398,18 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     }
   }, [token]);
 
-  useEffect(() => {
-    fetchScouts();
-  }, [fetchScouts]);
+  useEffect(() => { fetchScouts(); }, [fetchScouts]);
 
+  // ── Active Filter Count ────────────────────────────────────────────────────
+  const activeFilterCount = useMemo(() => (
+    localFilters.building_status.length +
+    localFilters.floor_condition.length +
+    localFilters.property_type.length +
+    localFilters.micro_market.length +   // NEW
+    (localFilters.oc !== null ? 1 : 0)   // NEW
+  ), [localFilters]);
+
+  // ── Date / Time Helpers ────────────────────────────────────────────────────
   const formatDate = (date: Date): string => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -402,25 +417,16 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     return `${year}-${month}-${day}`;
   };
 
-  const formatDisplayDate = (date: Date): string => {
-    const options: Intl.DateTimeFormatOptions = { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    };
-    return date.toLocaleDateString('en-US', options);
-  };
+  const formatDisplayDate = (date: Date): string =>
+    date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
+  // ── Create Assignment ──────────────────────────────────────────────────────
   const handleCreateAssignment = async () => {
     if (!token || selectedSites.length === 0 || !selectedScout || !selectedDate) {
       Alert.alert('Error', 'Please select at least one site, a scout, and a date');
       return;
     }
-
-    // Combine date and time
-    const dateString = formatDate(selectedDate);
-    const dateTime = `${dateString} ${selectedTime}:00`;
-
+    const dateTime = `${formatDate(selectedDate)} ${selectedTime}:00`;
     setLoading(true);
     try {
       const response = await fetch(`${BACKEND_URL}/manager/assignSiteVisits`, {
@@ -430,20 +436,13 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
           token,
           site_ids: selectedSites.map(site => site.id),
           scout_id: selectedScout.employee_id,
-          date: dateTime
-        })
+          date: dateTime,
+        }),
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      
-      if (!data.message || !data.message.includes('Successfully assigned')) {
+      if (!data.message?.includes('Successfully assigned'))
         throw new Error(data.message || 'Failed to create assignment');
-      }
-
       Alert.alert('Success', data.message);
       onAssignmentCreated();
     } catch (error: any) {
@@ -454,22 +453,15 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     }
   };
 
+  // ── Site / Scout Selection ─────────────────────────────────────────────────
   const handleSelectSite = (site: Site) => {
-    setSelectedSites(prev => {
-      if (prev.some(s => s.id === site.id)) {
-        return prev.filter(s => s.id !== site.id);
-      } else {
-        return [...prev, site];
-      }
-    });
+    setSelectedSites(prev =>
+      prev.some(s => s.id === site.id) ? prev.filter(s => s.id !== site.id) : [...prev, site]
+    );
   };
 
   const handleSelectAllSites = () => {
-    if (selectedSites.length === sites.length) {
-      setSelectedSites([]);
-    } else {
-      setSelectedSites([...sites]);
-    }
+    setSelectedSites(selectedSites.length === sites.length ? [] : [...sites]);
   };
 
   const handleSelectScout = (scout: Scout) => {
@@ -478,112 +470,78 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     setScoutSearchQuery('');
   };
 
+  // ── Avatar Helpers ─────────────────────────────────────────────────────────
   const getInitials = (name: string): string => {
-    if (!name || name.trim().length === 0) return '?';
-    const nameParts = name.trim().split(/\s+/);
-    if (nameParts.length === 1) {
-      return nameParts[0].charAt(0).toUpperCase();
-    } else {
-      return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
-    }
+    if (!name?.trim()) return '?';
+    const parts = name.trim().split(/\s+/);
+    return parts.length === 1
+      ? parts[0].charAt(0).toUpperCase()
+      : (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
   };
 
   const getAvatarColor = (name: string): string => {
     if (!name) return '#00d285';
     let hash = 0;
-    for (let i = 0; i < name.length; i++) {
+    for (let i = 0; i < name.length; i++)
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
     const colors = ['#00d285', '#ff5e7a', '#ffb157', '#1da1f2', '#007AFF'];
-    const index = Math.abs(hash) % colors.length;
-    return colors[index];
+    return colors[Math.abs(hash) % colors.length];
   };
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER: Date Picker Modal
+  // ══════════════════════════════════════════════════════════════════════════
   const renderDatePickerModal = () => {
     const today = new Date();
     const daysInMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate();
     const firstDayOfMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1).getDay();
-    
-    const monthNames = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
     const goToPreviousMonth = () => {
-      const newDate = new Date(selectedDate);
-      newDate.setMonth(newDate.getMonth() - 1);
-      setSelectedDate(newDate);
+      const d = new Date(selectedDate); d.setMonth(d.getMonth() - 1); setSelectedDate(d);
     };
-
     const goToNextMonth = () => {
-      const newDate = new Date(selectedDate);
-      newDate.setMonth(newDate.getMonth() + 1);
-      setSelectedDate(newDate);
+      const d = new Date(selectedDate); d.setMonth(d.getMonth() + 1); setSelectedDate(d);
     };
-
     const selectDate = (day: number) => {
-      const newDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day);
-      setSelectedDate(newDate);
+      setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day));
       setShowDatePicker(false);
     };
 
     const renderCalendarDays = () => {
       const days = [];
-      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-      // Day headers
-      dayNames.forEach(day => {
+      const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      dayNames.forEach(day => (
         days.push(
           <View key={`header-${day}`} style={styles.calendarDayHeader}>
             <Text style={styles.calendarDayHeaderText}>{day}</Text>
           </View>
-        );
-      });
-
-      // Empty cells for days before the first day of month
-      for (let i = 0; i < firstDayOfMonth; i++) {
+        )
+      ));
+      for (let i = 0; i < firstDayOfMonth; i++)
         days.push(<View key={`empty-${i}`} style={styles.calendarDay} />);
-      }
-
-      // Days of the month
       for (let day = 1; day <= daysInMonth; day++) {
-        const currentDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day);
+        const curr = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day);
         const isSelected = day === selectedDate.getDate();
-        const isPast = currentDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        
+        const isPast = curr < new Date(today.getFullYear(), today.getMonth(), today.getDate());
         days.push(
           <TouchableOpacity
             key={`day-${day}`}
-            style={[
-              styles.calendarDay,
-              isSelected && styles.calendarDaySelected,
-              isPast && styles.calendarDayPast
-            ]}
+            style={[styles.calendarDay, isSelected && styles.calendarDaySelected, isPast && styles.calendarDayPast]}
             onPress={() => !isPast && selectDate(day)}
             disabled={isPast}
           >
-            <Text style={[
-              styles.calendarDayText,
-              isSelected && styles.calendarDayTextSelected,
-              isPast && styles.calendarDayTextPast
-            ]}>
+            <Text style={[styles.calendarDayText, isSelected && styles.calendarDayTextSelected, isPast && styles.calendarDayTextPast]}>
               {day}
             </Text>
           </TouchableOpacity>
         );
       }
-
       return days;
     };
 
     return (
-      <Modal
-        visible={showDatePicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDatePicker(false)}
-        statusBarTranslucent
-      >
+      <Modal visible={showDatePicker} transparent animationType="slide" onRequestClose={() => setShowDatePicker(false)} statusBarTranslucent>
         <View style={styles.datePickerOverlay}>
           <View style={styles.datePickerContainer}>
             <View style={styles.datePickerHeader}>
@@ -592,41 +550,32 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
                 <Ionicons name="close" size={24} color={WHATSAPP_COLORS.textPrimary} />
               </TouchableOpacity>
             </View>
-            
             <View style={styles.monthNavigator}>
               <TouchableOpacity onPress={goToPreviousMonth} style={styles.monthNavButton}>
                 <Ionicons name="chevron-back" size={24} color={WHATSAPP_COLORS.primary} />
               </TouchableOpacity>
-              <Text style={styles.monthYearText}>
-                {monthNames[selectedDate.getMonth()]} {selectedDate.getFullYear()}
-              </Text>
+              <Text style={styles.monthYearText}>{monthNames[selectedDate.getMonth()]} {selectedDate.getFullYear()}</Text>
               <TouchableOpacity onPress={goToNextMonth} style={styles.monthNavButton}>
                 <Ionicons name="chevron-forward" size={24} color={WHATSAPP_COLORS.primary} />
               </TouchableOpacity>
             </View>
-
-            <View style={styles.calendarGrid}>
-              {renderCalendarDays()}
-            </View>
+            <View style={styles.calendarGrid}>{renderCalendarDays()}</View>
           </View>
         </View>
       </Modal>
     );
   };
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER: Time Picker Modal
+  // ══════════════════════════════════════════════════════════════════════════
   const renderTimePickerModal = () => {
     const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
     const minutes = Array.from({ length: 60 }, (_, i) => i.toString().padStart(2, '0'));
     const [selectedHour, selectedMinute] = selectedTime.split(':');
 
     return (
-      <Modal
-        visible={showTimePicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowTimePicker(false)}
-        statusBarTranslucent
-      >
+      <Modal visible={showTimePicker} transparent animationType="slide" onRequestClose={() => setShowTimePicker(false)} statusBarTranslucent>
         <View style={styles.timePickerOverlay}>
           <View style={styles.timePickerContainer}>
             <View style={styles.timePickerHeader}>
@@ -635,53 +584,31 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
                 <Ionicons name="close" size={24} color={WHATSAPP_COLORS.textPrimary} />
               </TouchableOpacity>
             </View>
-            
             <View style={styles.timePickerContent}>
               <ScrollView style={styles.timeColumn}>
                 {hours.map(hour => (
                   <TouchableOpacity
                     key={hour}
-                    style={[
-                      styles.timeOption,
-                      selectedHour === hour && styles.timeOptionSelected
-                    ]}
+                    style={[styles.timeOption, selectedHour === hour && styles.timeOptionSelected]}
                     onPress={() => setSelectedTime(`${hour}:${selectedMinute}`)}
                   >
-                    <Text style={[
-                      styles.timeOptionText,
-                      selectedHour === hour && styles.timeOptionTextSelected
-                    ]}>
-                      {hour}
-                    </Text>
+                    <Text style={[styles.timeOptionText, selectedHour === hour && styles.timeOptionTextSelected]}>{hour}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-              
               <ScrollView style={styles.timeColumn}>
                 {minutes.map(minute => (
                   <TouchableOpacity
                     key={minute}
-                    style={[
-                      styles.timeOption,
-                      selectedMinute === minute && styles.timeOptionSelected
-                    ]}
+                    style={[styles.timeOption, selectedMinute === minute && styles.timeOptionSelected]}
                     onPress={() => setSelectedTime(`${selectedHour}:${minute}`)}
                   >
-                    <Text style={[
-                      styles.timeOptionText,
-                      selectedMinute === minute && styles.timeOptionTextSelected
-                    ]}>
-                      {minute}
-                    </Text>
+                    <Text style={[styles.timeOptionText, selectedMinute === minute && styles.timeOptionTextSelected]}>{minute}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             </View>
-
-            <TouchableOpacity
-              style={styles.timePickerDoneButton}
-              onPress={() => setShowTimePicker(false)}
-            >
+            <TouchableOpacity style={styles.timePickerDoneButton} onPress={() => setShowTimePicker(false)}>
               <Text style={styles.timePickerDoneText}>Done</Text>
             </TouchableOpacity>
           </View>
@@ -690,41 +617,28 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     );
   };
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER: Generic Filter Dropdown
+  // ══════════════════════════════════════════════════════════════════════════
   const renderFilterDropdown = (
     visible: boolean,
     title: string,
-    options: { value: string; label: string }[],
+    options: FilterOption[],
     currentValues: string[],
     onToggle: (value: string) => void,
     onClose: () => void
   ) => (
-    <Modal 
-      visible={visible} 
-      transparent 
-      animationType="fade" 
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <TouchableOpacity 
-        style={styles.dropdownOverlay} 
-        activeOpacity={1} 
-        onPress={onClose}
-      >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <TouchableOpacity style={styles.dropdownOverlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.dropdownContainer}>
           <Text style={styles.dropdownTitle}>{title}</Text>
           <ScrollView style={styles.dropdownScroll}>
-            {options.map((option) => {
+            {options.map(option => {
               const isSelected = currentValues.includes(option.value);
               return (
-                <TouchableOpacity
-                  key={option.value}
-                  style={styles.dropdownOption}
-                  onPress={() => onToggle(option.value)}
-                >
+                <TouchableOpacity key={option.value} style={styles.dropdownOption} onPress={() => onToggle(option.value)}>
                   <Text style={styles.dropdownOptionText}>{option.label}</Text>
-                  {isSelected && (
-                    <Ionicons name="checkmark" size={20} color={WHATSAPP_COLORS.primary} />
-                  )}
+                  {isSelected && <Ionicons name="checkmark" size={20} color={WHATSAPP_COLORS.primary} />}
                 </TouchableOpacity>
               );
             })}
@@ -734,437 +648,99 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     </Modal>
   );
 
-  const renderSiteSearchModal = () => {
-    const activeFilterCount = 
-      localFilters.building_status.length +
-      localFilters.floor_condition.length +
-      localFilters.property_type.length;
-
-    return (
-      <Modal
-        visible={showSiteSearch}
-        animationType="slide"
-        onRequestClose={() => setShowSiteSearch(false)}
-        statusBarTranslucent
-      >
-        <KeyboardAvoidingView 
-          style={{ flex: 1 }} 
-          behavior={IS_IOS ? 'padding' : undefined}
-        >
-          <View style={styles.modalContainer}>
-            <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} translucent />
-            <SafeAreaView edges={['top']} style={{ backgroundColor: WHATSAPP_COLORS.primary }}>
-              <View style={styles.searchModalHeader}>
-                <TouchableOpacity 
-                  onPress={() => setShowSiteSearch(false)}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons name="chevron-back" size={24} color={WHATSAPP_COLORS.surface} />
-                </TouchableOpacity>
-                <Text style={styles.searchModalTitle}>Select Sites</Text>
-                <View style={{ width: 24 }} />
-              </View>
-            </SafeAreaView>
-
-            {/* Search Container */}
-            <View style={styles.searchContainer}>
-              <View style={styles.searchInputWrapper}>
-                <Ionicons 
-                  name="search" 
-                  size={20} 
-                  color={WHATSAPP_COLORS.textTertiary} 
-                  style={styles.searchIcon}
-                />
-                <TextInput
-                  style={styles.searchModalInput}
-                  placeholder="Add search term"
-                  value={siteSearchQuery}
-                  onChangeText={setSiteSearchQuery}
-                  onSubmitEditing={addSearchTag}
-                  onKeyPress={handleSearchKeyPress}
-                  placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-                  returnKeyType="search"
-                />
-                {siteSearchQuery.length > 0 && (
-                  <TouchableOpacity 
-                    onPress={addSearchTag}
-                    style={styles.addSearchButton}
-                  >
-                    <Ionicons name="add-circle" size={24} color={WHATSAPP_COLORS.primary} />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                  onPress={() => setShowFilterModal(true)}
-                  style={styles.filterButton}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons 
-                    name="filter" 
-                    size={20} 
-                    color={activeFilterCount > 0 ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.textSecondary} 
-                  />
-                  {activeFilterCount > 0 && (
-                    <View style={styles.filterBadge}>
-                      <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Search Tags */}
-            {searchTags.length > 0 && (
-              <View style={styles.searchTagsContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={styles.searchTagsContent}>
-                    {searchTags.map((tag, index) => (
-                      <View key={`search-tag-${index}`} style={styles.searchTag}>
-                        <Ionicons name="search" size={12} color={WHATSAPP_COLORS.primary} />
-                        <Text style={styles.searchTagText}>{tag}</Text>
-                        <TouchableOpacity onPress={() => removeSearchTag(tag)}>
-                          <Ionicons name="close-circle" size={16} color={WHATSAPP_COLORS.primary} />
-                        </TouchableOpacity>
-                      </View>
-                    ))}
-                    <TouchableOpacity onPress={clearAllSearchTags} style={styles.clearAllTagsButton}>
-                      <Text style={styles.clearAllTagsText}>Clear All</Text>
-                    </TouchableOpacity>
-                  </View>
-                </ScrollView>
-              </View>
-            )}
-
-            {/* Active Filters */}
-            {activeFilterCount > 0 && (
-              <View style={styles.activeFiltersContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {localFilters.property_type.map((value) => {
-                    const option = PROPERTY_TYPE_OPTIONS.find(o => o.value === value);
-                    return (
-                      <View key={`prop-${value}`} style={styles.activeFilter}>
-                        <Text style={styles.activeFilterText}>
-                          {option?.label || value}
-                        </Text>
-                        <TouchableOpacity 
-                          onPress={() => removeFilter('property_type', value)}
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        >
-                          <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  })}
-                  {localFilters.building_status.map((value) => (
-                    <View key={`status-${value}`} style={styles.activeFilter}>
-                      <Text style={styles.activeFilterText}>
-                        {beautifyName(value)}
-                      </Text>
-                      <TouchableOpacity 
-                        onPress={() => removeFilter('building_status', value)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      >
-                        <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                  {localFilters.floor_condition.map((value) => (
-                    <View key={`floor-${value}`} style={styles.activeFilter}>
-                      <Text style={styles.activeFilterText}>
-                        {beautifyName(value)}
-                      </Text>
-                      <TouchableOpacity 
-                        onPress={() => removeFilter('floor_condition', value)}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      >
-                        <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-
-            {/* Selection Info */}
-            <View style={styles.selectionInfoBar}>
-              <Text style={styles.selectionInfoText}>
-                {selectedSites.length} site(s) selected
-              </Text>
-              <TouchableOpacity 
-                onPress={handleSelectAllSites}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Text style={styles.selectAllText}>
-                  {selectedSites.length === sites.length ? 'Deselect All' : 'Select All'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Sites List */}
-            {loadingSites ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
-                <Text style={styles.loadingText}>Loading sites...</Text>
-              </View>
-            ) : (
-              <FlatList
-                data={sites}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => {
-                  const isSelected = selectedSites.some(s => s.id === item.id);
-                  const statusColor = getStatusColor(item.building_status);
-                  const propertyType = getPropertyTypeText(item);
-                  const propertyTypeColor = getPropertyTypeBadgeColor(item);
-                  
-                  const pricingText = item.managed_property && item.rent_per_seat
-                    ? `${formatCurrency(item.rent_per_seat)}/seat`
-                    : item.rent && item.total_area
-                      ? `${formatCurrency(parseFloat(item.rent) / parseFloat(item.total_area))}/sq-ft`
-                      : item.rent ? formatCurrency(item.rent) : '';
-
-                  return (
-                    <TouchableOpacity
-                      style={[
-                        styles.siteCard,
-                        isSelected && styles.siteCardSelected
-                      ]}
-                      onPress={() => handleSelectSite(item)}
-                    >
-                      {/* Selection Checkbox */}
-                      <View style={styles.selectionCheckbox}>
-                        <View style={[
-                          styles.checkbox,
-                          isSelected && styles.checkboxSelected
-                        ]}>
-                          {isSelected && (
-                            <Ionicons name="checkmark" size={16} color={WHATSAPP_COLORS.white} />
-                          )}
-                        </View>
-                      </View>
-
-                      <View style={styles.cardContent}>
-                        <View style={styles.cardHeader}>
-                          <View style={styles.headerLeft}>
-                            <Text style={styles.siteName} numberOfLines={1}>
-                              {item.building_name}
-                            </Text>
-                            <View style={[styles.propertyTypeBadge, { backgroundColor: propertyTypeColor }]}>
-                              <Text style={styles.propertyTypeText}>{propertyType}</Text>
-                            </View>
-                          </View>
-                        </View>
-
-                        {item.location && (
-                          <View style={styles.locationRow}>
-                            <Ionicons name="location" size={14} color={WHATSAPP_COLORS.textSecondary} />
-                            <Text style={styles.locationText} numberOfLines={1}>
-                              {item.location}
-                            </Text>
-                          </View>
-                        )}
-
-                        <ScrollView
-                          horizontal
-                          showsHorizontalScrollIndicator={false}
-                          style={styles.detailsScrollContainer}
-                          contentContainerStyle={styles.detailsGrid}
-                        >
-                          {/* Status Badge */}
-                          <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
-                            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                            <Text style={[styles.statusText, { color: statusColor }]}>
-                              {beautifyName(item.building_status || 'unknown')}
-                            </Text>
-                          </View>
-
-                          {/* Floor Condition */}
-                          {item.floor_condition && (
-                            <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightBlue }]}>
-                              <Ionicons name="layers-outline" size={12} color={WHATSAPP_COLORS.info} />
-                              <Text style={[styles.detailChipText, { color: WHATSAPP_COLORS.info }]}>
-                                {beautifyName(item.floor_condition)}
-                              </Text>
-                            </View>
-                          )}
-
-                          {/* Total Area */}
-                          {item.total_area && (
-                            <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightPurple }]}>
-                              <Ionicons name="expand-outline" size={12} color="#7C3AED" />
-                              <Text style={[styles.detailChipText, { color: "#7C3AED" }]}>
-                                {parseFloat(item.total_area).toLocaleString('en-IN')} sq ft
-                              </Text>
-                            </View>
-                          )}
-                        </ScrollView>
-
-                        {/* Pricing */}
-                        {pricingText && (
-                          <View style={styles.pricingRow}>
-                            <View style={styles.pricingBadge}>
-                              <Ionicons name="cash-outline" size={16} color={WHATSAPP_COLORS.success} />
-                              <Text style={styles.pricingText}>{pricingText}</Text>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                }}
-                ListEmptyComponent={() => (
-                  <View style={styles.emptySearch}>
-                    <Ionicons name="business" size={48} color={WHATSAPP_COLORS.border} />
-                    <Text style={styles.emptySearchText}>
-                      {searchTags.length > 0 || activeFilterCount > 0
-                        ? 'No sites found matching your criteria'
-                        : 'No sites available'}
-                    </Text>
-                  </View>
-                )}
-                ListFooterComponent={() => (
-                  <>
-                    {pagination && pagination.has_next && (
-                      <TouchableOpacity
-                        style={styles.loadMoreButton}
-                        onPress={handleLoadMore}
-                        disabled={loadingMoreSites}
-                      >
-                        {loadingMoreSites ? (
-                          <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
-                        ) : (
-                          <>
-                            <Ionicons name="chevron-down-circle-outline" size={20} color={WHATSAPP_COLORS.primary} />
-                            <Text style={styles.loadMoreText}>Load More</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    )}
-                  </>
-                )}
-              />
-            )}
-
-            {/* Selection Footer */}
-            <View style={styles.selectionFooter}>
-              <TouchableOpacity
-                style={[
-                  styles.selectButton,
-                  selectedSites.length === 0 && styles.selectButtonDisabled
-                ]}
-                onPress={() => {
-                  if (selectedSites.length > 0) {
-                    setShowSiteSearch(false);
-                    setSiteSearchQuery('');
-                  }
-                }}
-                disabled={selectedSites.length === 0}
-              >
-                <Text style={styles.selectButtonText}>
-                  Select {selectedSites.length} Site(s)
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    );
-  };
-
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER: Filter Modal (now with Micro Market + OC)
+  // ══════════════════════════════════════════════════════════════════════════
   const renderFilterModal = () => (
-    <Modal
-      visible={showFilterModal}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setShowFilterModal(false)}
-      statusBarTranslucent
-    >
-      <TouchableOpacity
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={() => setShowFilterModal(false)}
-      >
+    <Modal visible={showFilterModal} transparent animationType="slide" onRequestClose={() => setShowFilterModal(false)} statusBarTranslucent>
+      <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowFilterModal(false)}>
         <View style={styles.filterModalContent}>
           <View style={styles.filterModalHeader}>
             <Text style={styles.filterModalTitle}>Filter Sites</Text>
-            <TouchableOpacity 
-              onPress={() => setShowFilterModal(false)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
+            <TouchableOpacity onPress={() => setShowFilterModal(false)}>
               <Ionicons name="close" size={24} color={WHATSAPP_COLORS.textPrimary} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.filterList}>
-            {/* Property Type Filter */}
-            <TouchableOpacity
-              style={styles.filterOption}
-              onPress={() => setShowPropertyTypeFilter(true)}
-            >
+            {/* Property Type */}
+            <TouchableOpacity style={styles.filterOption} onPress={() => setShowPropertyTypeFilter(true)}>
               <View style={styles.filterOptionLeft}>
                 <Ionicons name="business" size={20} color={WHATSAPP_COLORS.primary} />
                 <Text style={styles.filterOptionLabel}>Property Type</Text>
               </View>
               <View style={styles.filterOptionRight}>
                 <Text style={styles.filterOptionValue}>
-                  {localFilters.property_type.length > 0 
-                    ? `${localFilters.property_type.length} selected` 
-                    : 'All'}
+                  {localFilters.property_type.length > 0 ? `${localFilters.property_type.length} selected` : 'All'}
                 </Text>
                 <Ionicons name="chevron-forward" size={16} color={WHATSAPP_COLORS.textTertiary} />
               </View>
             </TouchableOpacity>
 
-            {/* Building Status Filter */}
-            <TouchableOpacity
-              style={styles.filterOption}
-              onPress={() => setShowStatusFilter(true)}
-            >
+            {/* Building Status */}
+            <TouchableOpacity style={styles.filterOption} onPress={() => setShowStatusFilter(true)}>
               <View style={styles.filterOptionLeft}>
                 <Ionicons name="flag" size={20} color={WHATSAPP_COLORS.primary} />
                 <Text style={styles.filterOptionLabel}>Building Status</Text>
               </View>
               <View style={styles.filterOptionRight}>
                 <Text style={styles.filterOptionValue}>
-                  {localFilters.building_status.length > 0 
-                    ? `${localFilters.building_status.length} selected` 
-                    : 'All'}
+                  {localFilters.building_status.length > 0 ? `${localFilters.building_status.length} selected` : 'All'}
                 </Text>
                 <Ionicons name="chevron-forward" size={16} color={WHATSAPP_COLORS.textTertiary} />
               </View>
             </TouchableOpacity>
 
-            {/* Floor Condition Filter */}
-            <TouchableOpacity
-              style={styles.filterOption}
-              onPress={() => setShowFloorConditionFilter(true)}
-            >
+            {/* Floor Condition */}
+            <TouchableOpacity style={styles.filterOption} onPress={() => setShowFloorConditionFilter(true)}>
               <View style={styles.filterOptionLeft}>
                 <Ionicons name="layers" size={20} color={WHATSAPP_COLORS.primary} />
                 <Text style={styles.filterOptionLabel}>Floor Condition</Text>
               </View>
               <View style={styles.filterOptionRight}>
                 <Text style={styles.filterOptionValue}>
-                  {localFilters.floor_condition.length > 0 
-                    ? `${localFilters.floor_condition.length} selected` 
-                    : 'All'}
+                  {localFilters.floor_condition.length > 0 ? `${localFilters.floor_condition.length} selected` : 'All'}
                 </Text>
                 <Ionicons name="chevron-forward" size={16} color={WHATSAPP_COLORS.textTertiary} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Micro Market — NEW */}
+            <TouchableOpacity style={styles.filterOption} onPress={() => setShowMicroMarketFilter(true)}>
+              <View style={styles.filterOptionLeft}>
+                <Ionicons name="map" size={20} color={WHATSAPP_COLORS.primary} />
+                <Text style={styles.filterOptionLabel}>Location / Micro Market</Text>
+              </View>
+              <View style={styles.filterOptionRight}>
+                <Text style={styles.filterOptionValue}>
+                  {localFilters.micro_market.length > 0 ? `${localFilters.micro_market.length} selected` : 'All'}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={WHATSAPP_COLORS.textTertiary} />
+              </View>
+            </TouchableOpacity>
+
+            {/* OC Available toggle — NEW */}
+            <TouchableOpacity style={styles.filterOption} onPress={toggleOcFilter}>
+              <View style={styles.filterOptionLeft}>
+                <Ionicons name="checkmark-circle" size={20} color={WHATSAPP_COLORS.primary} />
+                <Text style={styles.filterOptionLabel}>OC Available</Text>
+              </View>
+              <View style={styles.filterOptionRight}>
+                <Text style={styles.filterOptionValue}>
+                  {localFilters.oc === true ? 'Yes' : 'All'}
+                </Text>
+                <View style={[styles.ocToggle, localFilters.oc === true && styles.ocToggleActive]}>
+                  <View style={[styles.ocToggleThumb, localFilters.oc === true && styles.ocToggleThumbActive]} />
+                </View>
               </View>
             </TouchableOpacity>
           </ScrollView>
 
           <View style={styles.filterModalFooter}>
-            <TouchableOpacity 
-              style={styles.clearFiltersButton} 
-              onPress={clearFilters}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
+            <TouchableOpacity style={styles.clearFiltersButton} onPress={clearFilters} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Text style={styles.clearFiltersText}>Clear All Filters</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.applyFiltersButton} 
-              onPress={applyFilters}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
+            <TouchableOpacity style={styles.applyFiltersButton} onPress={applyFilters} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Text style={styles.applyFiltersText}>Apply Filters</Text>
             </TouchableOpacity>
           </View>
@@ -1173,33 +749,295 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     </Modal>
   );
 
-  const renderScoutSearchModal = () => (
-    <Modal
-      visible={showScoutSearch}
-      animationType="slide"
-      onRequestClose={() => setShowScoutSearch(false)}
-      statusBarTranslucent
-    >
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
-        behavior={IS_IOS ? 'padding' : undefined}
-      >
-
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER: Site Search Modal
+  // ══════════════════════════════════════════════════════════════════════════
+  const renderSiteSearchModal = () => (
+    <Modal visible={showSiteSearch} animationType="slide" onRequestClose={() => setShowSiteSearch(false)} statusBarTranslucent>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={IS_IOS ? 'padding' : undefined}>
         <View style={styles.modalContainer}>
           <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} translucent />
           <SafeAreaView edges={['top']} style={{ backgroundColor: WHATSAPP_COLORS.primary }}>
             <View style={styles.searchModalHeader}>
-              <TouchableOpacity 
-                onPress={() => setShowScoutSearch(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
+              <TouchableOpacity onPress={() => setShowSiteSearch(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="chevron-back" size={24} color={WHATSAPP_COLORS.surface} />
+              </TouchableOpacity>
+              <Text style={styles.searchModalTitle}>Select Sites</Text>
+              <View style={{ width: 24 }} />
+            </View>
+          </SafeAreaView>
+
+          {/* Search Input */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputWrapper}>
+              <Ionicons name="search" size={20} color={WHATSAPP_COLORS.textTertiary} style={styles.searchIcon} />
+              <TextInput
+                style={styles.searchModalInput}
+                placeholder="Add search term"
+                value={siteSearchQuery}
+                onChangeText={setSiteSearchQuery}
+                onSubmitEditing={addSearchTag}
+                onKeyPress={handleSearchKeyPress}
+                placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                returnKeyType="search"
+              />
+              {siteSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={addSearchTag} style={styles.addSearchButton}>
+                  <Ionicons name="add-circle" size={24} color={WHATSAPP_COLORS.primary} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={() => setShowFilterModal(true)} style={styles.filterButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="filter" size={20} color={activeFilterCount > 0 ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.textSecondary} />
+                {activeFilterCount > 0 && (
+                  <View style={styles.filterBadge}>
+                    <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Search Tags */}
+          {searchTags.length > 0 && (
+            <View style={styles.searchTagsContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.searchTagsContent}>
+                  {searchTags.map((tag, index) => (
+                    <View key={`search-tag-${index}`} style={styles.searchTag}>
+                      <Ionicons name="search" size={12} color={WHATSAPP_COLORS.primary} />
+                      <Text style={styles.searchTagText}>{tag}</Text>
+                      <TouchableOpacity onPress={() => removeSearchTag(tag)}>
+                        <Ionicons name="close-circle" size={16} color={WHATSAPP_COLORS.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  <TouchableOpacity onPress={clearAllSearchTags} style={styles.clearAllTagsButton}>
+                    <Text style={styles.clearAllTagsText}>Clear All</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Active Filters Bar */}
+          {activeFilterCount > 0 && (
+            <View style={styles.activeFiltersContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {localFilters.property_type.map(value => {
+                  const option = PROPERTY_TYPE_OPTIONS.find(o => o.value === value);
+                  return (
+                    <View key={`prop-${value}`} style={styles.activeFilter}>
+                      <Text style={styles.activeFilterText}>{option?.label || value}</Text>
+                      <TouchableOpacity onPress={() => removeFilter('property_type', value)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+                {localFilters.building_status.map(value => (
+                  <View key={`status-${value}`} style={styles.activeFilter}>
+                    <Text style={styles.activeFilterText}>{beautifyName(value)}</Text>
+                    <TouchableOpacity onPress={() => removeFilter('building_status', value)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {localFilters.floor_condition.map(value => (
+                  <View key={`floor-${value}`} style={styles.activeFilter}>
+                    <Text style={styles.activeFilterText}>{beautifyName(value)}</Text>
+                    <TouchableOpacity onPress={() => removeFilter('floor_condition', value)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {/* Micro Market chips — NEW */}
+                {localFilters.micro_market.map(value => {
+                  const option = MICRO_MARKET_OPTIONS.find(o => o.value === value);
+                  return (
+                    <View key={`micro-${value}`} style={styles.activeFilter}>
+                      <Text style={styles.activeFilterText}>{option?.label || value}</Text>
+                      <TouchableOpacity onPress={() => removeFilter('micro_market', value)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                        <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+                {/* OC chip — NEW */}
+                {localFilters.oc === true && (
+                  <View style={styles.activeFilter}>
+                    <Ionicons name="checkmark-circle" size={12} color={WHATSAPP_COLORS.primary} />
+                    <Text style={styles.activeFilterText}>OC Available</Text>
+                    <TouchableOpacity onPress={removeOcFilter} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Selection Info Bar */}
+          <View style={styles.selectionInfoBar}>
+            <Text style={styles.selectionInfoText}>{selectedSites.length} site(s) selected</Text>
+            <TouchableOpacity onPress={handleSelectAllSites} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={styles.selectAllText}>
+                {selectedSites.length === sites.length ? 'Deselect All' : 'Select All'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Sites List */}
+          {loadingSites ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
+              <Text style={styles.loadingText}>Loading sites...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={sites}
+              keyExtractor={item => item.id.toString()}
+              renderItem={({ item }) => {
+                const isSelected = selectedSites.some(s => s.id === item.id);
+                const statusColor = getStatusColor(item.building_status);
+                const propertyType = getPropertyTypeText(item);
+                const propertyTypeColor = getPropertyTypeBadgeColor(item);
+                const pricingText = item.managed_property && item.rent_per_seat
+                  ? `${formatCurrency(item.rent_per_seat)}/seat`
+                  : item.rent && item.total_area
+                    ? `${formatCurrency(parseFloat(item.rent) / parseFloat(item.total_area))}/sq-ft`
+                    : item.rent ? formatCurrency(item.rent) : '';
+
+                return (
+                  <TouchableOpacity
+                    style={[styles.siteCard, isSelected && styles.siteCardSelected]}
+                    onPress={() => handleSelectSite(item)}
+                  >
+                    <View style={styles.selectionCheckbox}>
+                      <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                        {isSelected && <Ionicons name="checkmark" size={16} color={WHATSAPP_COLORS.white} />}
+                      </View>
+                    </View>
+                    <View style={styles.cardContent}>
+                      <View style={styles.cardHeader}>
+                        <View style={styles.headerLeft}>
+                          <Text style={styles.siteName} numberOfLines={1}>{item.building_name}</Text>
+                          <View style={[styles.propertyTypeBadge, { backgroundColor: propertyTypeColor }]}>
+                            <Text style={styles.propertyTypeText}>{propertyType}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      {item.location && (
+                        <View style={styles.locationRow}>
+                          <Ionicons name="location" size={14} color={WHATSAPP_COLORS.textSecondary} />
+                          <Text style={styles.locationText} numberOfLines={1}>{item.location}</Text>
+                        </View>
+                      )}
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.detailsScrollContainer}
+                        contentContainerStyle={styles.detailsGrid}
+                      >
+                        <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
+                          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                          <Text style={[styles.statusText, { color: statusColor }]}>
+                            {beautifyName(item.building_status || 'unknown')}
+                          </Text>
+                        </View>
+                        {item.floor_condition && (
+                          <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightBlue }]}>
+                            <Ionicons name="layers-outline" size={12} color={WHATSAPP_COLORS.info} />
+                            <Text style={[styles.detailChipText, { color: WHATSAPP_COLORS.info }]}>
+                              {beautifyName(item.floor_condition)}
+                            </Text>
+                          </View>
+                        )}
+                        {item.total_area && (
+                          <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightPurple }]}>
+                            <Ionicons name="expand-outline" size={12} color="#7C3AED" />
+                            <Text style={[styles.detailChipText, { color: '#7C3AED' }]}>
+                              {parseFloat(item.total_area).toLocaleString('en-IN')} sq ft
+                            </Text>
+                          </View>
+                        )}
+                        {item.oc && (
+                          <View style={[styles.detailChip, { backgroundColor: WHATSAPP_COLORS.lightGreen }]}>
+                            <Ionicons name="checkmark-circle-outline" size={12} color={WHATSAPP_COLORS.success} />
+                            <Text style={[styles.detailChipText, { color: WHATSAPP_COLORS.success }]}>OC Available</Text>
+                          </View>
+                        )}
+                      </ScrollView>
+                      {pricingText && (
+                        <View style={styles.pricingRow}>
+                          <View style={styles.pricingBadge}>
+                            <Ionicons name="cash-outline" size={16} color={WHATSAPP_COLORS.success} />
+                            <Text style={styles.pricingText}>{pricingText}</Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+              ListEmptyComponent={() => (
+                <View style={styles.emptySearch}>
+                  <Ionicons name="business" size={48} color={WHATSAPP_COLORS.border} />
+                  <Text style={styles.emptySearchText}>
+                    {searchTags.length > 0 || activeFilterCount > 0 ? 'No sites found matching your criteria' : 'No sites available'}
+                  </Text>
+                </View>
+              )}
+              ListFooterComponent={() => (
+                <>
+                  {pagination?.has_next && (
+                    <TouchableOpacity style={styles.loadMoreButton} onPress={handleLoadMore} disabled={loadingMoreSites}>
+                      {loadingMoreSites ? (
+                        <ActivityIndicator size="small" color={WHATSAPP_COLORS.primary} />
+                      ) : (
+                        <>
+                          <Ionicons name="chevron-down-circle-outline" size={20} color={WHATSAPP_COLORS.primary} />
+                          <Text style={styles.loadMoreText}>Load More</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            />
+          )}
+
+          {/* Selection Footer */}
+          <View style={styles.selectionFooter}>
+            <TouchableOpacity
+              style={[styles.selectButton, selectedSites.length === 0 && styles.selectButtonDisabled]}
+              onPress={() => { if (selectedSites.length > 0) { setShowSiteSearch(false); setSiteSearchQuery(''); } }}
+              disabled={selectedSites.length === 0}
+            >
+              <Text style={styles.selectButtonText}>Select {selectedSites.length} Site(s)</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER: Scout Search Modal
+  // ══════════════════════════════════════════════════════════════════════════
+  const renderScoutSearchModal = () => (
+    <Modal visible={showScoutSearch} animationType="slide" onRequestClose={() => setShowScoutSearch(false)} statusBarTranslucent>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={IS_IOS ? 'padding' : undefined}>
+        <View style={styles.modalContainer}>
+          <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} translucent />
+          <SafeAreaView edges={['top']} style={{ backgroundColor: WHATSAPP_COLORS.primary }}>
+            <View style={styles.searchModalHeader}>
+              <TouchableOpacity onPress={() => setShowScoutSearch(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name="chevron-back" size={24} color={WHATSAPP_COLORS.surface} />
               </TouchableOpacity>
               <Text style={styles.searchModalTitle}>Select Scout</Text>
               <View style={{ width: 24 }} />
             </View>
           </SafeAreaView>
-{/* >>>>>>> c0143d584040e9b2030d31e833d17c9d61b7752b */}
           <View style={styles.searchInputContainer}>
             <Ionicons name="search" size={20} color={WHATSAPP_COLORS.textTertiary} />
             <TextInput
@@ -1211,7 +1049,6 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
               autoFocus={!IS_IOS}
             />
           </View>
-
           {loadingScouts ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
@@ -1220,34 +1057,22 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
           ) : (
             <FlatList
               data={filteredScouts}
-              keyExtractor={(item) => item.employee_id}
+              keyExtractor={item => item.employee_id}
               renderItem={({ item }) => {
                 const isSelected = selectedScout?.employee_id === item.employee_id;
                 return (
                   <TouchableOpacity
-                    style={[
-                      styles.scoutOption,
-                      isSelected && styles.scoutOptionSelected
-                    ]}
+                    style={[styles.scoutOption, isSelected && styles.scoutOptionSelected]}
                     onPress={() => handleSelectScout(item)}
                   >
-                    <View style={[
-                      styles.scoutAvatar,
-                      { backgroundColor: getAvatarColor(`${item.first_name} ${item.last_name}`) }
-                    ]}>
-                      <Text style={styles.scoutAvatarText}>
-                        {getInitials(`${item.first_name} ${item.last_name}`)}
-                      </Text>
+                    <View style={[styles.scoutAvatar, { backgroundColor: getAvatarColor(`${item.first_name} ${item.last_name}`) }]}>
+                      <Text style={styles.scoutAvatarText}>{getInitials(`${item.first_name} ${item.last_name}`)}</Text>
                     </View>
                     <View style={styles.scoutInfo}>
-                      <Text style={styles.scoutName}>
-                        {item.first_name} {item.last_name}
-                      </Text>
+                      <Text style={styles.scoutName}>{item.first_name} {item.last_name}</Text>
                       <Text style={styles.scoutId}>ID: {item.employee_id}</Text>
                     </View>
-                    {isSelected && (
-                      <Ionicons name="checkmark-circle" size={24} color={WHATSAPP_COLORS.success} />
-                    )}
+                    {isSelected && <Ionicons name="checkmark-circle" size={24} color={WHATSAPP_COLORS.success} />}
                   </TouchableOpacity>
                 );
               }}
@@ -1264,23 +1089,15 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
     </Modal>
   );
 
-  // Active Filter Count
-  const activeFilterCount = useMemo(() => {
-    return localFilters.building_status.length +
-      localFilters.floor_condition.length +
-      localFilters.property_type.length;
-  }, [localFilters]);
-
+  // ══════════════════════════════════════════════════════════════════════════
+  // MAIN RENDER
+  // ══════════════════════════════════════════════════════════════════════════
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} translucent />
       <SafeAreaView edges={['top']} style={{ backgroundColor: WHATSAPP_COLORS.primary }}>
         <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={onBack}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={onBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="chevron-back" size={24} color="#FFF" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Assignment</Text>
@@ -1291,43 +1108,25 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.formContainer}>
           <Text style={styles.sectionTitle}>Assignment Details</Text>
-          <Text style={styles.sectionDescription}>
-            Select sites, scout, date and time for the visit
-          </Text>
+          <Text style={styles.sectionDescription}>Select sites, scout, date and time for the visit</Text>
 
           {/* Site Selection */}
           <View style={styles.formSection}>
             <Text style={styles.formLabel}>Select Site(s) *</Text>
-            <TouchableOpacity
-              style={styles.selectionButton}
-              onPress={() => setShowSiteSearch(true)}
-            >
+            <TouchableOpacity style={styles.selectionButton} onPress={() => setShowSiteSearch(true)}>
               {selectedSites.length > 0 ? (
                 <View style={styles.selectedItemsContainer}>
                   <View style={styles.selectedSitesHeader}>
-                    <Text style={styles.selectedCount}>
-                      {selectedSites.length} site(s) selected
-                    </Text>
+                    <Text style={styles.selectedCount}>{selectedSites.length} site(s) selected</Text>
                     <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textTertiary} />
                   </View>
-                  <ScrollView 
-                    horizontal 
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.selectedSitesScroll}
-                  >
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.selectedSitesScroll}>
                     {selectedSites.slice(0, 3).map((site, index) => (
                       <View key={site.id} style={styles.siteChip}>
-                        <View style={[
-                          styles.siteChipAvatar,
-                          { backgroundColor: getAvatarColor(site.building_name) }
-                        ]}>
-                          <Text style={styles.siteChipAvatarText}>
-                            {getInitials(site.building_name)}
-                          </Text>
+                        <View style={[styles.siteChipAvatar, { backgroundColor: getAvatarColor(site.building_name) }]}>
+                          <Text style={styles.siteChipAvatarText}>{getInitials(site.building_name)}</Text>
                         </View>
-                        <Text style={styles.siteChipText} numberOfLines={1}>
-                          {site.building_name}
-                        </Text>
+                        <Text style={styles.siteChipText} numberOfLines={1}>{site.building_name}</Text>
                         {index === 2 && selectedSites.length > 3 && (
                           <Text style={styles.moreCount}>+{selectedSites.length - 3}</Text>
                         )}
@@ -1348,24 +1147,14 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
           {/* Scout Selection */}
           <View style={styles.formSection}>
             <Text style={styles.formLabel}>Select Scout *</Text>
-            <TouchableOpacity
-              style={styles.selectionButton}
-              onPress={() => setShowScoutSearch(true)}
-            >
+            <TouchableOpacity style={styles.selectionButton} onPress={() => setShowScoutSearch(true)}>
               {selectedScout ? (
                 <View style={styles.selectedItem}>
-                  <View style={[
-                    styles.selectedAvatar,
-                    { backgroundColor: getAvatarColor(`${selectedScout.first_name} ${selectedScout.last_name}`) }
-                  ]}>
-                    <Text style={styles.selectedAvatarText}>
-                      {getInitials(`${selectedScout.first_name} ${selectedScout.last_name}`)}
-                    </Text>
+                  <View style={[styles.selectedAvatar, { backgroundColor: getAvatarColor(`${selectedScout.first_name} ${selectedScout.last_name}`) }]}>
+                    <Text style={styles.selectedAvatarText}>{getInitials(`${selectedScout.first_name} ${selectedScout.last_name}`)}</Text>
                   </View>
                   <View style={styles.selectedInfo}>
-                    <Text style={styles.selectedName}>
-                      {selectedScout.first_name} {selectedScout.last_name}
-                    </Text>
+                    <Text style={styles.selectedName}>{selectedScout.first_name} {selectedScout.last_name}</Text>
                     <Text style={styles.selectedSubtext}>ID: {selectedScout.employee_id}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textTertiary} />
@@ -1383,18 +1172,13 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
           {/* Date Selection */}
           <View style={styles.formSection}>
             <Text style={styles.formLabel}>Select Date *</Text>
-            <TouchableOpacity
-              style={styles.selectionButton}
-              onPress={() => setShowDatePicker(true)}
-            >
+            <TouchableOpacity style={styles.selectionButton} onPress={() => setShowDatePicker(true)}>
               <View style={styles.selectedItem}>
-                <Ionicons name="calendar" size={20} color={WHATSAPP_COLORS.primary} style={[{marginRight:10}]}/>
+                <Ionicons name="calendar" size={20} color={WHATSAPP_COLORS.primary} style={{ marginRight: 10 }} />
                 <View style={styles.selectedInfo}>
                   <Text style={styles.selectedName}>{formatDisplayDate(selectedDate)}</Text>
                   <Text style={styles.selectedSubtext}>
-                    {selectedDate.toDateString() === new Date().toDateString() 
-                      ? 'Today' 
-                      : formatDate(selectedDate)}
+                    {selectedDate.toDateString() === new Date().toDateString() ? 'Today' : formatDate(selectedDate)}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textTertiary} />
@@ -1405,12 +1189,9 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
           {/* Time Selection */}
           <View style={styles.formSection}>
             <Text style={styles.formLabel}>Select Time *</Text>
-            <TouchableOpacity
-              style={styles.selectionButton}
-              onPress={() => setShowTimePicker(true)}
-            >
+            <TouchableOpacity style={styles.selectionButton} onPress={() => setShowTimePicker(true)}>
               <View style={styles.selectedItem}>
-                <Ionicons name="time" size={20} color={WHATSAPP_COLORS.primary} style={[{marginRight:10}]}/>
+                <Ionicons name="time" size={20} color={WHATSAPP_COLORS.primary} style={{ marginRight: 10 }} />
                 <View style={styles.selectedInfo}>
                   <Text style={styles.selectedName}>{selectedTime}</Text>
                   <Text style={styles.selectedSubtext}>Visit time</Text>
@@ -1425,29 +1206,19 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
             <Ionicons name="information-circle" size={24} color={WHATSAPP_COLORS.info} />
             <View style={styles.infoContent}>
               <Text style={styles.infoTitle}>How assignments work:</Text>
-              <Text style={styles.infoText}>
-                • You can assign multiple sites to a scout for the same date and time
-              </Text>
-              <Text style={styles.infoText}>
-                • The scout will receive site visit assignments for the selected date and time
-              </Text>
-              <Text style={styles.infoText}>
-                • Scout can upload photos and comments during the visit
-              </Text>
-              <Text style={styles.infoText}>
-                • You can track progress and communicate with the scout
-              </Text>
+              <Text style={styles.infoText}>• You can assign multiple sites to a scout for the same date and time</Text>
+              <Text style={styles.infoText}>• The scout will receive site visit assignments for the selected date and time</Text>
+              <Text style={styles.infoText}>• Scout can upload photos and comments during the visit</Text>
+              <Text style={styles.infoText}>• You can track progress and communicate with the scout</Text>
             </View>
           </View>
         </View>
       </ScrollView>
 
+      {/* Footer */}
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[
-            styles.createButton,
-            (selectedSites.length === 0 || !selectedScout || !selectedDate || loading) && styles.createButtonDisabled
-          ]}
+          style={[styles.createButton, (selectedSites.length === 0 || !selectedScout || !selectedDate || loading) && styles.createButtonDisabled]}
           onPress={handleCreateAssignment}
           disabled={selectedSites.length === 0 || !selectedScout || !selectedDate || loading}
         >
@@ -1464,18 +1235,16 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Modals */}
+      {/* ── Modals ──────────────────────────────────────────────────────────── */}
       {renderSiteSearchModal()}
       {renderFilterModal()}
       {renderScoutSearchModal()}
       {renderDatePickerModal()}
       {renderTimePickerModal()}
 
-      {/* Filter Dropdowns */}
+      {/* Property Type dropdown */}
       {renderFilterDropdown(
-        showPropertyTypeFilter,
-        'Select Property Type',
-        PROPERTY_TYPE_OPTIONS,
+        showPropertyTypeFilter, 'Select Property Type', PROPERTY_TYPE_OPTIONS,
         localFilters.property_type,
         (value) => {
           const newValues = localFilters.property_type.includes(value)
@@ -1485,10 +1254,10 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
         },
         () => setShowPropertyTypeFilter(false)
       )}
+
+      {/* Building Status dropdown */}
       {renderFilterDropdown(
-        showStatusFilter,
-        'Select Building Status',
-        BUILDING_STATUS_OPTIONS,
+        showStatusFilter, 'Select Building Status', BUILDING_STATUS_OPTIONS,
         localFilters.building_status,
         (value) => {
           const newValues = localFilters.building_status.includes(value)
@@ -1498,10 +1267,10 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
         },
         () => setShowStatusFilter(false)
       )}
+
+      {/* Floor Condition dropdown */}
       {renderFilterDropdown(
-        showFloorConditionFilter,
-        'Select Floor Condition',
-        FLOOR_CONDITION_OPTIONS,
+        showFloorConditionFilter, 'Select Floor Condition', FLOOR_CONDITION_OPTIONS,
         localFilters.floor_condition,
         (value) => {
           const newValues = localFilters.floor_condition.includes(value)
@@ -1511,878 +1280,284 @@ const CreateAssignment: React.FC<CreateAssignmentProps> = ({
         },
         () => setShowFloorConditionFilter(false)
       )}
+
+      {/* Micro Market dropdown — NEW */}
+      {renderFilterDropdown(
+        showMicroMarketFilter, 'Select Location / Micro Market', MICRO_MARKET_OPTIONS,
+        localFilters.micro_market,
+        (value) => {
+          const newValues = localFilters.micro_market.includes(value)
+            ? localFilters.micro_market.filter(v => v !== value)
+            : [...localFilters.micro_market, value];
+          handleFilterChange('micro_market', newValues);
+        },
+        () => setShowMicroMarketFilter(false)
+      )}
     </View>
   );
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// STYLES
+// ════════════════════════════════════════════════════════════════════════════
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: WHATSAPP_COLORS.primary,
-  },
+  container: { flex: 1, backgroundColor: WHATSAPP_COLORS.primary },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: WHATSAPP_COLORS.primary,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 16, backgroundColor: WHATSAPP_COLORS.primary,
   },
-  headerSpacer: {
-    width: 32,
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    flex: 1,
-    textAlign: 'center',
-  },
-  scrollView: {
-    flex: 1,
-    backgroundColor: WHATSAPP_COLORS.background,
-  },
-  formContainer: {
-    padding: 20,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: WHATSAPP_COLORS.textPrimary,
-    marginBottom: 8,
-  },
-  sectionDescription: {
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textSecondary,
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  formSection: {
-    marginBottom: 24,
-  },
-  formLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary,
-    marginBottom: 8,
-  },
+  headerSpacer: { width: 32 },
+  backButton: { padding: 4 },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', flex: 1, textAlign: 'center' },
+  scrollView: { flex: 1, backgroundColor: WHATSAPP_COLORS.background },
+  formContainer: { padding: 20 },
+  sectionTitle: { fontSize: 20, fontWeight: '700', color: WHATSAPP_COLORS.textPrimary, marginBottom: 8 },
+  sectionDescription: { fontSize: 14, color: WHATSAPP_COLORS.textSecondary, marginBottom: 24, lineHeight: 20 },
+  formSection: { marginBottom: 24 },
+  formLabel: { fontSize: 14, fontWeight: '600', color: WHATSAPP_COLORS.textPrimary, marginBottom: 8 },
   selectionButton: {
-    backgroundColor: WHATSAPP_COLORS.surface,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.border,
+    backgroundColor: WHATSAPP_COLORS.surface, borderRadius: 12, padding: 16,
+    borderWidth: 1, borderColor: WHATSAPP_COLORS.border,
   },
-  selectedItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  selectedItemsContainer: {
-    width: '100%',
-  },
-  selectedSitesHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  selectedCount: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary,
-  },
-  selectedSitesScroll: {
-    flexDirection: 'row',
-  },
+  selectedItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  selectedItemsContainer: { width: '100%' },
+  selectedSitesHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  selectedCount: { fontSize: 14, fontWeight: '600', color: WHATSAPP_COLORS.textPrimary },
+  selectedSitesScroll: { flexDirection: 'row' },
   siteChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: WHATSAPP_COLORS.chipBackground,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
-    maxWidth: 150,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: WHATSAPP_COLORS.chipBackground,
+    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, marginRight: 8, maxWidth: 150,
   },
-  siteChipAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 6,
-  },
-  siteChipAvatarText: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  siteChipText: {
-    fontSize: 12,
-    color: WHATSAPP_COLORS.textPrimary,
-    flex: 1,
-  },
-  moreCount: {
-    fontSize: 12,
-    color: WHATSAPP_COLORS.textSecondary,
-    marginLeft: 4,
-    fontWeight: '600',
-  },
-  selectedAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  selectedAvatarText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  selectedInfo: {
-    flex: 1,
-  },
-  selectedName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary,
-    marginBottom: 2,
-  },
-  selectedSubtext: {
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textSecondary,
-  },
-  placeholderSelection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  placeholderText: {
-    fontSize: 16,
-    color: WHATSAPP_COLORS.textSecondary,
-    flex: 1,
-    marginLeft: 12,
-  },
+  siteChipAvatar: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 6 },
+  siteChipAvatarText: { color: '#FFF', fontSize: 12, fontWeight: '600' },
+  siteChipText: { fontSize: 12, color: WHATSAPP_COLORS.textPrimary, flex: 1 },
+  moreCount: { fontSize: 12, color: WHATSAPP_COLORS.textSecondary, marginLeft: 4, fontWeight: '600' },
+  selectedAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+  selectedAvatarText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
+  selectedInfo: { flex: 1 },
+  selectedName: { fontSize: 16, fontWeight: '600', color: WHATSAPP_COLORS.textPrimary, marginBottom: 2 },
+  selectedSubtext: { fontSize: 14, color: WHATSAPP_COLORS.textSecondary },
+  placeholderSelection: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  placeholderText: { fontSize: 16, color: WHATSAPP_COLORS.textSecondary, flex: 1, marginLeft: 12 },
   infoBox: {
-    flexDirection: 'row',
-    backgroundColor: WHATSAPP_COLORS.info + '10',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.info + '30',
+    flexDirection: 'row', backgroundColor: WHATSAPP_COLORS.info + '10',
+    borderRadius: 12, padding: 16, marginTop: 8,
+    borderWidth: 1, borderColor: WHATSAPP_COLORS.info + '30',
   },
-  infoContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  infoTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.info,
-    marginBottom: 8,
-  },
-  infoText: {
-    fontSize: 13,
-    color: WHATSAPP_COLORS.textSecondary,
-    lineHeight: 18,
-    marginBottom: 4,
-  },
+  infoContent: { flex: 1, marginLeft: 12 },
+  infoTitle: { fontSize: 14, fontWeight: '600', color: WHATSAPP_COLORS.info, marginBottom: 8 },
+  infoText: { fontSize: 13, color: WHATSAPP_COLORS.textSecondary, lineHeight: 18, marginBottom: 4 },
   footer: {
-    padding: 20,
-    backgroundColor: WHATSAPP_COLORS.surface,
-    borderTopWidth: 1,
-    borderTopColor: WHATSAPP_COLORS.border,
+    padding: 20, backgroundColor: WHATSAPP_COLORS.surface,
+    borderTopWidth: 1, borderTopColor: WHATSAPP_COLORS.border,
   },
   createButton: {
-    backgroundColor: WHATSAPP_COLORS.primary,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
+    backgroundColor: WHATSAPP_COLORS.primary, paddingVertical: 16, paddingHorizontal: 20,
+    borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8,
   },
-  createButtonDisabled: {
-    backgroundColor: WHATSAPP_COLORS.textTertiary,
-    opacity: 0.6,
-  },
-  createButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  modalContainer: {
-    flex: 1,
-    marginTop: 0,
-    backgroundColor: WHATSAPP_COLORS.surface,
-  },
+  createButtonDisabled: { backgroundColor: WHATSAPP_COLORS.textTertiary, opacity: 0.6 },
+  createButtonText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  modalContainer: { flex: 1, marginTop: 0, backgroundColor: WHATSAPP_COLORS.surface },
   searchModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: WHATSAPP_COLORS.primary,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.border,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 16, backgroundColor: WHATSAPP_COLORS.primary,
+    borderBottomWidth: 1, borderBottomColor: WHATSAPP_COLORS.border,
   },
-  searchModalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.surface,
-  },
+  searchModalTitle: { fontSize: 18, fontWeight: '600', color: WHATSAPP_COLORS.surface },
   searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 16, paddingVertical: 12,
     backgroundColor: WHATSAPP_COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.border,
+    borderBottomWidth: 1, borderBottomColor: WHATSAPP_COLORS.border,
   },
-  searchInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-  },
+  searchInputWrapper: { flexDirection: 'row', alignItems: 'center', position: 'relative' },
   searchModalInput: {
-    backgroundColor: WHATSAPP_COLORS.backgroundSecondary,
-    borderRadius: 20,
-    paddingHorizontal: 45,
-    paddingVertical: 12,
-    fontSize: 16,
-    flex: 1,
+    backgroundColor: WHATSAPP_COLORS.backgroundSecondary, borderRadius: 20,
+    paddingHorizontal: 45, paddingVertical: 12, fontSize: 16, flex: 1,
     color: WHATSAPP_COLORS.textPrimary,
   },
-  searchIcon: {
-    position: 'absolute',
-    left: 15,
-    zIndex: 1,
-  },
-  addSearchButton: {
-    position: 'absolute',
-    right: 50,
-    zIndex: 1,
-    padding: 4,
-  },
-  filterButton: {
-    position: 'absolute',
-    right: 15,
-    zIndex: 1,
-    padding: 8,
-  },
+  searchIcon: { position: 'absolute', left: 15, zIndex: 1 },
+  addSearchButton: { position: 'absolute', right: 50, zIndex: 1, padding: 4 },
+  filterButton: { position: 'absolute', right: 15, zIndex: 1, padding: 8 },
   filterBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: WHATSAPP_COLORS.danger,
-    borderRadius: 10,
-    width: 18,
-    height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'absolute', top: -2, right: -2, backgroundColor: WHATSAPP_COLORS.danger,
+    borderRadius: 10, width: 18, height: 18, alignItems: 'center', justifyContent: 'center',
   },
-  filterBadgeText: {
-    color: WHATSAPP_COLORS.white,
-    fontSize: 10,
-    fontWeight: '600',
-  },
+  filterBadgeText: { color: WHATSAPP_COLORS.white, fontSize: 10, fontWeight: '600' },
   searchInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: WHATSAPP_COLORS.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.border,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: WHATSAPP_COLORS.surface,
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: WHATSAPP_COLORS.border,
   },
   searchTagsContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: WHATSAPP_COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.border,
+    paddingHorizontal: 16, paddingVertical: 8, backgroundColor: WHATSAPP_COLORS.surface,
+    borderBottomWidth: 1, borderBottomColor: WHATSAPP_COLORS.border,
   },
-  searchTagsContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
+  searchTagsContent: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   searchTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: WHATSAPP_COLORS.primary + '15',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.primary + '30',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: WHATSAPP_COLORS.primary + '15',
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, gap: 6,
+    borderWidth: 1, borderColor: WHATSAPP_COLORS.primary + '30',
   },
-  searchTagText: {
-    fontSize: 13,
-    color: WHATSAPP_COLORS.primary,
-    fontWeight: '600',
-  },
+  searchTagText: { fontSize: 13, color: WHATSAPP_COLORS.primary, fontWeight: '600' },
   clearAllTagsButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: WHATSAPP_COLORS.danger + '10',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.danger + '30',
+    paddingHorizontal: 12, paddingVertical: 8, backgroundColor: WHATSAPP_COLORS.danger + '10',
+    borderRadius: 16, borderWidth: 1, borderColor: WHATSAPP_COLORS.danger + '30',
   },
-  clearAllTagsText: {
-    fontSize: 12,
-    color: WHATSAPP_COLORS.danger,
-    fontWeight: '600',
-  },
+  clearAllTagsText: { fontSize: 12, color: WHATSAPP_COLORS.danger, fontWeight: '600' },
   activeFiltersContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: WHATSAPP_COLORS.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.border,
+    paddingHorizontal: 16, paddingVertical: 8, backgroundColor: WHATSAPP_COLORS.surface,
+    borderBottomWidth: 1, borderBottomColor: WHATSAPP_COLORS.border,
   },
   activeFilter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: WHATSAPP_COLORS.primary + '10',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginRight: 8,
-    gap: 6,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: WHATSAPP_COLORS.primary + '10',
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, marginRight: 8, gap: 6,
   },
-  activeFilterText: {
-    fontSize: 12,
-    color: WHATSAPP_COLORS.primary,
-    fontWeight: '500',
-  },
+  activeFilterText: { fontSize: 12, color: WHATSAPP_COLORS.primary, fontWeight: '500' },
   selectionInfoBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: WHATSAPP_COLORS.lightBlue,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.info,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 12, backgroundColor: WHATSAPP_COLORS.lightBlue,
+    borderBottomWidth: 1, borderBottomColor: WHATSAPP_COLORS.info,
   },
-  selectionInfoText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.info,
-  },
-  selectAllText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.primary,
-  },
+  selectionInfoText: { fontSize: 15, fontWeight: '600', color: WHATSAPP_COLORS.info },
+  selectAllText: { fontSize: 15, fontWeight: '600', color: WHATSAPP_COLORS.primary },
   siteCard: {
-    backgroundColor: WHATSAPP_COLORS.surface,
-    borderRadius: 16,
-    padding: 16,
-    marginHorizontal: 16,
-    marginVertical: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    flexDirection: 'row',
+    backgroundColor: WHATSAPP_COLORS.surface, borderRadius: 16, padding: 16,
+    marginHorizontal: 16, marginVertical: 6,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8,
+    elevation: 3, borderWidth: 2, borderColor: 'transparent', flexDirection: 'row',
   },
-  siteCardSelected: {
-    borderColor: WHATSAPP_COLORS.info,
-    backgroundColor: WHATSAPP_COLORS.lightBlue,
-  },
-  selectionCheckbox: {
-    marginRight: 12,
-    justifyContent: 'center',
-  },
+  siteCardSelected: { borderColor: WHATSAPP_COLORS.info, backgroundColor: WHATSAPP_COLORS.lightBlue },
+  selectionCheckbox: { marginRight: 12, justifyContent: 'center' },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: WHATSAPP_COLORS.border,
-    backgroundColor: WHATSAPP_COLORS.white,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 24, height: 24, borderRadius: 12, borderWidth: 2,
+    borderColor: WHATSAPP_COLORS.border, backgroundColor: WHATSAPP_COLORS.white,
+    alignItems: 'center', justifyContent: 'center',
   },
-  checkboxSelected: {
-    backgroundColor: WHATSAPP_COLORS.info,
-    borderColor: WHATSAPP_COLORS.info,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 10,
-  },
-  headerLeft: {
-    flex: 1,
-    marginRight: 12,
-  },
-  siteName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: WHATSAPP_COLORS.textPrimary,
-    marginBottom: 8,
-    letterSpacing: -0.3,
-  },
-  propertyTypeBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  propertyTypeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: WHATSAPP_COLORS.textPrimary,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 6,
-  },
-  locationText: {
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textSecondary,
-    flex: 1,
-    fontWeight: '500',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    gap: 6,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  detailsScrollContainer: {
-    marginBottom: 12,
-  },
-  detailsGrid: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingRight: 16,
-  },
-  detailChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    gap: 5,
-  },
-  detailChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  pricingRow: {
-    marginTop: 4,
-  },
+  checkboxSelected: { backgroundColor: WHATSAPP_COLORS.info, borderColor: WHATSAPP_COLORS.info },
+  cardContent: { flex: 1 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
+  headerLeft: { flex: 1, marginRight: 12 },
+  siteName: { fontSize: 18, fontWeight: '700', color: WHATSAPP_COLORS.textPrimary, marginBottom: 8, letterSpacing: -0.3 },
+  propertyTypeBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, marginBottom: 8 },
+  propertyTypeText: { fontSize: 12, fontWeight: '700', color: WHATSAPP_COLORS.textPrimary },
+  locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 6 },
+  locationText: { fontSize: 14, color: WHATSAPP_COLORS.textSecondary, flex: 1, fontWeight: '500' },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, gap: 6 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  statusText: { fontSize: 12, fontWeight: '700' },
+  detailsScrollContainer: { marginBottom: 12 },
+  detailsGrid: { flexDirection: 'row', gap: 8, paddingRight: 16 },
+  detailChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, gap: 5 },
+  detailChipText: { fontSize: 12, fontWeight: '600' },
+  pricingRow: { marginTop: 4 },
   pricingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: WHATSAPP_COLORS.lightGreen,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    gap: 8,
-    alignSelf: 'flex-start',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: WHATSAPP_COLORS.lightGreen,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, gap: 8, alignSelf: 'flex-start',
   },
-  pricingText: {
-    fontSize: 16,
-    color: WHATSAPP_COLORS.success,
-    fontWeight: '700',
-  },
+  pricingText: { fontSize: 16, color: WHATSAPP_COLORS.success, fontWeight: '700' },
   selectionFooter: {
-    padding: 16,
-    backgroundColor: WHATSAPP_COLORS.surface,
-    borderTopWidth: 1,
-    borderTopColor: WHATSAPP_COLORS.border,
+    padding: 16, backgroundColor: WHATSAPP_COLORS.surface,
+    borderTopWidth: 1, borderTopColor: WHATSAPP_COLORS.border,
   },
   selectButton: {
-    backgroundColor: WHATSAPP_COLORS.primary,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: WHATSAPP_COLORS.primary, paddingVertical: 16,
+    borderRadius: 12, alignItems: 'center', justifyContent: 'center',
   },
-  selectButtonDisabled: {
-    backgroundColor: WHATSAPP_COLORS.textTertiary,
-    opacity: 0.6,
-  },
-  selectButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
+  selectButtonDisabled: { backgroundColor: WHATSAPP_COLORS.textTertiary, opacity: 0.6 },
+  selectButtonText: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
   scoutOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.border,
-    backgroundColor: WHATSAPP_COLORS.surface,
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16,
+    borderBottomWidth: 1, borderBottomColor: WHATSAPP_COLORS.border, backgroundColor: WHATSAPP_COLORS.surface,
   },
-  scoutOptionSelected: {
-    backgroundColor: WHATSAPP_COLORS.primary + '08',
-  },
-  scoutAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  scoutAvatarText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  scoutInfo: {
-    flex: 1,
-  },
-  scoutName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary,
-    marginBottom: 4,
-  },
-  scoutId: {
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textSecondary,
-  },
-  emptySearch: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40,
-  },
-  emptySearchText: {
-    fontSize: 16,
-    color: WHATSAPP_COLORS.textSecondary,
-    marginTop: 16,
-    textAlign: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 50,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textSecondary,
-    marginTop: 16,
-  },
+  scoutOptionSelected: { backgroundColor: WHATSAPP_COLORS.primary + '08' },
+  scoutAvatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  scoutAvatarText: { color: '#FFF', fontSize: 18, fontWeight: '600' },
+  scoutInfo: { flex: 1 },
+  scoutName: { fontSize: 16, fontWeight: '600', color: WHATSAPP_COLORS.textPrimary, marginBottom: 4 },
+  scoutId: { fontSize: 14, color: WHATSAPP_COLORS.textSecondary },
+  emptySearch: { alignItems: 'center', justifyContent: 'center', padding: 40 },
+  emptySearchText: { fontSize: 16, color: WHATSAPP_COLORS.textSecondary, marginTop: 16, textAlign: 'center' },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 50 },
+  loadingText: { fontSize: 14, color: WHATSAPP_COLORS.textSecondary, marginTop: 16 },
   loadMoreButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 8,
-    backgroundColor: WHATSAPP_COLORS.surface,
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginTop: 4,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.border,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 16, gap: 8, backgroundColor: WHATSAPP_COLORS.surface,
+    borderRadius: 12, marginHorizontal: 16, marginTop: 4, marginBottom: 20,
+    borderWidth: 1, borderColor: WHATSAPP_COLORS.border,
   },
-  loadMoreText: {
-    fontSize: 15,
-    color: WHATSAPP_COLORS.primary,
-    fontWeight: '600',
-  },
-  datePickerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  datePickerContainer: {
-    backgroundColor: WHATSAPP_COLORS.surface,
-    borderRadius: 16,
-    padding: 20,
-    width: '90%',
-    maxWidth: 400,
-  },
-  datePickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  datePickerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: WHATSAPP_COLORS.textPrimary,
-  },
-  monthNavigator: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  monthNavButton: {
-    padding: 8,
-  },
-  monthYearText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary,
-  },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  calendarDayHeader: {
-    width: '14.28%',
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  calendarDayHeaderText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textSecondary,
-  },
-  calendarDay: {
-    width: '14.28%',
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8,
-    marginBottom: 4,
-  },
-  calendarDaySelected: {
-    backgroundColor: WHATSAPP_COLORS.primary,
-  },
-  calendarDayPast: {
-    opacity: 0.3,
-  },
-  calendarDayText: {
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textPrimary,
-  },
-  calendarDayTextSelected: {
-    color: '#FFF',
-    fontWeight: '700',
-  },
-  calendarDayTextPast: {
-    color: WHATSAPP_COLORS.textTertiary,
-  },
-  timePickerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  timePickerContainer: {
-    backgroundColor: WHATSAPP_COLORS.surface,
-    borderRadius: 16,
-    padding: 20,
-    width: '80%',
-    maxWidth: 350,
-  },
-  timePickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  timePickerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: WHATSAPP_COLORS.textPrimary,
-  },
-  timePickerContent: {
-    flexDirection: 'row',
-    height: 200,
-    marginBottom: 20,
-  },
-  timeColumn: {
-    flex: 1,
-  },
-  timeOption: {
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timeOptionSelected: {
-    backgroundColor: WHATSAPP_COLORS.primary + '15',
-    borderRadius: 8,
-  },
-  timeOptionText: {
-    fontSize: 16,
-    color: WHATSAPP_COLORS.textPrimary,
-  },
-  timeOptionTextSelected: {
-    color: WHATSAPP_COLORS.primary,
-    fontWeight: '600',
-  },
-  timePickerDoneButton: {
-    backgroundColor: WHATSAPP_COLORS.primary,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  timePickerDoneText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: WHATSAPP_COLORS.overlay,
-    justifyContent: 'flex-end',
-  },
-  filterModalContent: {
-    backgroundColor: WHATSAPP_COLORS.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
-  },
+  loadMoreText: { fontSize: 15, color: WHATSAPP_COLORS.primary, fontWeight: '600' },
+  datePickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  datePickerContainer: { backgroundColor: WHATSAPP_COLORS.surface, borderRadius: 16, padding: 20, width: '90%', maxWidth: 400 },
+  datePickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  datePickerTitle: { fontSize: 18, fontWeight: '700', color: WHATSAPP_COLORS.textPrimary },
+  monthNavigator: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  monthNavButton: { padding: 8 },
+  monthYearText: { fontSize: 16, fontWeight: '600', color: WHATSAPP_COLORS.textPrimary },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calendarDayHeader: { width: '14.28%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  calendarDayHeaderText: { fontSize: 12, fontWeight: '600', color: WHATSAPP_COLORS.textSecondary },
+  calendarDay: { width: '14.28%', aspectRatio: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 8, marginBottom: 4 },
+  calendarDaySelected: { backgroundColor: WHATSAPP_COLORS.primary },
+  calendarDayPast: { opacity: 0.3 },
+  calendarDayText: { fontSize: 14, color: WHATSAPP_COLORS.textPrimary },
+  calendarDayTextSelected: { color: '#FFF', fontWeight: '700' },
+  calendarDayTextPast: { color: WHATSAPP_COLORS.textTertiary },
+  timePickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  timePickerContainer: { backgroundColor: WHATSAPP_COLORS.surface, borderRadius: 16, padding: 20, width: '80%', maxWidth: 350 },
+  timePickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  timePickerTitle: { fontSize: 18, fontWeight: '700', color: WHATSAPP_COLORS.textPrimary },
+  timePickerContent: { flexDirection: 'row', height: 200, marginBottom: 20 },
+  timeColumn: { flex: 1 },
+  timeOption: { paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
+  timeOptionSelected: { backgroundColor: WHATSAPP_COLORS.primary + '15', borderRadius: 8 },
+  timeOptionText: { fontSize: 16, color: WHATSAPP_COLORS.textPrimary },
+  timeOptionTextSelected: { color: WHATSAPP_COLORS.primary, fontWeight: '600' },
+  timePickerDoneButton: { backgroundColor: WHATSAPP_COLORS.primary, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  timePickerDoneText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+  modalOverlay: { flex: 1, backgroundColor: WHATSAPP_COLORS.overlay, justifyContent: 'flex-end' },
+  filterModalContent: { backgroundColor: WHATSAPP_COLORS.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' },
   filterModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.border,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 16,
+    borderBottomWidth: 1, borderBottomColor: WHATSAPP_COLORS.border,
   },
-  filterModalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary,
-  },
-  filterList: {
-    maxHeight: 400,
-  },
+  filterModalTitle: { fontSize: 18, fontWeight: '600', color: WHATSAPP_COLORS.textPrimary },
+  filterList: { maxHeight: 420 },  // increased from 400 to fit 2 extra rows
   filterOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.border,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 16,
+    borderBottomWidth: 1, borderBottomColor: WHATSAPP_COLORS.border,
   },
-  filterOptionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  filterOptionLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  filterOptionLabel: { fontSize: 16, color: WHATSAPP_COLORS.textPrimary },
+  filterOptionRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  filterOptionValue: { fontSize: 14, color: WHATSAPP_COLORS.textSecondary },
+  // OC toggle styles — NEW
+  ocToggle: {
+    width: 44, height: 24, borderRadius: 12, backgroundColor: WHATSAPP_COLORS.border,
+    justifyContent: 'center', paddingHorizontal: 2,
   },
-  filterOptionLabel: {
-    fontSize: 16,
-    color: WHATSAPP_COLORS.textPrimary,
-  },
-  filterOptionRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  filterOptionValue: {
-    fontSize: 14,
-    color: WHATSAPP_COLORS.textSecondary,
-  },
-  filterModalFooter: {
-    flexDirection: 'row',
-    padding: 20,
-    gap: 12,
-  },
+  ocToggleActive: { backgroundColor: WHATSAPP_COLORS.primary },
+  ocToggleThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: WHATSAPP_COLORS.white, alignSelf: 'flex-start' },
+  ocToggleThumbActive: { alignSelf: 'flex-end' },
+  filterModalFooter: { flexDirection: 'row', padding: 20, gap: 12 },
   clearFiltersButton: {
-    flex: 1,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.border,
-    borderRadius: 8,
+    flex: 1, paddingVertical: 14, alignItems: 'center',
+    borderWidth: 1, borderColor: WHATSAPP_COLORS.border, borderRadius: 8,
   },
-  clearFiltersText: {
-    fontSize: 16,
-    color: WHATSAPP_COLORS.textSecondary,
-    fontWeight: '600',
-  },
-  applyFiltersButton: {
-    flex: 1,
-    paddingVertical: 14,
-    alignItems: 'center',
-    backgroundColor: WHATSAPP_COLORS.primary,
-    borderRadius: 8,
-  },
-  applyFiltersText: {
-    fontSize: 16,
-    color: WHATSAPP_COLORS.white,
-    fontWeight: '600',
-  },
-  dropdownOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  dropdownContainer: {
-    width: '100%',
-    maxWidth: 400,
-    backgroundColor: WHATSAPP_COLORS.surface,
-    borderRadius: 16,
-    padding: 16,
-    maxHeight: '60%',
-  },
-  dropdownTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary,
-    marginBottom: 12,
-  },
-  dropdownScroll: {
-    maxHeight: 300,
-  },
+  clearFiltersText: { fontSize: 16, color: WHATSAPP_COLORS.textSecondary, fontWeight: '600' },
+  applyFiltersButton: { flex: 1, paddingVertical: 14, alignItems: 'center', backgroundColor: WHATSAPP_COLORS.primary, borderRadius: 8 },
+  applyFiltersText: { fontSize: 16, color: WHATSAPP_COLORS.white, fontWeight: '600' },
+  dropdownOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 16 },
+  dropdownContainer: { width: '100%', maxWidth: 400, backgroundColor: WHATSAPP_COLORS.surface, borderRadius: 16, padding: 16, maxHeight: '60%' },
+  dropdownTitle: { fontSize: 18, fontWeight: '600', color: WHATSAPP_COLORS.textPrimary, marginBottom: 12 },
+  dropdownScroll: { maxHeight: 300 },
   dropdownOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: WHATSAPP_COLORS.border,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 12, paddingHorizontal: 12,
+    borderBottomWidth: 1, borderBottomColor: WHATSAPP_COLORS.border,
   },
-  dropdownOptionText: {
-    fontSize: 16,
-    color: WHATSAPP_COLORS.textPrimary,
-  },
+  dropdownOptionText: { fontSize: 16, color: WHATSAPP_COLORS.textPrimary },
 });
 
 export default CreateAssignment;

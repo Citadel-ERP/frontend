@@ -149,7 +149,7 @@ const ModuleDetails: React.FC<ModuleDetailsProps> = ({
 
       const response = await fetch(`${BACKEND_URL}/citadel_admin/updateModule`, {
         method: 'POST',
-        headers: { 'Content-Type': 'multipart/form-data' },
+        // headers: { 'Content-Type': 'multipart/form-data' },
         body: formData,
       });
       const data = await response.json();

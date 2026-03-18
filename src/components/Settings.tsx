@@ -27,9 +27,21 @@ interface SettingsProps {
   onBack: () => void;
   isDark?: boolean;
   extraTopOffset?: number;
+  onHelpCenter?: () => void;
+  onPrivacyPolicy?: () => void;
+  onReportProblem?: () => void;
+  onAbout?: () => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false,extraTopOffset=0 }) => {
+const Settings: React.FC<SettingsProps> = ({
+  onBack,
+  isDark = false,
+  extraTopOffset = 0,
+  onHelpCenter,
+  onPrivacyPolicy,
+  onReportProblem,
+  onAbout,
+}) => {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [reconfigureLoading, setReconfigureLoading] = useState(false);
@@ -64,12 +76,14 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false,extraTopOffs
     try {
       setNotificationsEnabled(value);
       await AsyncStorage.setItem('notifications_enabled', value.toString());
-      
+
       // Show confirmation message
       Alert.alert(
         'Notifications ' + (value ? 'Enabled' : 'Disabled'),
-        'Notification settings have been updated. ' + 
-        (value ? 'You will receive notifications as usual.' : 'You will no longer receive any notifications.'),
+        'Notification settings have been updated. ' +
+          (value
+            ? 'You will receive notifications as usual.'
+            : 'You will no longer receive any notifications.'),
         [{ text: 'OK' }]
       );
     } catch (error) {
@@ -107,7 +121,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false,extraTopOffs
       icon: '#8696A0',
       danger: '#F15C6D',
       warning: '#FFB347',
-    }
+    },
   };
 
   const currentTheme = darkMode ? whatsappColors.dark : whatsappColors.light;
@@ -136,7 +150,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false,extraTopOffs
 
               // Get token from AsyncStorage
               const token = await AsyncStorage.getItem('token_2');
-              
+
               if (!token) {
                 Alert.alert('Error', 'Authentication token not found. Please login again.');
                 return;
@@ -158,12 +172,8 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false,extraTopOffs
                 if (SecureStore) {
                   await SecureStore.setItemAsync('device_id', data.device_id);
                 }
-                
-                Alert.alert(
-                  'Success',
-                  'Device reconfigured successfully!',
-                  [{ text: 'OK' }]
-                );
+
+                Alert.alert('Success', 'Device reconfigured successfully!', [{ text: 'OK' }]);
               } else if (response.status === 403) {
                 // Show not permitted screen
                 Alert.alert(
@@ -187,9 +197,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false,extraTopOffs
   };
 
   const showComingSoon = (feature: string) => {
-    Alert.alert('Coming Soon', `${feature} feature will be available soon!`, [
-      { text: 'OK' },
-    ]);
+    Alert.alert('Coming Soon', `${feature} feature will be available soon!`, [{ text: 'OK' }]);
   };
 
   const BackIcon = () => (
@@ -200,21 +208,23 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false,extraTopOffs
   );
 
   const renderHeader = () => (
-   <View style={[styles.header, { 
-    backgroundColor: currentTheme.header,
-    marginTop: Platform.OS === 'ios' ? extraTopOffset : 0,  // moves the whole header up
-    paddingTop: Platform.OS === 'ios' 
-      ? insets.top 
-      : Platform.OS === 'android' 
-        ? (StatusBar.currentHeight ?? 0) 
-        : 0,
-  }]}>
+    <View
+      style={[
+        styles.header,
+        {
+          backgroundColor: currentTheme.header,
+          marginTop: Platform.OS === 'ios' ? extraTopOffset : 0,
+          paddingTop:
+            Platform.OS === 'ios'
+              ? insets.top
+              : Platform.OS === 'android'
+              ? StatusBar.currentHeight ?? 0
+              : 0,
+        },
+      ]}
+    >
       <View style={styles.headerContent}>
-        <TouchableOpacity 
-          onPress={onBack}
-          style={styles.backButton}
-          activeOpacity={0.7}
-        >
+        <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.7}>
           <BackIcon />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Settings</Text>
@@ -243,10 +253,13 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false,extraTopOffs
     isLoading?: boolean;
   }) => (
     <TouchableOpacity
-      style={[styles.settingItem, { 
-        backgroundColor: currentTheme.card,
-        borderBottomColor: currentTheme.border,
-      }]}
+      style={[
+        styles.settingItem,
+        {
+          backgroundColor: currentTheme.card,
+          borderBottomColor: currentTheme.border,
+        },
+      ]}
       onPress={onPress}
       activeOpacity={0.7}
       disabled={isLoading}
@@ -255,10 +268,12 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false,extraTopOffs
         <Ionicons name={icon as any} size={20} color={currentTheme.primary} />
       </View>
       <View style={styles.settingContent}>
-        <Text style={[
-          styles.settingTitle, 
-          { color: isDestructive ? currentTheme.danger : currentTheme.text }
-        ]}>
+        <Text
+          style={[
+            styles.settingTitle,
+            { color: isDestructive ? currentTheme.danger : currentTheme.text },
+          ]}
+        >
           {title}
         </Text>
         {subtitle && (
@@ -289,9 +304,7 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false,extraTopOffs
 
   const renderSection = (title: string, children: React.ReactNode) => (
     <View style={styles.section}>
-      <Text style={[styles.sectionTitle, { color: currentTheme.textSecondary }]}>
-        {title}
-      </Text>
+      <Text style={[styles.sectionTitle, { color: currentTheme.textSecondary }]}>{title}</Text>
       <View style={[styles.sectionContent, { backgroundColor: currentTheme.card }]}>
         {children}
       </View>
@@ -300,14 +313,11 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false,extraTopOffs
 
   return (
     <View style={[styles.container, { backgroundColor: currentTheme.background }]}>
-      <StatusBar 
-        barStyle={"light-content"} 
-        backgroundColor={currentTheme.header} 
-      />
-      
+      <StatusBar barStyle={'light-content'} backgroundColor={currentTheme.header} />
+
       {/* Fixed Header */}
       {renderHeader()}
-      
+
       {/* Main Content with SafeArea */}
       <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <ScrollView
@@ -316,81 +326,109 @@ const Settings: React.FC<SettingsProps> = ({ onBack, isDark = false,extraTopOffs
           contentContainerStyle={styles.scrollContent}
         >
           {/* Notifications */}
-          {renderSection("NOTIFICATIONS", (
+          {renderSection(
+            'NOTIFICATIONS',
             <>
               {renderSettingItem({
-                icon: "notifications-outline",
-                title: "Notifications",
-                subtitle: "Enable or disable all notifications",
+                icon: 'notifications-outline',
+                title: 'Notifications',
+                subtitle: 'Enable or disable all notifications',
                 onPress: () => handleNotificationToggle(!notificationsEnabled),
                 rightComponent: renderSwitch(notificationsEnabled, handleNotificationToggle),
                 showChevron: false,
               })}
             </>
-          ))}
+          )}
 
           {/* Device */}
-          {renderSection("DEVICE", (
+          {renderSection(
+            'DEVICE',
             <>
               {renderSettingItem({
-                icon: "phone-portrait-outline",
-                title: "App Language",
+                icon: 'phone-portrait-outline',
+                title: 'App Language',
                 subtitle: "English (phone's language)",
                 onPress: () => showComingSoon('App Language'),
               })}
               {renderSettingItem({
-                icon: "moon-outline",
-                title: "Dark Mode",
-                subtitle: darkMode ? "On" : "Off",
+                icon: 'moon-outline',
+                title: 'Dark Mode',
+                subtitle: darkMode ? 'On' : 'Off',
                 onPress: () => setDarkMode(!darkMode),
                 rightComponent: renderSwitch(darkMode, setDarkMode),
                 showChevron: false,
               })}
               {renderSettingItem({
-                icon: "refresh-outline",
-                title: "Reconfigure Device",
-                subtitle: isWeb ? "Available only on mobile app" : "Update your device ID",
+                icon: 'refresh-outline',
+                title: 'Reconfigure Device',
+                subtitle: isWeb ? 'Available only on mobile app' : 'Update your device ID',
                 onPress: handleReconfigureDevice,
                 isLoading: reconfigureLoading,
               })}
             </>
-          ))}
+          )}
 
           {/* Help */}
-          {renderSection("HELP", (
+          {renderSection(
+            'HELP',
             <>
               {renderSettingItem({
-                icon: "help-circle-outline",
-                title: "Help Center",
-                subtitle: "Help, contact info, privacy policy",
-                onPress: () => showComingSoon('Help Center'),
+                icon: 'help-circle-outline',
+                title: 'Help Center',
+                subtitle: 'Help, contact info, privacy policy',
+                onPress: () => {
+                  if (onHelpCenter) {
+                    onHelpCenter();
+                  } else {
+                    showComingSoon('Help Center');
+                  }
+                },
               })}
               {renderSettingItem({
-                icon: "flag-outline",
-                title: "Report a Problem",
-                subtitle: "Report bugs and issues",
-                onPress: () => showComingSoon('Report a Problem'),
+                icon: 'flag-outline',
+                title: 'Report a Problem',
+                subtitle: 'Report bugs and issues',
+                onPress: () => {
+                  if (onReportProblem) {
+                    onReportProblem();
+                  } else {
+                    showComingSoon('Report a Problem');
+                  }
+                },
               })}
             </>
-          ))}
+          )}
 
           {/* About */}
-          {renderSection("ABOUT", (
+          {renderSection(
+            'ABOUT',
             <>
               {renderSettingItem({
-                icon: "information-circle-outline",
-                title: "About Citadel Hub",
+                icon: 'information-circle-outline',
+                title: 'About Citadel Hub',
                 subtitle: `Version ${appVersion}`,
-                onPress: () => showComingSoon('About'),
-                showChevron: false,
+                onPress: () => {
+                  if (onAbout) {
+                    onAbout();
+                  } else {
+                    showComingSoon('About');
+                  }
+                },
+                showChevron: true,
               })}
               {renderSettingItem({
-                icon: "shield-checkmark-outline",
-                title: "Terms & Privacy Policy",
-                onPress: () => showComingSoon('Terms & Privacy Policy'),
+                icon: 'shield-checkmark-outline',
+                title: 'Terms & Privacy Policy',
+                onPress: () => {
+                  if (onPrivacyPolicy) {
+                    onPrivacyPolicy();
+                  } else {
+                    showComingSoon('Terms & Privacy Policy');
+                  }
+                },
               })}
             </>
-          ))}
+          )}
 
           <View style={styles.bottomSpacing} />
         </ScrollView>
@@ -409,14 +447,13 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 16,
     paddingBottom: 12,
-    // marginTop: Platform.OS === 'ios' ? 0 : Platform.OS === 'android' ? -30 : 0,
   },
   headerContent: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  minHeight: 52,
-},
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 52,
+  },
   backButton: {
     width: 40,
     height: 40,

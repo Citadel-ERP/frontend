@@ -11,12 +11,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from '../../config/config';
-import { 
-  ScoutBoyProps, 
-  Visit, 
-  ViewMode, 
-  ThemeColors, 
-  Pagination 
+import {
+  ScoutBoyProps,
+  Visit,
+  ViewMode,
+  ThemeColors,
+  Pagination
 } from './types';
 import { lightTheme, darkTheme } from './theme';
 import Header from './header';
@@ -45,7 +45,7 @@ const WHATSAPP_COLORS = {
 
 const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
-  
+
   // State Management
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [token, setToken] = useState<string | null>(null);
@@ -61,8 +61,10 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
+
+  // ─── Single source of truth for filter state (lifted up from SearchAndFilter) ───
   const [filterBy, setFilterBy] = useState('');
-  const [filterValue, setFilterValue] = useState('');
+  const [filterValue, setFilterValue] = useState('all');
 
   // Selection State
   const [selectedVisits, setSelectedVisits] = useState<number[]>([]);
@@ -78,13 +80,13 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
   // Ref to track if initial fetch has been done
   const initialFetchDone = useRef(false);
 
-  // Memoized Values
-  const theme: ThemeColors = useMemo(() => 
-    isDarkMode ? darkTheme : lightTheme, 
+  // Memoized Theme
+  const theme: ThemeColors = useMemo(() =>
+    isDarkMode ? darkTheme : lightTheme,
     [isDarkMode]
   );
 
-  // Initialization Effects
+  // ─── Initialization ───────────────────────────────────────────────────────────
   useEffect(() => {
     const initializeApp = async () => {
       try {
@@ -92,18 +94,16 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
           AsyncStorage.getItem(DARK_MODE_KEY),
           AsyncStorage.getItem(TOKEN_KEY)
         ]);
-        
         setIsDarkMode(darkMode === 'true');
         setToken(apiToken);
       } catch (error) {
         console.error('Error initializing app:', error);
       }
     };
-    
     initializeApp();
   }, []);
 
-  // API Functions
+  // ─── API: Fetch Visits ────────────────────────────────────────────────────────
   const fetchVisits = useCallback(async (page: number = 1, append: boolean = false): Promise<void> => {
     if (!token) return;
 
@@ -157,6 +157,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   }, [token]);
 
+  // ─── API: Search Visits ───────────────────────────────────────────────────────
   const searchVisits = useCallback(async (query: string): Promise<void> => {
     if (!query.trim()) {
       setIsSearchMode(false);
@@ -169,7 +170,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     try {
       setLoading(true);
       setIsSearchMode(true);
-      
+
       const response = await fetch(`${BACKEND_URL}/employee/searchVisits`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -205,7 +206,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   }, [token, fetchVisits]);
 
-  // Initial Data Fetch
+  // ─── Initial Data Fetch ───────────────────────────────────────────────────────
   useEffect(() => {
     if (token && !initialFetchDone.current) {
       initialFetchDone.current = true;
@@ -213,14 +214,14 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   }, [token]);
 
-  // Theme Toggle
+  // ─── Theme Toggle ─────────────────────────────────────────────────────────────
   const toggleDarkMode = useCallback(async () => {
     const newDarkMode = !isDarkMode;
     setIsDarkMode(newDarkMode);
     await AsyncStorage.setItem(DARK_MODE_KEY, newDarkMode.toString());
   }, [isDarkMode]);
 
-  // Selection Handlers
+  // ─── Selection Handlers ───────────────────────────────────────────────────────
   const handleLongPress = useCallback((visitId: number) => {
     setSelectionMode(true);
     setSelectedVisits([visitId]);
@@ -231,9 +232,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     setSelectedVisits(prev => {
       if (prev.includes(visitId)) {
         const newSelection = prev.filter(id => id !== visitId);
-        if (newSelection.length === 0) {
-          setSelectionMode(false);
-        }
+        if (newSelection.length === 0) setSelectionMode(false);
         return newSelection;
       } else {
         return [...prev, visitId];
@@ -246,10 +245,10 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     setSelectionMode(false);
   }, []);
 
-  // Mark as Complete Handler
+  // ─── Mark Complete (bulk) ─────────────────────────────────────────────────────
   const handleMarkComplete = useCallback(async () => {
     setShowActionsModal(false);
-    
+
     Alert.alert(
       'Mark as Complete',
       `Are you sure you want to mark ${selectedVisits.length} visit(s) as completed?`,
@@ -264,10 +263,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
               const response = await fetch(`${BACKEND_URL}/employee/updateVisitDetails`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                  token, 
-                  visit_ids: selectedVisits 
-                })
+                body: JSON.stringify({ token, visit_ids: selectedVisits })
               });
 
               const data = await response.json();
@@ -275,10 +271,9 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
               if (!response.ok) {
                 throw new Error(data.message || `HTTP error! status: ${response.status}`);
               }
-              
+
               Alert.alert('Success', `${selectedVisits.length} visit(s) marked as completed!`);
               cancelSelection();
-              // Refresh the list
               fetchVisits(1);
             } catch (error) {
               console.error('Error marking visits complete:', error);
@@ -292,15 +287,21 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     );
   }, [selectedVisits, token, cancelSelection, fetchVisits]);
 
-  // Event Handlers
+  // ─── Event Handlers ───────────────────────────────────────────────────────────
   const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
     searchVisits(query);
   }, [searchVisits]);
 
-  const handleFilter = useCallback((filterBy: string, filterValue: string) => {
-    setFilterBy(filterBy);
-    setFilterValue(filterValue);
+  /**
+   * handleFilter is now the ONLY place filter state is updated.
+   * SearchAndFilter is a controlled component — it reads filterBy/filterValue
+   * from props and calls this to request changes.
+   */
+  const handleFilter = useCallback((newFilterBy: string, newFilterValue: string) => {
+    setFilterBy(newFilterBy);
+    // When filterBy is empty (i.e. "All" tab), normalize filterValue to 'all'
+    setFilterValue(newFilterBy === '' ? 'all' : newFilterValue);
   }, []);
 
   const handleLoadMore = useCallback(() => {
@@ -328,6 +329,12 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     setViewMode('create-site');
   }, []);
 
+  /**
+   * Back navigation — no longer calls fetchVisits(1).
+   * The visits array is preserved in parent state, and filteredVisits memo
+   * re-applies the filter correctly, so the user returns to exactly what
+   * they were looking at before drilling into a detail view.
+   */
   const handleBackPress = useCallback(() => {
     switch (viewMode) {
       case 'detail':
@@ -335,20 +342,18 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
       case 'edit':
         setViewMode('list');
         setSelectedVisit(null);
-        if (token) {
-          fetchVisits(1);
-        }
         break;
       case 'list':
         onBack();
         break;
     }
-  }, [viewMode, token, onBack, fetchVisits]);
+  }, [viewMode, onBack]);
 
   const handleEditPress = useCallback(() => {
     setViewMode('edit');
   }, []);
 
+  // ─── Mark Complete (detail view) ──────────────────────────────────────────────
   const handleMarkCompleteDetail = useCallback(async () => {
     if (!selectedVisit || !token) return;
 
@@ -364,17 +369,13 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const updatedVisit = { 
-        ...selectedVisit, 
-        status: 'scout_completed' 
-      };
-      
+      const updatedVisit = { ...selectedVisit, status: 'scout_completed' };
       const updatedVisits = [...visits];
       updatedVisits[currentVisitIndex] = updatedVisit;
-      
+
       setSelectedVisit(updatedVisit);
       setVisits(updatedVisits);
-      
+
       Alert.alert('Success', 'Visit marked as completed');
     } catch (error) {
       console.error('Error marking visit complete:', error);
@@ -384,20 +385,21 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   }, [selectedVisit, token, visits, currentVisitIndex]);
 
-  // Filtered Visits
+  // ─── Filtered Visits ──────────────────────────────────────────────────────────
+  /**
+   * filteredVisits derives from the parent-owned filterBy/filterValue.
+   * This is the single filtered list passed to VisitsList — no secondary
+   * filter state anywhere below this component.
+   */
   const filteredVisits = useMemo(() => {
     return visits.filter(visit => {
-      if (!filterBy || !filterValue) return true;
-      
-      if (filterBy === 'status') {
-        return visit.status === filterValue;
-      }
-      
+      if (!filterBy || !filterValue || filterValue === 'all') return true;
+      if (filterBy === 'status') return visit.status === filterValue;
       return true;
     });
   }, [visits, filterBy, filterValue]);
 
-  // Back Handler
+  // ─── Back Handler (Android) ───────────────────────────────────────────────────
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       handleBackPress();
@@ -406,7 +408,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     return () => backHandler.remove();
   }, [handleBackPress]);
 
-  // View Title
+  // ─── Header Title ─────────────────────────────────────────────────────────────
   const getHeaderTitle = useCallback((): string => {
     switch (viewMode) {
       case 'detail': return 'Visit Details';
@@ -416,7 +418,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     }
   }, [viewMode]);
 
-  // Render Actions Modal
+  // ─── Actions Modal ────────────────────────────────────────────────────────────
   const renderActionsModal = useCallback(() => (
     <Modal
       visible={showActionsModal}
@@ -439,9 +441,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
           >
             <View style={styles.actionOptionLeft}>
               <Ionicons name="checkmark-circle-outline" size={22} color={WHATSAPP_COLORS.success} />
-              <Text style={styles.actionOptionText}>
-                Mark as Complete
-              </Text>
+              <Text style={styles.actionOptionText}>Mark as Complete</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textSecondary} />
           </TouchableOpacity>
@@ -456,7 +456,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     </Modal>
   ), [showActionsModal, selectedVisits, handleMarkComplete]);
 
-  // Render Content Based on View Mode
+  // ─── Content Renderer ─────────────────────────────────────────────────────────
   const renderContent = useCallback(() => {
     switch (viewMode) {
       case 'detail':
@@ -464,7 +464,7 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
           <VisitDetails
             visit={selectedVisit}
             currentIndex={currentVisitIndex}
-            totalVisits={visits.length}
+            totalVisits={filteredVisits.length}
             onBack={handleBackPress}
             onEdit={handleEditPress}
             onMarkComplete={handleMarkCompleteDetail}
@@ -477,18 +477,18 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
               if (currentVisitIndex > 0) {
                 const newIndex = currentVisitIndex - 1;
                 setCurrentVisitIndex(newIndex);
-                setSelectedVisit(visits[newIndex]);
+                setSelectedVisit(filteredVisits[newIndex]);
               }
             }}
             onNext={() => {
-              if (currentVisitIndex < visits.length - 1) {
+              if (currentVisitIndex < filteredVisits.length - 1) {
                 const newIndex = currentVisitIndex + 1;
                 setCurrentVisitIndex(newIndex);
-                setSelectedVisit(visits[newIndex]);
+                setSelectedVisit(filteredVisits[newIndex]);
               }
             }}
             hasPrevious={currentVisitIndex > 0}
-            hasNext={currentVisitIndex < visits.length - 1}
+            hasNext={currentVisitIndex < filteredVisits.length - 1}
             token={token}
             theme={theme}
           />
@@ -524,10 +524,18 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
             stickyHeaderIndices={[0]}
           >
             <View>
+              {/*
+               * SearchAndFilter is now fully controlled:
+               * - filterBy and filterValue come from parent state
+               * - onFilter updates parent state via handleFilter
+               * - No local filter state inside SearchAndFilter
+               */}
               <SearchAndFilter
                 onSearch={handleSearch}
                 onFilter={handleFilter}
                 theme={theme}
+                filterBy={filterBy}
+                filterValue={filterValue}
                 selectionMode={selectionMode}
                 selectedCount={selectedVisits.length}
                 onSettingsPress={() => setShowActionsModal(true)}
@@ -555,13 +563,12 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
         );
     }
   }, [
-    viewMode, 
-    selectedVisit, 
-    currentVisitIndex, 
-    visits, 
-    token, 
-    theme, 
+    viewMode,
+    selectedVisit,
+    currentVisitIndex,
     filteredVisits,
+    token,
+    theme,
     loading,
     loadingMore,
     refreshing,
@@ -569,6 +576,8 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     isDarkMode,
     selectionMode,
     selectedVisits,
+    filterBy,
+    filterValue,
     handleBackPress,
     handleEditPress,
     handleMarkCompleteDetail,
@@ -579,17 +588,17 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     handleRefresh,
     handleVisitSelection,
     handleLongPress,
-    cancelSelection
+    cancelSelection,
   ]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar
-        barStyle={isDarkMode ? "light-content" : "dark-content"}
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
         backgroundColor="transparent"
         translucent
       />
-      
+
       {viewMode === 'list' && (
         <Header
           title={getHeaderTitle()}
@@ -605,10 +614,8 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
         {renderContent()}
       </View>
 
-      {/* Actions Modal */}
       {renderActionsModal()}
 
-      {/* Loading Overlay */}
       {markingComplete && (
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingCard}>
@@ -622,12 +629,12 @@ const ScoutBoy: React.FC<ScoutBoyProps> = ({ onBack }) => {
     </View>
   );
 };
-// Platform.OS === 'ios' ? -30 : 0,
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    height:'100%',
-    marginBottom:Platform.OS === 'ios' ? -30 : 0,
+    height: '100%',
+    marginBottom: Platform.OS === 'ios' ? -30 : 0,
   },
   scrollContainer: {
     flex: 1,
