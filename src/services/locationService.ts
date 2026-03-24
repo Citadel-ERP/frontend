@@ -167,26 +167,71 @@ export class LocationService {
   }
 
   /**
-   * Request background location permission
+   * Request background location permission.
+   *
+   * IMPORTANT — Google Play Prominent Disclosure requirement:
+   * Do NOT call this directly from service code. Instead, use
+   * `requestBackgroundPermissionWithDisclosure(showDisclosureFn)` so that
+   * the UI layer can show the mandatory prominent-disclosure dialog first.
+   *
+   * This raw method is kept for internal use only (called after the user
+   * has accepted the disclosure).
    */
   static async requestBackgroundPermission(): Promise<boolean> {
     try {
       const { status } = await Location.requestBackgroundPermissionsAsync();
       
       if (status !== 'granted') {
-        // Alert.alert(
-        //   'Background Location Required',
-        //   Platform.OS === 'ios'
-        //     ? 'For automatic attendance, please:\n\n1. Go to Settings > Privacy & Security > Location Services > [Your App]\n2. Select "Always"\n3. Enable "Precise Location"'
-        //     : 'Please enable "Allow all the time" for location access in Settings.',
-        //   [{ text: 'OK' }]
-        // );
         return false;
       }
 
       return true;
     } catch (error) {
       console.error('❌ Error requesting background permission:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Request background location permission with mandatory prominent disclosure.
+   *
+   * This is the method you should always call from UI-connected code.
+   * It asks the caller to present the disclosure dialog and waits for the
+   * user's choice before proceeding to the system permission prompt.
+   *
+   * Usage:
+   * ```tsx
+   * const granted = await LocationService.requestBackgroundPermissionWithDisclosure(
+   *   () => new Promise(resolve => setDisclosureVisible({ resolve }))
+   * );
+   * ```
+   *
+   * @param showDisclosure  An async function that shows the disclosure UI and
+   *                        resolves with `true` if the user accepted or `false`
+   *                        if they declined.
+   */
+  static async requestBackgroundPermissionWithDisclosure(
+    showDisclosure: () => Promise<boolean>
+  ): Promise<boolean> {
+    try {
+      // Check if already granted — skip disclosure if so
+      const { status: existing } = await Location.getBackgroundPermissionsAsync();
+      if (existing === 'granted') {
+        console.log('✅ Background location already granted, skipping disclosure');
+        return true;
+      }
+
+      // Show the mandatory prominent disclosure first
+      const accepted = await showDisclosure();
+      if (!accepted) {
+        console.log('ℹ️ User declined background location disclosure');
+        return false;
+      }
+
+      // User accepted — now request the system permission
+      return await this.requestBackgroundPermission();
+    } catch (error) {
+      console.error('❌ Error in requestBackgroundPermissionWithDisclosure:', error);
       return false;
     }
   }
