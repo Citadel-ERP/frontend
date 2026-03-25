@@ -716,10 +716,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         const perms = await AttendanceUtils.requestLocationPermissions();
         if (!perms.foreground) return;
         if (Constants.appOwnership === 'expo') return;
-
-        // Pass the disclosure callback so geofencing setup can show the
-        // Google Play-required prominent disclosure before requesting
-        // ACCESS_BACKGROUND_LOCATION.
         await BackgroundAttendanceService.initialize(showBackgroundLocationDisclosure);
 
         if (perms.background) await GeofencingService.initialize();
