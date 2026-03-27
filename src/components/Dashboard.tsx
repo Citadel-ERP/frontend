@@ -33,6 +33,9 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 
 import { BackgroundLocationDisclosure } from './BackgroundLocationDisclosure';
+import { BackgroundLocationService } from '../services/backgroundLocationTracking';
+
+
 // Import all pages
 import Profile from './Profile';
 import PrivacyPolicy from './PrivacyPolicy';
@@ -708,24 +711,58 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     }
   }, [showProfile]);
 
-  useEffect(() => {
-    if (!token || !userData || isWeb) return;
+  // Dashboard.tsx — replace the background services useEffect
 
-    const init = async () => {
-      try {
-        const perms = await AttendanceUtils.requestLocationPermissions();
-        if (!perms.foreground) return;
-        if (Constants.appOwnership === 'expo') return;
-        await BackgroundAttendanceService.initialize(showBackgroundLocationDisclosure);
+useEffect(() => {
+  if (!token || !userData || isWeb) return;
+  if (Constants.appOwnership === 'expo') return;
 
-        if (perms.background) await GeofencingService.initialize();
-      } catch (e) {
-        console.warn('Background services failed:', e);
+  const init = async () => {
+    try {
+      // Check if App.tsx deferred initialization pending our disclosure
+      const pendingDisclosure = await AsyncStorage.getItem(
+        'pending_background_location_disclosure'
+      );
+
+      const { status: fgStatus } = await Location.getForegroundPermissionsAsync();
+      const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
+      const backgroundAlreadyGranted = bgStatus === 'granted';
+
+      if (!backgroundAlreadyGranted) {
+        // Show our prominent disclosure BEFORE any system dialog
+        const accepted = await showBackgroundLocationDisclosure();
+
+        if (!accepted) {
+          await AsyncStorage.removeItem('pending_background_location_disclosure');
+          // Initialize only foreground-safe services
+          await BackgroundAttendanceService.initialize(showBackgroundLocationDisclosure);
+          return;
+        }
       }
-    };
 
-    init();
-  }, [token, userData, isWeb, showBackgroundLocationDisclosure]);
+      // Clear the pending flag
+      await AsyncStorage.removeItem('pending_background_location_disclosure');
+
+      // NOW request permissions (system dialog comes AFTER our disclosure)
+      const perms = await AttendanceUtils.requestLocationPermissions();
+      if (!perms.foreground) return;
+
+      // Initialize all services
+      await BackgroundAttendanceService.initialize(showBackgroundLocationDisclosure);
+      if (perms.background) {
+        await GeofencingService.initialize();
+        // Also trigger App.tsx-level services now that we have permission
+        await BackgroundAttendanceService.initializeAll();
+        await BackgroundLocationService.initialize();
+      }
+
+    } catch (e) {
+      console.warn('Background services failed:', e);
+    }
+  };
+
+  init();
+}, [token, userData, isWeb, showBackgroundLocationDisclosure]);
 
   // Push notifications setup
   useEffect(() => {
