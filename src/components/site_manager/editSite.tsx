@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   StatusBar, Alert, Modal, TextInput, Dimensions, ActivityIndicator,
@@ -41,6 +41,14 @@ interface Photo {
   description?: string;
   isExisting?: boolean;
   existingId?: number;
+}
+
+// ─── EditableChipList types ───────────────────────────────────────────────────
+
+interface ChipItem {
+  /** Stable identity — never changes after creation */
+  id: string;
+  value: string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -95,6 +103,372 @@ const MICRO_MARKET_OPTIONS = [
   { label: 'HSR', value: 'HSR' },
 ];
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Convert an array of plain strings into ChipItems with stable IDs */
+const stringsToChips = (values: string[]): ChipItem[] =>
+  values.map((value, i) => ({ id: `chip_${Date.now()}_${i}_${Math.random()}`, value }));
+
+/** Extract plain string values from ChipItems (for form submission) */
+const chipsToStrings = (chips: ChipItem[]): string[] => chips.map((c) => c.value);
+
+// ─── EditableChipList ─────────────────────────────────────────────────────────
+/**
+ * A self-contained, reusable chip-list component that supports:
+ *   • Adding new entries via a text input + Enter / Done
+ *   • Inline editing of any existing chip (tap the pencil icon)
+ *   • Saving the edited value (tap the tick icon or press Enter)
+ *   • Cancelling an edit (tap the × icon while editing)
+ *   • Deleting a chip entirely (tap the red × icon in view mode)
+ *
+ * Props:
+ *   label        – field label rendered above the input
+ *   hint         – optional italic hint rendered below the label
+ *   placeholder  – placeholder for the "add new" input
+ *   chips        – controlled ChipItem array
+ *   onChange     – callback called whenever the chip array changes
+ */
+
+interface EditableChipListProps {
+  label: string;
+  hint?: string;
+  placeholder: string;
+  chips: ChipItem[];
+  onChange: (chips: ChipItem[]) => void;
+}
+
+const EditableChipList: React.FC<EditableChipListProps> = memo(
+  ({ label, hint, placeholder, chips, onChange }) => {
+    const [addInput, setAddInput] = useState('');
+    // Which chip is currently being edited (by id), and the draft value
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editDraft, setEditDraft] = useState('');
+    const editInputRef = useRef<TextInput>(null);
+
+    // ── Add ──────────────────────────────────────────────────────────────────
+    const handleAdd = useCallback(() => {
+      const trimmed = addInput.trim();
+      if (!trimmed) return;
+      const newChip: ChipItem = {
+        id: `chip_${Date.now()}_${Math.random()}`,
+        value: trimmed,
+      };
+      onChange([...chips, newChip]);
+      setAddInput('');
+    }, [addInput, chips, onChange]);
+
+    // ── Begin edit ───────────────────────────────────────────────────────────
+    const handleBeginEdit = useCallback(
+      (chip: ChipItem) => {
+        // If another chip is being edited, save it first (silent auto-save)
+        if (editingId && editingId !== chip.id) {
+          const draft = editDraft.trim();
+          if (draft) {
+            onChange(chips.map((c) => (c.id === editingId ? { ...c, value: draft } : c)));
+          }
+        }
+        setEditingId(chip.id);
+        setEditDraft(chip.value);
+        // Focus the edit input after state settles
+        setTimeout(() => editInputRef.current?.focus(), 50);
+      },
+      [editingId, editDraft, chips, onChange],
+    );
+
+    // ── Save edit ────────────────────────────────────────────────────────────
+    const handleSaveEdit = useCallback(() => {
+      if (!editingId) return;
+      const trimmed = editDraft.trim();
+      if (!trimmed) {
+        // Empty → treat as cancel (don't delete implicitly)
+        setEditingId(null);
+        setEditDraft('');
+        return;
+      }
+      onChange(chips.map((c) => (c.id === editingId ? { ...c, value: trimmed } : c)));
+      setEditingId(null);
+      setEditDraft('');
+    }, [editingId, editDraft, chips, onChange]);
+
+    // ── Cancel edit ──────────────────────────────────────────────────────────
+    const handleCancelEdit = useCallback(() => {
+      setEditingId(null);
+      setEditDraft('');
+    }, []);
+
+    // ── Remove ───────────────────────────────────────────────────────────────
+    const handleRemove = useCallback(
+      (id: string) => {
+        if (editingId === id) {
+          setEditingId(null);
+          setEditDraft('');
+        }
+        onChange(chips.filter((c) => c.id !== id));
+      },
+      [editingId, chips, onChange],
+    );
+
+    return (
+      <View style={chipStyles.container}>
+        {/* Label */}
+        <Text style={chipStyles.label}>{label}</Text>
+        {!!hint && <Text style={chipStyles.hint}>{hint}</Text>}
+
+        {/* "Add new" input */}
+        <View style={chipStyles.addRow}>
+          <TextInput
+            style={chipStyles.addInput}
+            value={addInput}
+            onChangeText={setAddInput}
+            placeholder={placeholder}
+            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+            onSubmitEditing={handleAdd}
+            returnKeyType="done"
+            blurOnSubmit={false}
+          />
+          <TouchableOpacity
+            style={[chipStyles.addButton, !addInput.trim() && chipStyles.addButtonDisabled]}
+            onPress={handleAdd}
+            disabled={!addInput.trim()}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="add" size={20} color={WHATSAPP_COLORS.white} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Chip list */}
+        {chips.length > 0 && (
+          <View style={chipStyles.list}>
+            {chips.map((chip, index) => {
+              const isEditing = editingId === chip.id;
+              return (
+                <View
+                  key={chip.id}
+                  style={[chipStyles.chip, isEditing && chipStyles.chipEditing]}
+                >
+                  {/* Index badge */}
+                  <View style={chipStyles.indexBadge}>
+                    <Text style={chipStyles.indexText}>{index + 1}</Text>
+                  </View>
+
+                  {isEditing ? (
+                    /* ── Edit mode ── */
+                    <View style={chipStyles.editRow}>
+                      <TextInput
+                        ref={editInputRef}
+                        style={chipStyles.editInput}
+                        value={editDraft}
+                        onChangeText={setEditDraft}
+                        onSubmitEditing={handleSaveEdit}
+                        returnKeyType="done"
+                        blurOnSubmit={false}
+                        autoFocus
+                        selectTextOnFocus
+                        placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+                      />
+                      {/* Save */}
+                      <TouchableOpacity
+                        style={chipStyles.actionSave}
+                        onPress={handleSaveEdit}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="checkmark" size={18} color={WHATSAPP_COLORS.white} />
+                      </TouchableOpacity>
+                      {/* Cancel */}
+                      <TouchableOpacity
+                        style={chipStyles.actionCancel}
+                        onPress={handleCancelEdit}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="close" size={18} color={WHATSAPP_COLORS.textSecondary} />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    /* ── View mode ── */
+                    <View style={chipStyles.viewRow}>
+                      <Text style={chipStyles.chipText} numberOfLines={2}>
+                        {chip.value}
+                      </Text>
+                      {/* Edit */}
+                      <TouchableOpacity
+                        style={chipStyles.actionEdit}
+                        onPress={() => handleBeginEdit(chip)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Ionicons name="pencil" size={15} color={WHATSAPP_COLORS.primary} />
+                      </TouchableOpacity>
+                      {/* Delete */}
+                      <TouchableOpacity
+                        style={chipStyles.actionDelete}
+                        onPress={() => handleRemove(chip.id)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Ionicons name="close-circle" size={18} color={WHATSAPP_COLORS.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+    );
+  },
+);
+
+// ─── Chip styles ──────────────────────────────────────────────────────────────
+
+const chipStyles = StyleSheet.create({
+  container: {
+    marginBottom: 16,
+    width: '100%',
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: WHATSAPP_COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  hint: {
+    fontSize: 11,
+    color: WHATSAPP_COLORS.textSecondary,
+    marginBottom: 6,
+    fontStyle: 'italic',
+  },
+  /* Add-new row */
+  addRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addInput: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.border,
+    borderRadius: 8,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    fontSize: 14,
+    color: WHATSAPP_COLORS.textPrimary,
+  },
+  addButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 8,
+    backgroundColor: WHATSAPP_COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addButtonDisabled: {
+    opacity: 0.4,
+  },
+  /* Chip list */
+  list: {
+    marginTop: 10,
+    gap: 8,
+  },
+  chip: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: WHATSAPP_COLORS.primary,
+    backgroundColor: 'rgba(7,94,84,0.04)',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  chipEditing: {
+    borderStyle: 'solid',
+    borderColor: WHATSAPP_COLORS.primaryLight,
+    backgroundColor: 'rgba(7,94,84,0.08)',
+  },
+  /* Index badge */
+  indexBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: WHATSAPP_COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  indexText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: WHATSAPP_COLORS.white,
+  },
+  /* View mode row */
+  viewRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  chipText: {
+    flex: 1,
+    fontSize: 13,
+    color: WHATSAPP_COLORS.textPrimary,
+    lineHeight: 18,
+  },
+  actionEdit: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: 'rgba(7,94,84,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  actionDelete: {
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  /* Edit mode row */
+  editRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  editInput: {
+    flex: 1,
+    fontSize: 13,
+    color: WHATSAPP_COLORS.textPrimary,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderWidth: 1,
+    borderColor: WHATSAPP_COLORS.primaryLight,
+    borderRadius: 6,
+    backgroundColor: WHATSAPP_COLORS.surface,
+    minHeight: 34,
+  },
+  actionSave: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+    backgroundColor: WHATSAPP_COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  actionCancel: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
+    backgroundColor: WHATSAPP_COLORS.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+});
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated, theme }) => {
@@ -121,19 +495,11 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
   const [customFloorCondition, setCustomFloorCondition] = useState('');
   const [customBuildingStatus, setCustomBuildingStatus] = useState('');
 
-  // ── CHANGE 1: Total Available Area chips ──────────────────────────────────
-  const [totalAreaEntries, setTotalAreaEntries] = useState<string[]>([]);
-  const [currentTotalAreaInput, setCurrentTotalAreaInput] = useState('');
-
-  // Floor-wise area chips
-  const [floorWiseAreaEntries, setFloorWiseAreaEntries] = useState<string[]>([]);
-  const [currentFloorInput, setCurrentFloorInput] = useState('');
-
-  // ── CHANGE 3: Managed office unit/seat chips ──────────────────────────────
-  const [numberOfUnitsEntries, setNumberOfUnitsEntries] = useState<string[]>([]);
-  const [currentNumberOfUnitsInput, setCurrentNumberOfUnitsInput] = useState('');
-  const [seatsPerUnitEntries, setSeatsPerUnitEntries] = useState<string[]>([]);
-  const [currentSeatsPerUnitInput, setCurrentSeatsPerUnitInput] = useState('');
+  // ── ChipItem state (replaces plain string[] state) ─────────────────────────
+  const [totalAreaChips, setTotalAreaChips] = useState<ChipItem[]>([]);
+  const [floorWiseAreaChips, setFloorWiseAreaChips] = useState<ChipItem[]>([]);
+  const [numberOfUnitsChips, setNumberOfUnitsChips] = useState<ChipItem[]>([]);
+  const [seatsPerUnitChips, setSeatsPerUnitChips] = useState<ChipItem[]>([]);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const [initialized, setInitialized] = useState(false);
@@ -162,7 +528,7 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
     car_parking_slots: '',
     building_status: 'available',
     rent: '',
-    cam: '',          // CHANGE 4: cam is now free text — no formatCurrency
+    cam: '',
     cam_deposit: '',
     oc: false,
     rental_escalation: '',
@@ -266,42 +632,25 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
       setCustomBuildingStatus(site.building_status);
     }
 
-    // ── CHANGE 1: Initialise total_area chip entries ────────────────────────
-    if (site.total_area !== undefined && site.total_area !== null) {
-      const raw = String(site.total_area).trim();
-      if (raw) {
-        const entries = raw.split('\n').map((e: string) => e.trim()).filter(Boolean);
-        setTotalAreaEntries(entries.length > 0 ? entries : [raw]);
-      }
-    }
+    // ── Initialise ChipItem arrays ─────────────────────────────────────────
+    const parseToChips = (raw: any): ChipItem[] => {
+      if (raw === undefined || raw === null) return [];
+      const str = String(raw).trim();
+      if (!str) return [];
+      const entries = str.split('\n').map((e: string) => e.trim()).filter(Boolean);
+      return stringsToChips(entries.length > 0 ? entries : [str]);
+    };
 
-    // Floor-wise area → chips
-    if (site.floor_wise_area) {
-      const entries = site.floor_wise_area.split('\n').filter((e: string) => e.trim());
-      setFloorWiseAreaEntries(entries);
-    }
-
-    // ── CHANGE 3: Initialise units / seats-per-unit chip entries ───────────
-    if (site.number_of_units !== undefined && site.number_of_units !== null) {
-      const raw = String(site.number_of_units).trim();
-      if (raw) {
-        const entries = raw.split('\n').map((e: string) => e.trim()).filter(Boolean);
-        setNumberOfUnitsEntries(entries.length > 0 ? entries : [raw]);
-      }
-    }
-    if (site.number_of_seats_per_unit !== undefined && site.number_of_seats_per_unit !== null) {
-      const raw = String(site.number_of_seats_per_unit).trim();
-      if (raw) {
-        const entries = raw.split('\n').map((e: string) => e.trim()).filter(Boolean);
-        setSeatsPerUnitEntries(entries.length > 0 ? entries : [raw]);
-      }
-    }
+    setTotalAreaChips(parseToChips(site.total_area));
+    setFloorWiseAreaChips(parseToChips(site.floor_wise_area));
+    setNumberOfUnitsChips(parseToChips(site.number_of_units));
+    setSeatsPerUnitChips(parseToChips(site.number_of_seats_per_unit));
 
     // Map all remaining scalar fields
     const mappedSite = { ...editedSite };
     Object.keys(editedSite).forEach((key) => {
       // Skip fields now managed by chip state
-      if (['total_area', 'number_of_units', 'number_of_seats_per_unit'].includes(key)) return;
+      if (['total_area', 'floor_wise_area', 'number_of_units', 'number_of_seats_per_unit'].includes(key)) return;
 
       if (site[key] !== undefined && site[key] !== null) {
         if (typeof site[key] === 'boolean') {
@@ -311,11 +660,9 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
           key.includes('_charges') ||
           key === 'rent' ||
           key === 'rent_per_seat'
-          // NOTE: 'cam' intentionally excluded — CHANGE 4
         ) {
           (mappedSite as any)[key] = formatCurrency(String(site[key]));
         } else if (key === 'cam') {
-          // CHANGE 4: cam stored as-is (allows alphabets)
           (mappedSite as any)[key] = String(site[key]);
         } else {
           (mappedSite as any)[key] = String(site[key]);
@@ -377,50 +724,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
 
   const parseCurrency = (formatted: string): string => formatted.replace(/,/g, '');
 
-  // ─── Generic chip helpers ──────────────────────────────────────────────────
-
-  /**
-   * Shared factory for chip-list add/remove handlers.
-   * Returns [addFn, removeFn] that operate on the given state setters.
-   */
-  const makeChipHandlers = (
-    currentInput: string,
-    setCurrentInput: React.Dispatch<React.SetStateAction<string>>,
-    setEntries: React.Dispatch<React.SetStateAction<string[]>>,
-  ) => {
-    const add = () => {
-      const trimmed = currentInput.trim();
-      if (trimmed) {
-        setEntries((prev) => [...prev, trimmed]);
-        setCurrentInput('');
-      }
-    };
-    const remove = (index: number) => {
-      setEntries((prev) => prev.filter((_, i) => i !== index));
-    };
-    return { add, remove };
-  };
-
-  // Floor-wise area
-  const floorHandlers = makeChipHandlers(
-    currentFloorInput, setCurrentFloorInput, setFloorWiseAreaEntries,
-  );
-
-  // CHANGE 1 – Total area
-  const totalAreaHandlers = makeChipHandlers(
-    currentTotalAreaInput, setCurrentTotalAreaInput, setTotalAreaEntries,
-  );
-
-  // CHANGE 3 – Number of units
-  const unitsHandlers = makeChipHandlers(
-    currentNumberOfUnitsInput, setCurrentNumberOfUnitsInput, setNumberOfUnitsEntries,
-  );
-
-  // CHANGE 3 – Seats per unit
-  const seatsPerUnitHandlers = makeChipHandlers(
-    currentSeatsPerUnitInput, setCurrentSeatsPerUnitInput, setSeatsPerUnitEntries,
-  );
-
   // ─── Other amenities ───────────────────────────────────────────────────────
 
   const addOtherAmenity = () => {
@@ -452,7 +755,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
   const handleNextStep = () => {
     if (validateStep(currentStep)) {
       setCurrentStep((s) => s + 1);
-      // Scroll to top of form on step change
       scrollViewRef.current?.scrollTo({ y: 0, animated: true });
     }
   };
@@ -510,7 +812,7 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        allowsMultipleSelection: true,   // ← added
+        allowsMultipleSelection: true,
         allowsEditing: false,
         quality: 0.8,
       });
@@ -602,19 +904,17 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
       if (editedSite.total_floors) siteData.total_floors = editedSite.total_floors;
       if (editedSite.number_of_basements) siteData.number_of_basements = editedSite.number_of_basements;
 
-      // area_per_floor = typical floor plate
       if (editedSite.area_per_floor) siteData.area_per_floor = parseCurrency(editedSite.area_per_floor);
 
-      // floor_wise_area chips
-      if (floorWiseAreaEntries.length > 0) {
-        siteData.floor_wise_area = floorWiseAreaEntries.join('\n');
-      } else if (editedSite.floor_wise_area) {
-        siteData.floor_wise_area = editedSite.floor_wise_area;
+      // ── ChipItem → newline-joined string for submission ─────────────────
+      const floorWiseStrings = chipsToStrings(floorWiseAreaChips);
+      if (floorWiseStrings.length > 0) {
+        siteData.floor_wise_area = floorWiseStrings.join('\n');
       }
 
-      // CHANGE 1: total_area now uses chip entries (raw text, no parseCurrency)
-      if (totalAreaEntries.length > 0) {
-        siteData.total_area = totalAreaEntries.join('\n');
+      const totalAreaStrings = chipsToStrings(totalAreaChips);
+      if (totalAreaStrings.length > 0) {
+        siteData.total_area = totalAreaStrings.join('\n');
       }
 
       if (editedSite.availble_floors) siteData.availble_floors = editedSite.availble_floors;
@@ -627,17 +927,14 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
         if (editedSite.total_seats) siteData.total_seats = parseCurrency(editedSite.total_seats);
         if (editedSite.seats_available) siteData.seats_available = parseCurrency(editedSite.seats_available);
 
-        // CHANGE 3: number_of_units and seats_per_unit now use chip entries
-        if (numberOfUnitsEntries.length > 0) {
-          siteData.number_of_units = numberOfUnitsEntries.join('\n');
-        } else if (editedSite.number_of_units) {
-          siteData.number_of_units = editedSite.number_of_units;
+        const unitsStrings = chipsToStrings(numberOfUnitsChips);
+        if (unitsStrings.length > 0) {
+          siteData.number_of_units = unitsStrings.join('\n');
         }
 
-        if (seatsPerUnitEntries.length > 0) {
-          siteData.number_of_seats_per_unit = seatsPerUnitEntries.join('\n');
-        } else if (editedSite.number_of_seats_per_unit) {
-          siteData.number_of_seats_per_unit = editedSite.number_of_seats_per_unit;
+        const seatsPerUnitStrings = chipsToStrings(seatsPerUnitChips);
+        if (seatsPerUnitStrings.length > 0) {
+          siteData.number_of_seats_per_unit = seatsPerUnitStrings.join('\n');
         }
 
         if (editedSite.business_hours_of_operation)
@@ -667,7 +964,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
       }
 
       // Commercial terms
-      // CHANGE 4: cam sent as raw text (supports alphabets)
       if (editedSite.cam) siteData.cam = editedSite.cam;
       if (editedSite.cam_deposit) siteData.cam_deposit = editedSite.cam_deposit;
       if (editedSite.security_deposit) siteData.security_deposit = editedSite.security_deposit;
@@ -712,7 +1008,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
         }
       });
 
-      // Only new (locally picked) photos
       buildingPhotos
         .filter((p) => !p.isExisting)
         .forEach((photo, idx) => {
@@ -749,49 +1044,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
     }
   };
 
-  // ─── Reusable chip list renderer ───────────────────────────────────────────
-
-  const renderChipList = (
-    label: string,
-    hint: string,
-    placeholder: string,
-    currentInput: string,
-    onChangeInput: (v: string) => void,
-    entries: string[],
-    onAdd: () => void,
-    onRemove: (i: number) => void,
-  ) => (
-    <View style={styles.formGroup}>
-      <Text style={styles.formLabel}>{label}</Text>
-      {!!hint && <Text style={styles.fieldHint}>{hint}</Text>}
-      <TextInput
-        style={styles.input}
-        value={currentInput}
-        onChangeText={onChangeInput}
-        placeholder={placeholder}
-        placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-        onSubmitEditing={onAdd}
-        returnKeyType="done"
-        blurOnSubmit={false}
-      />
-      {entries.length > 0 && (
-        <View style={styles.floorEntriesContainer}>
-          {entries.map((entry, index) => (
-            <View key={index} style={styles.floorEntryBox}>
-              <Text style={styles.floorEntryText}>{entry}</Text>
-              <TouchableOpacity
-                onPress={() => onRemove(index)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="close-circle" size={20} color={WHATSAPP_COLORS.danger} />
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-
   // ─── Step Indicator ────────────────────────────────────────────────────────
 
   const renderStepIndicator = () => (
@@ -812,7 +1064,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
   );
 
   // ─── Step 0: Site Type ─────────────────────────────────────────────────────
-  // CHANGE 2: Metro station removed from here (moved to Step 1)
 
   const renderStep0 = () => (
     <View style={styles.stepContent}>
@@ -866,7 +1117,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
   );
 
   // ─── Step 1: Basic Information ─────────────────────────────────────────────
-  // CHANGE 2: Nearest Metro Station added here
 
   const renderStep1 = () => (
     <View style={styles.stepContent}>
@@ -935,7 +1185,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
         />
       </View>
 
-      {/* CHANGE 2: Metro station moved here from Step 0 */}
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>
           Nearest Metro Station{' '}
@@ -965,8 +1214,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
   );
 
   // ─── Step 2: Property Specifications ──────────────────────────────────────
-  // CHANGE 1: Total Area is chip-based
-  // CHANGE 3: Number of Units & Seats Per Unit are chip-based for Managed
 
   const renderStep2 = () => (
     <View style={styles.stepContent}>
@@ -1036,19 +1283,16 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
 
       {siteType === 'conventional' || siteType === 'for_sale' ? (
         <>
-          {/* CHANGE 1: Total Area as chip-based input */}
-          {renderChipList(
-            'Total Available Area',
-            'Supports numbers and text. Press Enter / Done to add each entry.',
-            'e.g., 50,000 sq ft or G+3 – 15,000 sq ft',
-            currentTotalAreaInput,
-            setCurrentTotalAreaInput,
-            totalAreaEntries,
-            totalAreaHandlers.add,
-            totalAreaHandlers.remove,
-          )}
+          {/* Total Available Area – EditableChipList */}
+          <EditableChipList
+            label="Total Available Area"
+            hint="Supports numbers and text. Tap ✏️ to edit any entry inline."
+            placeholder="e.g., 50,000 sq ft or G+3 – 15,000 sq ft"
+            chips={totalAreaChips}
+            onChange={setTotalAreaChips}
+          />
 
-          {/* area_per_floor = typical floor plate */}
+          {/* Area per floor – plain text (single value, no chips needed) */}
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>Area Per Floor — Typical Floor Plate (sq ft)</Text>
             <Text style={styles.fieldHint}>
@@ -1064,17 +1308,14 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
             />
           </View>
 
-          {/* floor_wise_area chips */}
-          {renderChipList(
-            'Floor-wise Availability',
-            'How much area is available on each specific floor. Press Enter / Done to add.',
-            'e.g., G – 10,000 sq ft',
-            currentFloorInput,
-            setCurrentFloorInput,
-            floorWiseAreaEntries,
-            floorHandlers.add,
-            floorHandlers.remove,
-          )}
+          {/* Floor-wise availability – EditableChipList */}
+          <EditableChipList
+            label="Floor-wise Availability"
+            hint="How much area is available on each specific floor. Tap ✏️ to edit any entry."
+            placeholder="e.g., G – 10,000 sq ft"
+            chips={floorWiseAreaChips}
+            onChange={setFloorWiseAreaChips}
+          />
 
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>Available Floors</Text>
@@ -1116,29 +1357,23 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
             </View>
           </View>
 
-          {/* CHANGE 3: Number of Units – chip-based */}
-          {renderChipList(
-            'Number of Units',
-            'Supports text and numbers. Press Enter / Done to add each floor entry.',
-            'e.g., Ground Floor – 10 units',
-            currentNumberOfUnitsInput,
-            setCurrentNumberOfUnitsInput,
-            numberOfUnitsEntries,
-            unitsHandlers.add,
-            unitsHandlers.remove,
-          )}
+          {/* Number of Units – EditableChipList */}
+          <EditableChipList
+            label="Number of Units"
+            hint="Supports text and numbers. Tap ✏️ to edit any entry inline."
+            placeholder="e.g., Ground Floor – 10 units"
+            chips={numberOfUnitsChips}
+            onChange={setNumberOfUnitsChips}
+          />
 
-          {/* CHANGE 3: Seats Per Unit – chip-based */}
-          {renderChipList(
-            'Seats Per Unit',
-            'Supports text and numbers. Press Enter / Done to add each entry.',
-            'e.g., 1st Floor – 8 seats per unit',
-            currentSeatsPerUnitInput,
-            setCurrentSeatsPerUnitInput,
-            seatsPerUnitEntries,
-            seatsPerUnitHandlers.add,
-            seatsPerUnitHandlers.remove,
-          )}
+          {/* Seats Per Unit – EditableChipList */}
+          <EditableChipList
+            label="Seats Per Unit"
+            hint="Supports text and numbers. Tap ✏️ to edit any entry inline."
+            placeholder="e.g., 1st Floor – 8 seats per unit"
+            chips={seatsPerUnitChips}
+            onChange={setSeatsPerUnitChips}
+          />
         </>
       )}
 
@@ -1157,7 +1392,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
   );
 
   // ─── Step 3: Commercial Details ────────────────────────────────────────────
-  // CHANGE 4: CAM allows alphabets – no formatCurrency, no keyboardType="numeric"
 
   const renderStep3 = () => (
     <View style={styles.stepContent}>
@@ -1210,7 +1444,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
             />
           </View>
           <View style={styles.halfWidth}>
-            {/* CHANGE 4: CAM – free text, no keyboardType numeric, no formatCurrency */}
             <Text style={styles.formLabel}>CAM</Text>
             <TextInput
               style={styles.input}
@@ -1236,7 +1469,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
               placeholderTextColor={WHATSAPP_COLORS.textTertiary}
             />
           </View>
-          {/* CHANGE 4: CAM – free text */}
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>CAM</Text>
             <TextInput
@@ -1912,15 +2144,11 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
-  // CHANGE 5: KeyboardAvoidingView wraps the full content area (below the header).
-  // This ensures the NavigationButtons are also lifted when the keyboard appears,
-  // and the ScrollView shrinks to keep the focused input visible on both iOS & Android.
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} />
 
-      {/* Fixed header – sits outside KeyboardAvoidingView intentionally */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -1933,14 +2161,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
         <View style={styles.headerSpacer} />
       </View>
 
-      {/*
-        CHANGE 5 – keyboard avoidance:
-        • iOS:     behavior="padding" adds bottom padding equal to keyboard height,
-                   which shrinks the ScrollView and keeps nav buttons above the keyboard.
-        • Android: behavior="height" reduces the KAV's own height, achieving the same effect.
-                   This is more reliable than relying on windowSoftInputMode="adjustResize"
-                   alone, which varies by Expo SDK version and device manufacturer.
-      */}
       <KeyboardAvoidingView
         style={styles.keyboardAvoidingWrapper}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1967,7 +2187,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
             </View>
           </ScrollView>
 
-          {/* Navigation buttons are INSIDE the KAV so they stay above the keyboard */}
           <View style={styles.navigationButtons}>
             {currentStep > 0 && (
               <TouchableOpacity
@@ -2025,7 +2244,6 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
         </View>
       </KeyboardAvoidingView>
 
-      {/* Modals rendered outside KAV to avoid layout interference */}
       <DropdownModal
         visible={showBuildingStatusDropdown}
         options={BUILDING_STATUS_OPTIONS}
@@ -2055,15 +2273,8 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  // Layout
-  container: {
-    flex: 1,
-    backgroundColor: '#075E54',
-  },
-  // CHANGE 5: replaces the old contentContainer that wrapped KAV
-  keyboardAvoidingWrapper: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: '#075E54' },
+  keyboardAvoidingWrapper: { flex: 1 },
   contentContainer: {
     flex: 1,
     backgroundColor: '#F5F5F5',
@@ -2071,15 +2282,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     overflow: 'hidden',
   },
-  scrollView: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  scrollContent: {
-    paddingBottom: 24,
-  },
-
-  // Header
+  scrollView: { flex: 1, backgroundColor: '#F5F5F5' },
+  scrollContent: { paddingBottom: 24 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2097,8 +2301,6 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-
-  // Step indicator
   stepIndicator: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -2121,8 +2323,6 @@ const styles = StyleSheet.create({
   stepNumberActive: { color: '#FFFFFF' },
   stepLine: { width: 20, height: 2, backgroundColor: '#E5E7EB' },
   stepLineActive: { backgroundColor: '#075E54' },
-
-  // Step content
   stepContent: { flex: 1 },
   stepTitle: { fontSize: 20, fontWeight: '700', color: '#1F2937', marginBottom: 4 },
   stepDescription: { fontSize: 14, color: '#6B7280', marginBottom: 16 },
@@ -2134,8 +2334,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 12,
   },
-
-  // Form
   formContainer: { padding: 16, flexGrow: 1 },
   formGroup: { marginBottom: 16, width: '100%' },
   formLabel: { fontSize: 12, fontWeight: '600', color: '#1F2937', marginBottom: 6 },
@@ -2153,8 +2351,6 @@ const styles = StyleSheet.create({
   textArea: { minHeight: 100, textAlignVertical: 'top' },
   row: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   halfWidth: { flex: 1 },
-
-  // Dropdowns
   dropdownButton: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2196,8 +2392,6 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E7EB',
   },
   dropdownOptionText: { fontSize: 14, color: '#1F2937' },
-
-  // Image source modal
   imageSourceContainer: {
     width: '100%',
     maxWidth: 400,
@@ -2219,8 +2413,6 @@ const styles = StyleSheet.create({
   imageSourceText: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginLeft: 12 },
   cancelButton: { paddingVertical: 12, alignItems: 'center', marginTop: 8 },
   cancelButtonText: { fontSize: 14, color: '#6B7280', fontWeight: '600' },
-
-  // Checkboxes
   checkboxContainer: { marginBottom: 16 },
   checkbox: { flexDirection: 'row', alignItems: 'center' },
   checkboxBox: {
@@ -2235,13 +2427,9 @@ const styles = StyleSheet.create({
   },
   checkboxBoxChecked: { backgroundColor: '#075E54', borderColor: '#075E54' },
   checkboxLabel: { fontSize: 14, color: '#1F2937', flex: 1 },
-
-  // Parking ratio
   ratioContainer: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ratioInput: { flex: 1, marginBottom: 0 },
   ratioSeparator: { fontSize: 18, fontWeight: '700', color: '#1F2937' },
-
-  // Rental escalation
   rentalEscalationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2263,24 +2451,6 @@ const styles = StyleSheet.create({
   periodButtonText: { fontSize: 12, color: '#6B7280' },
   periodButtonTextActive: { color: '#FFFFFF', fontWeight: '600' },
   helperText: { fontSize: 11, color: '#6B7280', marginTop: 4 },
-
-  // Chip entries (shared by floor-wise area, total area, units, seats-per-unit)
-  floorEntriesContainer: { marginTop: 12, gap: 8 },
-  floorEntryBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: '#075E54',
-    backgroundColor: 'rgba(7,94,84,0.05)',
-  },
-  floorEntryText: { fontSize: 14, color: '#1F2937', flex: 1, marginRight: 8 },
-
-  // Site type cards
   siteTypeContainer: { gap: 12 },
   siteTypeCard: {
     backgroundColor: '#FFFFFF',
@@ -2318,8 +2488,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  // Metro selector button
   metroSelectButton: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2334,8 +2502,6 @@ const styles = StyleSheet.create({
   metroSelectContent: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 8 },
   metroSelectText: { fontSize: 14, color: '#1F2937' },
   metroSelectPlaceholder: { color: '#9CA3AF' },
-
-  // Other amenities
   otherAmenityContainer: { marginBottom: 16 },
   otherAmenityRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   otherAmenityInputContainer: { flex: 1 },
@@ -2360,8 +2526,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   addOtherAmenityText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-
-  // Photo upload
   addPhotoButton: {
     backgroundColor: '#075E54',
     paddingVertical: 12,
@@ -2423,8 +2587,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   existingPhotoText: { color: '#FFFFFF', fontSize: 8, fontWeight: '700' },
-
-  // Navigation buttons (inside KAV – stays above keyboard)
   navigationButtons: {
     flexDirection: 'row',
     gap: 12,

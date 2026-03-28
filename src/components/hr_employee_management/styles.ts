@@ -1768,8 +1768,8 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   saveButton: {
-    backgroundColor: '#25D366',
-    shadowColor: '#25D366',
+    backgroundColor: WHATSAPP_COLORS.primary,
+    shadowColor: WHATSAPP_COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

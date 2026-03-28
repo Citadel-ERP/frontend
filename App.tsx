@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   Platform
 } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from './src/config/config';
@@ -782,46 +782,14 @@ function App(): React.JSX.Element {
         return <SplashScreen onSplashComplete={handleSplashComplete} />;
     }
   };
-
   return (
-    <SafeAreaProvider>
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaProvider style={{ backgroundColor: '#FFFFFF' }}>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: colors.buttonsBackground }}
+        edges={['bottom']}
+      >
         {renderScreen()}
-      </View>
-
-      {/* {__DEV__ && showDevMenu && (
-        <TouchableOpacity
-          style={{
-            position: 'absolute',
-            bottom: 100,
-            right: 20,
-            width: 60,
-            height: 60,
-            borderRadius: 30,
-            backgroundColor: '#3B82F6',
-            alignItems: 'center',
-            justifyContent: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 8,
-            zIndex: 9999,
-          }}
-          onPress={async () => {
-            await ConfigValidator.runValidation();
-            Alert.alert(
-              'System Validation',
-              'Check console for results. Access full report via Menu → System Validation',
-              [{ text: 'OK' }]
-            );
-          }}
-        >
-          <View>
-            <Text style={{ color: 'white', fontSize: 24 }}>🔍</Text>
-          </View>
-        </TouchableOpacity>
-      )} */}
+      </SafeAreaView>
     </SafeAreaProvider>
   );
 }

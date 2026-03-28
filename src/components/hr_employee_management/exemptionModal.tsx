@@ -372,7 +372,7 @@ const ExemptionModal: React.FC<ExemptionModalProps> = ({
   // ── Derived config ──
   const isAttendance = exemptionType === 'attendance';
   const title = isAttendance ? 'Attendance Exemptions' : 'Geofence Exemptions';
-  const accentColor = isAttendance ? '#4CAF50' : '#2196F3';
+  const accentColor = WHATSAPP_COLORS.primary ;
   const getAllEndpoint = isAttendance
     ? `${BACKEND_URL}/manager/getAllAttendanceExemptions`
     : `${BACKEND_URL}/manager/getAllGeofenceExemptions`;

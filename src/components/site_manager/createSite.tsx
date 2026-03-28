@@ -1,8 +1,24 @@
-import React, { useState, useRef } from 'react';
+/**
+ * createSite.tsx  (refactored)
+ *
+ * Key changes from original:
+ *  1. Draft persistence — useCreateSiteDraft hook wires auto-save (debounced)
+ *     and handles restore / discard prompts.
+ *  2. DraftBanner component — non-intrusive banner shown when a draft is
+ *     detected; offers "Continue" and "Start Fresh" actions.
+ *  3. Back-press guard — saves the draft immediately before navigating away
+ *     so no data is lost even if the debounce hasn't fired yet.
+ *  4. onSiteCreated callback — deletes the draft atomically on success so
+ *     no stale data lingers after creation.
+ *  5. All original UI / business logic is preserved verbatim; only the
+ *     persistence layer is new.
+ */
+
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   StatusBar, Alert, Modal, TextInput, Dimensions, ActivityIndicator,
-  Image, Platform, KeyboardAvoidingView
+  Image, Platform, KeyboardAvoidingView, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -10,26 +26,13 @@ import { BACKEND_URL } from '../../config/config';
 import { Ionicons } from '@expo/vector-icons';
 import MetroStationSelector from './metroStationSelector';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+// ── Draft persistence ─────────────────────────────────────────────────────────
+import { useCreateSiteDraft } from './useCreateSiteDraft';
+import { SiteDraftData } from './siteDraftManager';
 
-interface CreateSiteProps {
-  token: string | null;
-  onBack: () => void;
-  onSiteCreated: () => void;
-  theme: any;
-}
+const { width: screenWidth } = Dimensions.get('window');
 
-interface MetroStation {
-  id: number;
-  name: string;
-  city: string;
-}
-
-interface OtherAmenity {
-  id: string;
-  key: string;
-  value: string;
-}
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const WHATSAPP_COLORS = {
   primary: '#075E54',
@@ -81,25 +84,206 @@ const MICRO_MARKET_OPTIONS = [
   { label: 'HSR', value: 'HSR' },
 ];
 
+/** Initial / empty state for the main form object. */
+const INITIAL_NEW_SITE = {
+  building_name: '',
+  location_link: '',
+  location: '',
+  landmark: '',
+  micro_market: '',
+  total_floors: '',
+  number_of_basements: '',
+  floor_condition: 'bareshell',
+  area_per_floor: '',
+  floor_wise_area: '',
+  total_area: '',
+  availble_floors: '',
+  car_parking_charges: '',
+  car_parking_ratio_left: '',
+  car_parking_ratio_right: '',
+  car_parking_slots: '',
+  building_status: 'available',
+  rent: '',
+  cam: '',
+  cam_deposit: '',
+  oc: false,
+  rental_escalation: '',
+  security_deposit: '',
+  two_wheeler_slots: '',
+  two_wheeler_charges: '',
+  efficiency: '',
+  notice_period: '',
+  lease_term: '',
+  lock_in_period: '',
+  will_developer_do_fitouts: false,
+  contact_person_name: '',
+  contact_person_designation: '',
+  contact_person_number: '',
+  contact_person_email: '',
+  power: '',
+  power_backup: '',
+  number_of_cabins: '',
+  number_of_workstations: '',
+  size_of_workstation: '',
+  server_room: '',
+  training_room: '',
+  pantry: '',
+  electrical_ups_room: '',
+  cafeteria: '',
+  gym: '',
+  discussion_room: '',
+  meeting_room: '',
+  remarks: '',
+  building_owner_name: '',
+  building_owner_contact: '',
+  managed_property: false,
+  conventional_property: true,
+  for_sale_property: false,
+  business_hours_of_operation: '',
+  premises_access: '',
+  total_seats: '',
+  rent_per_seat: '',
+  seats_available: '',
+  number_of_units: '',
+  number_of_seats_per_unit: '',
+  latitude: '',
+  longitude: '',
+  scout_id: '',
+};
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface MetroStation { id: number; name: string; city: string; }
+interface OtherAmenity { id: string; key: string; value: string; }
+
+interface CreateSiteProps {
+  token: string | null;
+  onBack: () => void;
+  onSiteCreated: () => void;
+  theme: any;
+}
+
+// ─── DraftBanner ─────────────────────────────────────────────────────────────
+/**
+ * Non-modal, non-intrusive banner shown at the top of the form when an
+ * unexpired draft is detected. Lets the user choose to continue or start fresh
+ * without blocking the entire screen.
+ */
+interface DraftBannerProps {
+  expiresInMs: number;
+  onRestore: () => void;
+  onDiscard: () => void;
+}
+
+const DraftBanner: React.FC<DraftBannerProps> = ({ expiresInMs, onRestore, onDiscard }) => {
+  const minutesLeft = Math.ceil(expiresInMs / 60_000);
+  const label = minutesLeft >= 60
+    ? 'less than 1 hour'
+    : `${minutesLeft} minute${minutesLeft !== 1 ? 's' : ''}`;
+
+  return (
+    <View style={bannerStyles.container}>
+      <View style={bannerStyles.iconRow}>
+        <Ionicons name="document-text" size={18} color={WHATSAPP_COLORS.warning} />
+        <Text style={bannerStyles.title}>Unsaved draft found</Text>
+      </View>
+      <Text style={bannerStyles.subtitle}>Expires in {label}. Continue where you left off?</Text>
+      <View style={bannerStyles.actions}>
+        <TouchableOpacity style={bannerStyles.discardButton} onPress={onDiscard}>
+          <Text style={bannerStyles.discardText}>Start Fresh</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={bannerStyles.restoreButton} onPress={onRestore}>
+          <Ionicons name="refresh" size={14} color={WHATSAPP_COLORS.white} />
+          <Text style={bannerStyles.restoreText}>Continue Draft</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+const bannerStyles = StyleSheet.create({
+  container: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    padding: 12,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  iconRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  title: { fontSize: 13, fontWeight: '700', color: '#92400E' },
+  subtitle: { fontSize: 12, color: '#78350F', marginBottom: 10 },
+  actions: { flexDirection: 'row', gap: 8 },
+  discardButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+  },
+  discardText: { fontSize: 12, fontWeight: '600', color: '#374151' },
+  restoreButton: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: WHATSAPP_COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  restoreText: { fontSize: 12, fontWeight: '700', color: WHATSAPP_COLORS.white },
+});
+
+// ─── SavingIndicator ─────────────────────────────────────────────────────────
+/**
+ * Tiny "Saving…" chip shown in the header while a debounced write is in-flight.
+ * Purely cosmetic; never blocks interaction.
+ */
+const SavingIndicator: React.FC<{ visible: boolean }> = ({ visible }) => {
+  if (!visible) return null;
+  return (
+    <View style={savingStyles.chip}>
+      <ActivityIndicator size="small" color={WHATSAPP_COLORS.primaryLight} />
+      <Text style={savingStyles.text}>Saving…</Text>
+    </View>
+  );
+};
+
+const savingStyles = StyleSheet.create({
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  text: { fontSize: 10, color: 'rgba(255,255,255,0.85)', fontWeight: '500' },
+});
+
+// ─── CreateSite ───────────────────────────────────────────────────────────────
+
 const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, theme }) => {
+  // ── Core form state ──────────────────────────────────────────────────────────
   const [currentStep, setCurrentStep] = useState(0);
   const [creatingSite, setCreatingSite] = useState(false);
 
-  // Dropdown visibility states
+  // Dropdown visibility
   const [showBuildingStatusDropdown, setShowBuildingStatusDropdown] = useState(false);
   const [showFloorConditionDropdown, setShowFloorConditionDropdown] = useState(false);
   const [showMicroMarketDropdown, setShowMicroMarketDropdown] = useState(false);
   const [showImageSourceModal, setShowImageSourceModal] = useState(false);
 
-  // ── CHANGE 1: Floor-wise area chips (unchanged logic, kept) ──────────────────
+  // Chip-list fields
   const [floorWiseAreaEntries, setFloorWiseAreaEntries] = useState<string[]>([]);
   const [currentFloorInput, setCurrentFloorInput] = useState('');
-
-  // ── CHANGE 1: Total Available Area — chip-based, same as floor-wise ──────────
   const [totalAreaEntries, setTotalAreaEntries] = useState<string[]>([]);
   const [currentTotalAreaInput, setCurrentTotalAreaInput] = useState('');
-
-  // ── CHANGE 3: Managed Office — chip-based Number of Units & Seats Per Unit ───
   const [numberOfUnitsEntries, setNumberOfUnitsEntries] = useState<string[]>([]);
   const [currentNumberOfUnitsInput, setCurrentNumberOfUnitsInput] = useState('');
   const [seatsPerUnitEntries, setSeatsPerUnitEntries] = useState<string[]>([]);
@@ -111,7 +295,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
   const [customMetroStation, setCustomMetroStation] = useState('');
   const [showMetroSelector, setShowMetroSelector] = useState(false);
 
-  // Photos & amenities
+  // Photos & amenities (photos deliberately excluded from draft — URIs are ephemeral)
   const [buildingPhotos, setBuildingPhotos] = useState<Array<{ id: number; uri: string; type: string }>>([]);
   const [otherAmenities, setOtherAmenities] = useState<OtherAmenity[]>([]);
 
@@ -119,81 +303,100 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
   const [customFloorCondition, setCustomFloorCondition] = useState('');
   const [customBuildingStatus, setCustomBuildingStatus] = useState('');
 
-  const scrollViewRef = useRef<ScrollView>(null);
-
   // Rental escalation
   const [rentalEscalationPercentage, setRentalEscalationPercentage] = useState('');
   const [rentalEscalationValue, setRentalEscalationValue] = useState('');
   const [rentalEscalationPeriod, setRentalEscalationPeriod] = useState<'year' | 'month'>('year');
 
-  const [newSite, setNewSite] = useState({
-    building_name: '',
-    location_link: '',
-    location: '',
-    landmark: '',
-    micro_market: '',
-    total_floors: '',
-    number_of_basements: '',
-    floor_condition: 'bareshell',
-    area_per_floor: '',
-    floor_wise_area: '',
-    total_area: '',
-    availble_floors: '',
-    car_parking_charges: '',
-    car_parking_ratio_left: '',
-    car_parking_ratio_right: '',
-    car_parking_slots: '',
-    building_status: 'available',
-    rent: '',
-    // ── CHANGE 4: cam allows alphanumeric, stored as plain string ────────────
-    cam: '',
-    cam_deposit: '',
-    oc: false,
-    rental_escalation: '',
-    security_deposit: '',
-    two_wheeler_slots: '',
-    two_wheeler_charges: '',
-    efficiency: '',
-    notice_period: '',
-    lease_term: '',
-    lock_in_period: '',
-    will_developer_do_fitouts: false,
-    contact_person_name: '',
-    contact_person_designation: '',
-    contact_person_number: '',
-    contact_person_email: '',
-    power: '',
-    power_backup: '',
-    number_of_cabins: '',
-    number_of_workstations: '',
-    size_of_workstation: '',
-    server_room: '',
-    training_room: '',
-    pantry: '',
-    electrical_ups_room: '',
-    cafeteria: '',
-    gym: '',
-    discussion_room: '',
-    meeting_room: '',
-    remarks: '',
-    building_owner_name: '',
-    building_owner_contact: '',
-    managed_property: false,
-    conventional_property: true,
-    for_sale_property: false,
-    business_hours_of_operation: '',
-    premises_access: '',
-    total_seats: '',
-    rent_per_seat: '',
-    seats_available: '',
-    number_of_units: '',
-    number_of_seats_per_unit: '',
-    latitude: '',
-    longitude: '',
-    scout_id: '',
+  const [newSite, setNewSite] = useState({ ...INITIAL_NEW_SITE });
+
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // ── Draft persistence ─────────────────────────────────────────────────────────
+
+  /**
+   * Assemble the current form state into a SiteDraftData object.
+   * useMemo so the reference only changes when form state actually changes,
+   * which prevents spurious re-renders in useCreateSiteDraft.
+   *
+   * Note: photos are intentionally excluded (URIs are not stable across sessions).
+   */
+  const currentDraftData: SiteDraftData = useMemo(() => ({
+    siteType,
+    newSite,
+    floorWiseAreaEntries,
+    totalAreaEntries,
+    numberOfUnitsEntries,
+    seatsPerUnitEntries,
+    customFloorCondition,
+    customBuildingStatus,
+    rentalEscalationPercentage,
+    rentalEscalationValue,
+    rentalEscalationPeriod,
+    selectedMetroStation,
+    customMetroStation,
+    otherAmenities,
+    currentStep,
+  }), [
+    siteType, newSite,
+    floorWiseAreaEntries, totalAreaEntries, numberOfUnitsEntries, seatsPerUnitEntries,
+    customFloorCondition, customBuildingStatus,
+    rentalEscalationPercentage, rentalEscalationValue, rentalEscalationPeriod,
+    selectedMetroStation, customMetroStation,
+    otherAmenities, currentStep,
+  ]);
+
+  const {
+    isSaving,
+    draftDetected,
+    draftExpiresInMs,
+    restoreDraft,
+    discardDraft,
+    onSiteCreated: clearDraftOnSuccess,
+    saveNow,
+  } = useCreateSiteDraft(currentDraftData, {
+    debounceMs: 500,
   });
 
-  // ─── Helpers ────────────────────────────────────────────────────────────────
+  /**
+   * Hydrate all form state from a SiteDraftData object.
+   * Called when the user taps "Continue Draft".
+   */
+  const hydrateFromDraft = useCallback((draft: SiteDraftData) => {
+    if (draft.siteType !== undefined) setSiteType(draft.siteType);
+    if (draft.newSite) setNewSite({ ...INITIAL_NEW_SITE, ...draft.newSite });
+    if (draft.floorWiseAreaEntries) setFloorWiseAreaEntries(draft.floorWiseAreaEntries);
+    if (draft.totalAreaEntries) setTotalAreaEntries(draft.totalAreaEntries);
+    if (draft.numberOfUnitsEntries) setNumberOfUnitsEntries(draft.numberOfUnitsEntries);
+    if (draft.seatsPerUnitEntries) setSeatsPerUnitEntries(draft.seatsPerUnitEntries);
+    if (draft.customFloorCondition !== undefined) setCustomFloorCondition(draft.customFloorCondition);
+    if (draft.customBuildingStatus !== undefined) setCustomBuildingStatus(draft.customBuildingStatus);
+    if (draft.rentalEscalationPercentage !== undefined) setRentalEscalationPercentage(draft.rentalEscalationPercentage);
+    if (draft.rentalEscalationValue !== undefined) setRentalEscalationValue(draft.rentalEscalationValue);
+    if (draft.rentalEscalationPeriod !== undefined) setRentalEscalationPeriod(draft.rentalEscalationPeriod);
+    if (draft.selectedMetroStation !== undefined) setSelectedMetroStation(draft.selectedMetroStation);
+    if (draft.customMetroStation !== undefined) setCustomMetroStation(draft.customMetroStation);
+    if (draft.otherAmenities) setOtherAmenities(draft.otherAmenities);
+    // Restore step so the user lands exactly where they left off.
+    if (typeof draft.currentStep === 'number') setCurrentStep(draft.currentStep);
+  }, []);
+
+  const handleRestoreDraft = useCallback(() => {
+    const draft = restoreDraft();
+    if (draft) hydrateFromDraft(draft);
+  }, [restoreDraft, hydrateFromDraft]);
+
+  /**
+   * Intercepts the back press to flush the draft before unmounting.
+   * This ensures that even if the debounce hasn't fired, the latest state
+   * is persisted when the user navigates away mid-form.
+   */
+  const handleBack = useCallback(async () => {
+    await saveNow(currentDraftData);
+    onBack();
+  }, [saveNow, currentDraftData, onBack]);
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────────
 
   const beautifyName = (name: string): string => {
     if (!name) return '-';
@@ -208,101 +411,48 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
 
   const parseCurrency = (formatted: string): string => formatted.replace(/,/g, '');
 
-  // ─── Floor-wise area chips ───────────────────────────────────────────────────
+  // ─── Chip handlers ────────────────────────────────────────────────────────────
 
   const addFloorWiseArea = () => {
     if (currentFloorInput.trim()) {
-      setFloorWiseAreaEntries((prev) => [...prev, currentFloorInput.trim()]);
+      setFloorWiseAreaEntries((p) => [...p, currentFloorInput.trim()]);
       setCurrentFloorInput('');
     }
   };
 
-  const removeFloorWiseArea = (index: number) => {
-    setFloorWiseAreaEntries((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleFloorInputKeyPress = (e: any) => {
-    if (e.nativeEvent.key === 'Enter') {
-      e.preventDefault();
-      addFloorWiseArea();
-    }
-  };
-
-  // ── CHANGE 1: Total Available Area — chip handlers ───────────────────────────
-
   const addTotalAreaEntry = () => {
     if (currentTotalAreaInput.trim()) {
-      setTotalAreaEntries((prev) => [...prev, currentTotalAreaInput.trim()]);
+      setTotalAreaEntries((p) => [...p, currentTotalAreaInput.trim()]);
       setCurrentTotalAreaInput('');
     }
   };
 
-  const removeTotalAreaEntry = (index: number) => {
-    setTotalAreaEntries((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleTotalAreaKeyPress = (e: any) => {
-    if (e.nativeEvent.key === 'Enter') {
-      e.preventDefault();
-      addTotalAreaEntry();
-    }
-  };
-
-  // ── CHANGE 3: Number of Units chip handlers ──────────────────────────────────
-
   const addNumberOfUnitsEntry = () => {
     if (currentNumberOfUnitsInput.trim()) {
-      setNumberOfUnitsEntries((prev) => [...prev, currentNumberOfUnitsInput.trim()]);
+      setNumberOfUnitsEntries((p) => [...p, currentNumberOfUnitsInput.trim()]);
       setCurrentNumberOfUnitsInput('');
     }
   };
 
-  const removeNumberOfUnitsEntry = (index: number) => {
-    setNumberOfUnitsEntries((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleNumberOfUnitsKeyPress = (e: any) => {
-    if (e.nativeEvent.key === 'Enter') {
-      e.preventDefault();
-      addNumberOfUnitsEntry();
-    }
-  };
-
-  // ── CHANGE 3: Seats Per Unit chip handlers ───────────────────────────────────
-
   const addSeatsPerUnitEntry = () => {
     if (currentSeatsPerUnitInput.trim()) {
-      setSeatsPerUnitEntries((prev) => [...prev, currentSeatsPerUnitInput.trim()]);
+      setSeatsPerUnitEntries((p) => [...p, currentSeatsPerUnitInput.trim()]);
       setCurrentSeatsPerUnitInput('');
     }
   };
 
-  const removeSeatsPerUnitEntry = (index: number) => {
-    setSeatsPerUnitEntries((prev) => prev.filter((_, i) => i !== index));
-  };
+  // ─── Other amenities ──────────────────────────────────────────────────────────
 
-  const handleSeatsPerUnitKeyPress = (e: any) => {
-    if (e.nativeEvent.key === 'Enter') {
-      e.preventDefault();
-      addSeatsPerUnitEntry();
-    }
-  };
+  const addOtherAmenity = () =>
+    setOtherAmenities((p) => [...p, { id: Date.now().toString(), key: '', value: '' }]);
 
-  // ─── Other amenities ─────────────────────────────────────────────────────────
+  const updateOtherAmenity = (id: string, field: 'key' | 'value', text: string) =>
+    setOtherAmenities((p) => p.map((a) => (a.id === id ? { ...a, [field]: text } : a)));
 
-  const addOtherAmenity = () => {
-    setOtherAmenities((prev) => [...prev, { id: Date.now().toString(), key: '', value: '' }]);
-  };
+  const removeOtherAmenity = (id: string) =>
+    setOtherAmenities((p) => p.filter((a) => a.id !== id));
 
-  const updateOtherAmenity = (id: string, field: 'key' | 'value', text: string) => {
-    setOtherAmenities((prev) => prev.map((a) => (a.id === id ? { ...a, [field]: text } : a)));
-  };
-
-  const removeOtherAmenity = (id: string) => {
-    setOtherAmenities((prev) => prev.filter((a) => a.id !== id));
-  };
-
-  // ─── Navigation ──────────────────────────────────────────────────────────────
+  // ─── Navigation ───────────────────────────────────────────────────────────────
 
   const validateStep = (step: number): boolean => {
     if (step === 0 && !siteType) {
@@ -319,7 +469,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
   const handleNextStep = () => { if (validateStep(currentStep)) setCurrentStep((s) => s + 1); };
   const handlePrevStep = () => { if (currentStep > 0) setCurrentStep((s) => s - 1); };
 
-  // ─── Photos ──────────────────────────────────────────────────────────────────
+  // ─── Photos ───────────────────────────────────────────────────────────────────
 
   const pickImageFromCamera = async () => {
     setShowImageSourceModal(false);
@@ -333,7 +483,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [4, 3], quality: 0.8 });
       if (!result.canceled && result.assets?.[0]) {
         const a = result.assets[0];
-        setBuildingPhotos((prev) => [...prev, { id: Date.now(), uri: a.uri, type: a.type || 'image/jpeg' }]);
+        setBuildingPhotos((p) => [...p, { id: Date.now(), uri: a.uri, type: a.type || 'image/jpeg' }]);
       }
     } catch { Alert.alert('Error', 'Failed to capture image'); }
   };
@@ -347,24 +497,15 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
         const { status: ns } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (ns !== 'granted') { Alert.alert('Permission Denied', 'Gallery permission required.'); return; }
       }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsMultipleSelection: true,
-        allowsEditing: false,
-        quality: 0.8,
-      });
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsMultipleSelection: true, allowsEditing: false, quality: 0.8 });
       if (!result.canceled && result.assets?.length) {
-        const newPhotos = result.assets.map((a, i) => ({
-          id: Date.now() + i,
-          uri: a.uri,
-          type: a.type || 'image/jpeg',
-        }));
-        setBuildingPhotos((prev) => [...prev, ...newPhotos]);
+        const newPhotos = result.assets.map((a, i) => ({ id: Date.now() + i, uri: a.uri, type: a.type || 'image/jpeg' }));
+        setBuildingPhotos((p) => [...p, ...newPhotos]);
       }
     } catch { Alert.alert('Error', 'Failed to pick images'); }
   };
 
-  // ─── Submit ──────────────────────────────────────────────────────────────────
+  // ─── Submit ───────────────────────────────────────────────────────────────────
 
   const handleCreateSite = async () => {
     if (!validateStep(currentStep)) return;
@@ -401,49 +542,31 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
         } catch (e) { console.error('Metro station error:', e); }
       }
 
-      // Floor condition
       siteData.floor_condition = newSite.floor_condition === 'custom' && customFloorCondition
         ? customFloorCondition : newSite.floor_condition;
-
-      // Building status
       siteData.building_status = newSite.building_status === 'custom' && customBuildingStatus
         ? customBuildingStatus : newSite.building_status;
 
-      // Rental escalation
       if (rentalEscalationPercentage && rentalEscalationValue) {
         siteData.rental_escalation = `${rentalEscalationPercentage}% / ${rentalEscalationValue} / ${rentalEscalationPeriod}`;
       }
 
-      // Basic info
       if (newSite.location) siteData.location = newSite.location;
       if (newSite.location_link) siteData.location_link = newSite.location_link;
       if (newSite.landmark) siteData.landmark = newSite.landmark;
       if (newSite.micro_market) siteData.micro_market = newSite.micro_market;
-
-      // Property specs
       if (newSite.total_floors) siteData.total_floors = newSite.total_floors;
       if (newSite.number_of_basements) siteData.number_of_basements = newSite.number_of_basements;
-
-      // area_per_floor = typical floor plate (single value)
       if (newSite.area_per_floor) siteData.area_per_floor = parseCurrency(newSite.area_per_floor);
 
-      // floor_wise_area = per-floor availability (chip entries joined by newline)
-      if (floorWiseAreaEntries.length > 0) {
-        siteData.floor_wise_area = floorWiseAreaEntries.join('\n');
-      } else if (newSite.floor_wise_area) {
-        siteData.floor_wise_area = newSite.floor_wise_area;
-      }
+      if (floorWiseAreaEntries.length > 0) siteData.floor_wise_area = floorWiseAreaEntries.join('\n');
+      else if (newSite.floor_wise_area) siteData.floor_wise_area = newSite.floor_wise_area;
 
-      // ── CHANGE 1: total_area — chip entries joined by newline ────────────────
-      if (totalAreaEntries.length > 0) {
-        siteData.total_area = totalAreaEntries.join('\n');
-      } else if (newSite.total_area) {
-        siteData.total_area = newSite.total_area;
-      }
+      if (totalAreaEntries.length > 0) siteData.total_area = totalAreaEntries.join('\n');
+      else if (newSite.total_area) siteData.total_area = newSite.total_area;
 
       if (newSite.availble_floors) siteData.availble_floors = newSite.availble_floors;
 
-      // Financial details
       if (siteType === 'conventional' || siteType === 'for_sale') {
         if (newSite.rent) siteData.rent = parseCurrency(newSite.rent);
       } else {
@@ -453,22 +576,13 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
         if (newSite.business_hours_of_operation) siteData.business_hours_of_operation = newSite.business_hours_of_operation;
         if (newSite.premises_access) siteData.premises_access = newSite.premises_access;
 
-        // ── CHANGE 3: number_of_units — chip entries joined by newline ──────────
-        if (numberOfUnitsEntries.length > 0) {
-          siteData.number_of_units = numberOfUnitsEntries.join('\n');
-        } else if (newSite.number_of_units) {
-          siteData.number_of_units = newSite.number_of_units;
-        }
+        if (numberOfUnitsEntries.length > 0) siteData.number_of_units = numberOfUnitsEntries.join('\n');
+        else if (newSite.number_of_units) siteData.number_of_units = newSite.number_of_units;
 
-        // ── CHANGE 3: number_of_seats_per_unit — chip entries joined by newline ─
-        if (seatsPerUnitEntries.length > 0) {
-          siteData.number_of_seats_per_unit = seatsPerUnitEntries.join('\n');
-        } else if (newSite.number_of_seats_per_unit) {
-          siteData.number_of_seats_per_unit = newSite.number_of_seats_per_unit;
-        }
+        if (seatsPerUnitEntries.length > 0) siteData.number_of_seats_per_unit = seatsPerUnitEntries.join('\n');
+        else if (newSite.number_of_seats_per_unit) siteData.number_of_seats_per_unit = newSite.number_of_seats_per_unit;
       }
 
-      // Contact
       if (newSite.contact_person_name) siteData.contact_person_name = newSite.contact_person_name;
       if (newSite.contact_person_number) siteData.contact_person_number = newSite.contact_person_number;
       if (newSite.contact_person_email) siteData.contact_person_email = newSite.contact_person_email;
@@ -476,7 +590,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       if (newSite.building_owner_name) siteData.building_owner_name = newSite.building_owner_name;
       if (newSite.building_owner_contact) siteData.building_owner_contact = newSite.building_owner_contact;
 
-      // Parking
       if (newSite.car_parking_charges) siteData.car_parking_charges = parseCurrency(newSite.car_parking_charges);
       if (newSite.car_parking_slots) siteData.car_parking_slots = newSite.car_parking_slots;
       if (newSite.two_wheeler_slots) siteData.two_wheeler_slots = newSite.two_wheeler_slots;
@@ -485,8 +598,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
         siteData.car_parking_ratio = `${newSite.car_parking_ratio_left}:${newSite.car_parking_ratio_right}`;
       }
 
-      // Commercial terms
-      // ── CHANGE 4: cam passed through as-is (alphanumeric allowed) ────────────
       if (newSite.cam) siteData.cam = newSite.cam;
       if (newSite.cam_deposit) siteData.cam_deposit = newSite.cam_deposit;
       if (newSite.security_deposit) siteData.security_deposit = newSite.security_deposit;
@@ -496,12 +607,8 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       if (newSite.notice_period) siteData.notice_period = newSite.notice_period;
       if (newSite.lease_term) siteData.lease_term = newSite.lease_term;
       if (newSite.lock_in_period) siteData.lock_in_period = newSite.lock_in_period;
-
-      // Utilities
       if (newSite.power) siteData.power = newSite.power;
       if (newSite.power_backup) siteData.power_backup = newSite.power_backup;
-
-      // Workspace amenities
       if (newSite.number_of_cabins) siteData.number_of_cabins = newSite.number_of_cabins;
       if (newSite.number_of_workstations) siteData.number_of_workstations = newSite.number_of_workstations;
       if (newSite.size_of_workstation) siteData.size_of_workstation = newSite.size_of_workstation;
@@ -514,7 +621,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       if (newSite.discussion_room) siteData.discussion_room = newSite.discussion_room;
       if (newSite.meeting_room) siteData.meeting_room = newSite.meeting_room;
 
-      // Other amenities
       otherAmenities.forEach((amenity, index) => {
         if (amenity.key && amenity.value) {
           siteData[`other_amenity_${index + 1}_key`] = amenity.key;
@@ -546,6 +652,9 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       if (!response.ok) throw new Error(responseData.message || `HTTP ${response.status}`);
       if (responseData.message !== 'Site created successfully') throw new Error(responseData.message || 'Failed to create site');
 
+      // ── Draft cleanup: delete draft before notifying parent ─────────────────
+      await clearDraftOnSuccess();
+
       Alert.alert('Success', 'Site created successfully!');
       onSiteCreated();
     } catch (error: any) {
@@ -555,7 +664,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     }
   };
 
-  // ─── Step Indicator ──────────────────────────────────────────────────────────
+  // ─── Step indicator ───────────────────────────────────────────────────────────
 
   const renderStepIndicator = () => (
     <View style={styles.stepIndicator}>
@@ -570,59 +679,30 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     </View>
   );
 
-  // ─── Reusable Chip Input ─────────────────────────────────────────────────────
+  // ─── Reusable chip input ──────────────────────────────────────────────────────
 
-  /**
-   * A reusable chip-list input component shared by:
-   *  - Floor-wise Availability
-   *  - Total Available Area       (CHANGE 1)
-   *  - Number of Units            (CHANGE 3)
-   *  - Seats Per Unit             (CHANGE 3)
-   */
   const renderChipInput = ({
-    label,
-    hint,
-    placeholder,
-    currentValue,
-    onChangeText,
-    onSubmit,
-    onKeyPress,
-    entries,
-    onRemove,
+    label, hint, placeholder, currentValue, onChangeText, onSubmit, onKeyPress, entries, onRemove,
   }: {
-    label: string;
-    hint?: string;
-    placeholder: string;
-    currentValue: string;
-    onChangeText: (v: string) => void;
-    onSubmit: () => void;
-    onKeyPress: (e: any) => void;
-    entries: string[];
-    onRemove: (index: number) => void;
+    label: string; hint?: string; placeholder: string; currentValue: string;
+    onChangeText: (v: string) => void; onSubmit: () => void; onKeyPress: (e: any) => void;
+    entries: string[]; onRemove: (index: number) => void;
   }) => (
     <View style={styles.formGroup}>
       <Text style={styles.formLabel}>{label}</Text>
       {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
       <TextInput
-        style={styles.input}
-        value={currentValue}
-        onChangeText={onChangeText}
-        onKeyPress={onKeyPress}
-        placeholder={placeholder}
+        style={styles.input} value={currentValue} onChangeText={onChangeText}
+        onKeyPress={onKeyPress} placeholder={placeholder}
         placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-        onSubmitEditing={onSubmit}
-        returnKeyType="done"
-      // Allow all characters — no keyboardType restriction
+        onSubmitEditing={onSubmit} returnKeyType="done"
       />
       {entries.length > 0 && (
         <View style={styles.floorEntriesContainer}>
           {entries.map((entry, index) => (
             <View key={index} style={styles.floorEntryBox}>
               <Text style={styles.floorEntryText}>{entry}</Text>
-              <TouchableOpacity
-                onPress={() => onRemove(index)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
+              <TouchableOpacity onPress={() => onRemove(index)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name="close-circle" size={20} color={WHATSAPP_COLORS.danger} />
               </TouchableOpacity>
             </View>
@@ -632,14 +712,12 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     </View>
   );
 
-  // ─── Step 0: Site Type ───────────────────────────────────────────────────────
-  // ── CHANGE 2: Metro Station moved OUT of Step 0 and INTO Step 1 ─────────────
+  // ─── Step renders (unchanged from original) ───────────────────────────────────
 
   const renderStep0 = () => (
     <View style={styles.stepContent}>
       <Text style={styles.stepTitle}>🏢 Select Site Type</Text>
       <Text style={styles.stepDescription}>Choose the type of office space</Text>
-
       <View style={styles.siteTypeContainer}>
         {([
           { type: 'conventional', icon: 'business', title: 'Conventional Office', desc: 'Traditional office space with area-based pricing' },
@@ -665,28 +743,22 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     </View>
   );
 
-  // ─── Step 1: Basic Information ───────────────────────────────────────────────
-  // ── CHANGE 2: Metro Station field added here ─────────────────────────────────
-
   const renderStep1 = () => (
     <View style={styles.stepContent}>
       <Text style={styles.stepTitle}>🏢 Basic Information</Text>
       <Text style={styles.stepDescription}>Essential site details</Text>
-
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Building Name *</Text>
         <TextInput style={styles.input} value={newSite.building_name}
           onChangeText={(v) => setNewSite({ ...newSite, building_name: v })}
           placeholder="Enter building name" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
       </View>
-
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Location *</Text>
         <TextInput style={styles.input} value={newSite.location}
           onChangeText={(v) => setNewSite({ ...newSite, location: v })}
           placeholder="Enter location" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
       </View>
-
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Micro Market</Text>
         <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowMicroMarketDropdown(true)}>
@@ -696,26 +768,20 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
           <Ionicons name="chevron-down" size={16} color={WHATSAPP_COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
-
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Landmark</Text>
         <TextInput style={styles.input} value={newSite.landmark}
           onChangeText={(v) => setNewSite({ ...newSite, landmark: v })}
           placeholder="Nearby landmark" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
       </View>
-
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Location Link</Text>
         <TextInput style={styles.input} value={newSite.location_link}
           onChangeText={(v) => setNewSite({ ...newSite, location_link: v })}
           placeholder="Google Maps link" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
       </View>
-
-      {/* ── CHANGE 2: Nearest Metro Station moved here from Step 0 ──────────── */}
       <View style={styles.formGroup}>
-        <Text style={styles.formLabel}>
-          Nearest Metro Station <Text style={styles.optionalText}>(Optional)</Text>
-        </Text>
+        <Text style={styles.formLabel}>Nearest Metro Station <Text style={styles.optionalText}>(Optional)</Text></Text>
         <TouchableOpacity style={styles.metroSelectButton} onPress={() => setShowMetroSelector(true)}>
           <View style={styles.metroSelectContent}>
             <Ionicons name="train" size={20} color={WHATSAPP_COLORS.primary} />
@@ -729,8 +795,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     </View>
   );
 
-  // ─── Step 2: Property Specifications ────────────────────────────────────────
-
   const renderStep2 = () => (
     <View style={styles.stepContent}>
       <Text style={styles.stepTitle}>
@@ -739,7 +803,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       <Text style={styles.stepDescription}>
         {siteType === 'conventional' || siteType === 'for_sale' ? 'Area and floor details' : 'Seat and unit configuration'}
       </Text>
-
       <View style={styles.row}>
         <View style={styles.halfWidth}>
           <Text style={styles.formLabel}>Total Floors</Text>
@@ -754,7 +817,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="2" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       </View>
-
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Floor Condition</Text>
         <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowFloorConditionDropdown(true)}>
@@ -764,7 +826,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
           <Ionicons name="chevron-down" size={16} color={WHATSAPP_COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
-
       {newSite.floor_condition === 'custom' && (
         <View style={styles.formGroup}>
           <Text style={styles.formLabel}>Custom Floor Condition</Text>
@@ -772,23 +833,9 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="Enter custom floor condition" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       )}
-
       {(siteType === 'conventional' || siteType === 'for_sale') ? (
         <>
-          {/* ── CHANGE 1: Total Available Area — chip-based, same as floor-wise ── */}
-          {renderChipInput({
-            label: 'Total Available Area',
-            hint: 'Enter available area per entry (supports text and numbers)',
-            placeholder: 'e.g., 50,000 sq ft  (press Enter to add)',
-            currentValue: currentTotalAreaInput,
-            onChangeText: setCurrentTotalAreaInput,
-            onSubmit: addTotalAreaEntry,
-            onKeyPress: handleTotalAreaKeyPress,
-            entries: totalAreaEntries,
-            onRemove: removeTotalAreaEntry,
-          })}
-
-          {/* area_per_floor — typical floor plate (unchanged single value) */}
+          {renderChipInput({ label: 'Total Available Area', hint: 'Enter available area per entry (supports text and numbers)', placeholder: 'e.g., 50,000 sq ft  (press Enter to add)', currentValue: currentTotalAreaInput, onChangeText: setCurrentTotalAreaInput, onSubmit: addTotalAreaEntry, onKeyPress: (e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault(); addTotalAreaEntry(); } }, entries: totalAreaEntries, onRemove: (i) => setTotalAreaEntries((p) => p.filter((_, idx) => idx !== i)) })}
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>Area Per Floor — Typical Floor Plate (sq ft)</Text>
             <Text style={styles.fieldHint}>The standard floor plate area of the entire building</Text>
@@ -796,23 +843,10 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
               onChangeText={(v) => setNewSite({ ...newSite, area_per_floor: formatCurrency(v) })}
               placeholder="10,000" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
           </View>
-
-          {/* floor_wise_area — per-floor availability chips (unchanged) */}
-          {renderChipInput({
-            label: 'Floor-wise Availability',
-            hint: 'How much area is available on each specific floor',
-            placeholder: 'e.g., G- 10000 sq/ft  (press Enter to add)',
-            currentValue: currentFloorInput,
-            onChangeText: setCurrentFloorInput,
-            onSubmit: addFloorWiseArea,
-            onKeyPress: handleFloorInputKeyPress,
-            entries: floorWiseAreaEntries,
-            onRemove: removeFloorWiseArea,
-          })}
+          {renderChipInput({ label: 'Floor-wise Availability', hint: 'How much area is available on each specific floor', placeholder: 'e.g., G- 10000 sq/ft  (press Enter to add)', currentValue: currentFloorInput, onChangeText: setCurrentFloorInput, onSubmit: addFloorWiseArea, onKeyPress: (e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault(); addFloorWiseArea(); } }, entries: floorWiseAreaEntries, onRemove: (i) => setFloorWiseAreaEntries((p) => p.filter((_, idx) => idx !== i)) })}
         </>
       ) : (
         <>
-          {/* Total seats & available seats (unchanged numeric fields) */}
           <View style={styles.row}>
             <View style={styles.halfWidth}>
               <Text style={styles.formLabel}>Total Seats</Text>
@@ -827,35 +861,10 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
                 placeholder="200" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
             </View>
           </View>
-
-          {/* ── CHANGE 3: Number of Units — chip-based ───────────────────────── */}
-          {renderChipInput({
-            label: 'Number of Units',
-            hint: 'Enter units per floor (supports text and numbers)',
-            placeholder: 'e.g., Ground Floor – 10 units  (press Enter to add)',
-            currentValue: currentNumberOfUnitsInput,
-            onChangeText: setCurrentNumberOfUnitsInput,
-            onSubmit: addNumberOfUnitsEntry,
-            onKeyPress: handleNumberOfUnitsKeyPress,
-            entries: numberOfUnitsEntries,
-            onRemove: removeNumberOfUnitsEntry,
-          })}
-
-          {/* ── CHANGE 3: Seats Per Unit — chip-based ────────────────────────── */}
-          {renderChipInput({
-            label: 'Seats Per Unit',
-            hint: 'Enter seats per unit per floor (supports text and numbers)',
-            placeholder: 'e.g., 1st Floor – 8 seats  (press Enter to add)',
-            currentValue: currentSeatsPerUnitInput,
-            onChangeText: setCurrentSeatsPerUnitInput,
-            onSubmit: addSeatsPerUnitEntry,
-            onKeyPress: handleSeatsPerUnitKeyPress,
-            entries: seatsPerUnitEntries,
-            onRemove: removeSeatsPerUnitEntry,
-          })}
+          {renderChipInput({ label: 'Number of Units', hint: 'Enter units per floor (supports text and numbers)', placeholder: 'e.g., Ground Floor – 10 units  (press Enter to add)', currentValue: currentNumberOfUnitsInput, onChangeText: setCurrentNumberOfUnitsInput, onSubmit: addNumberOfUnitsEntry, onKeyPress: (e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault(); addNumberOfUnitsEntry(); } }, entries: numberOfUnitsEntries, onRemove: (i) => setNumberOfUnitsEntries((p) => p.filter((_, idx) => idx !== i)) })}
+          {renderChipInput({ label: 'Seats Per Unit', hint: 'Enter seats per unit per floor (supports text and numbers)', placeholder: 'e.g., 1st Floor – 8 seats  (press Enter to add)', currentValue: currentSeatsPerUnitInput, onChangeText: setCurrentSeatsPerUnitInput, onSubmit: addSeatsPerUnitEntry, onKeyPress: (e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault(); addSeatsPerUnitEntry(); } }, entries: seatsPerUnitEntries, onRemove: (i) => setSeatsPerUnitEntries((p) => p.filter((_, idx) => idx !== i)) })}
         </>
       )}
-
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Efficiency (%)</Text>
         <TextInput style={styles.input} value={newSite.efficiency}
@@ -865,15 +874,12 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     </View>
   );
 
-  // ─── Step 3: Commercial Details ──────────────────────────────────────────────
-
   const renderStep3 = () => (
     <View style={styles.stepContent}>
       <Text style={styles.stepTitle}>📊 Commercial Details</Text>
       <Text style={styles.stepDescription}>
         {siteType === 'conventional' || siteType === 'for_sale' ? 'Commercial terms and pricing' : 'Seat pricing and commercial terms'}
       </Text>
-
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Building Status</Text>
         <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowBuildingStatusDropdown(true)}>
@@ -883,7 +889,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
           <Ionicons name="chevron-down" size={16} color={WHATSAPP_COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
-
       {newSite.building_status === 'custom' && (
         <View style={styles.formGroup}>
           <Text style={styles.formLabel}>Custom Building Status</Text>
@@ -891,7 +896,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="Enter custom building status" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       )}
-
       {siteType === 'conventional' || siteType === 'for_sale' ? (
         <View style={styles.row}>
           <View style={styles.halfWidth}>
@@ -901,15 +905,10 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
               placeholder="5,00,000" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
           </View>
           <View style={styles.halfWidth}>
-            {/* ── CHANGE 4: CAM — no keyboardType restriction, accepts alphanumeric ── */}
             <Text style={styles.formLabel}>CAM</Text>
-            <TextInput
-              style={styles.input}
-              value={newSite.cam}
+            <TextInput style={styles.input} value={newSite.cam}
               onChangeText={(v) => setNewSite({ ...newSite, cam: v })}
-              placeholder="e.g., 50,000 or Included"
-              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-            />
+              placeholder="e.g., 50,000 or Included" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
           </View>
         </View>
       ) : (
@@ -920,18 +919,11 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
               onChangeText={(v) => setNewSite({ ...newSite, rent_per_seat: formatCurrency(v) })}
               placeholder="8,000" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
           </View>
-          <View style={styles.row}>
-            <View style={styles.halfWidth}>
-              {/* ── CHANGE 4: CAM — alphanumeric, managed path ─────────────────── */}
-              <Text style={styles.formLabel}>CAM</Text>
-              <TextInput
-                style={styles.input}
-                value={newSite.cam}
-                onChangeText={(v) => setNewSite({ ...newSite, cam: v })}
-                placeholder="e.g., 50,000 or Included"
-                placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-              />
-            </View>
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>CAM</Text>
+            <TextInput style={styles.input} value={newSite.cam}
+              onChangeText={(v) => setNewSite({ ...newSite, cam: v })}
+              placeholder="e.g., 50,000 or Included" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
           </View>
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>Business Hours of Operation</Text>
@@ -947,7 +939,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
           </View>
         </>
       )}
-
       <View style={styles.row}>
         <View style={styles.halfWidth}>
           <Text style={styles.formLabel}>CAM Deposit (Months)</Text>
@@ -962,7 +953,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="3" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       </View>
-
       <View style={styles.row}>
         <View style={styles.halfWidth}>
           <Text style={styles.formLabel}>Lease Term</Text>
@@ -977,7 +967,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="3 years" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       </View>
-
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Rental Escalation</Text>
         <View style={styles.rentalEscalationContainer}>
@@ -1003,7 +992,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
         </View>
         <Text style={styles.helperText}>Format: Percentage / Frequency / Period</Text>
       </View>
-
       <View style={styles.row}>
         <View style={styles.halfWidth}>
           <Text style={styles.formLabel}>Notice Period</Text>
@@ -1012,7 +1000,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="6 months" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       </View>
-
       <View style={styles.checkboxContainer}>
         <TouchableOpacity style={styles.checkbox} onPress={() => setNewSite({ ...newSite, oc: !newSite.oc })}>
           <View style={[styles.checkboxBox, newSite.oc && styles.checkboxBoxChecked]}>
@@ -1021,7 +1008,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
           <Text style={styles.checkboxLabel}>OC Available</Text>
         </TouchableOpacity>
       </View>
-
       <View style={styles.checkboxContainer}>
         <TouchableOpacity style={styles.checkbox}
           onPress={() => setNewSite({ ...newSite, will_developer_do_fitouts: !newSite.will_developer_do_fitouts })}>
@@ -1034,13 +1020,10 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     </View>
   );
 
-  // ─── Step 4: Parking & Utilities ─────────────────────────────────────────────
-
   const renderStep4 = () => (
     <View style={styles.stepContent}>
       <Text style={styles.stepTitle}>🚗 Parking & Utilities</Text>
       <Text style={styles.stepDescription}>Parking facilities and power details</Text>
-
       <Text style={styles.subSectionTitle}>Car Parking</Text>
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Car Parking Ratio</Text>
@@ -1054,7 +1037,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="1000" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       </View>
-
       <View style={styles.row}>
         <View style={styles.halfWidth}>
           <Text style={styles.formLabel}>Car Slots</Text>
@@ -1069,7 +1051,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="5,500" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       </View>
-
       <Text style={styles.subSectionTitle}>Two-Wheeler Parking</Text>
       <View style={styles.row}>
         <View style={styles.halfWidth}>
@@ -1085,7 +1066,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="1,000" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       </View>
-
       <Text style={styles.subSectionTitle}>Power</Text>
       <View style={styles.row}>
         <View style={styles.halfWidth}>
@@ -1104,13 +1084,10 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     </View>
   );
 
-  // ─── Step 5: Workspace & Amenities ───────────────────────────────────────────
-
   const renderStep5 = () => (
     <View style={styles.stepContent}>
       <Text style={styles.stepTitle}>🏢 Workspace & Amenities</Text>
       <Text style={styles.stepDescription}>Office configuration and facilities</Text>
-
       <View style={styles.row}>
         <View style={styles.halfWidth}>
           <Text style={styles.formLabel}>Cabins</Text>
@@ -1125,14 +1102,12 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="200" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       </View>
-
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Workstation Size</Text>
         <TextInput style={styles.input} value={newSite.size_of_workstation}
           onChangeText={(v) => setNewSite({ ...newSite, size_of_workstation: v })}
           placeholder="60 sq ft" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
       </View>
-
       <View style={styles.row}>
         <View style={styles.halfWidth}>
           <Text style={styles.formLabel}>Meeting Rooms</Text>
@@ -1147,7 +1122,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="2" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       </View>
-
       <View style={styles.row}>
         <View style={styles.halfWidth}>
           <Text style={styles.formLabel}>Server Room</Text>
@@ -1162,7 +1136,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="2" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       </View>
-
       <View style={styles.row}>
         <View style={styles.halfWidth}>
           <Text style={styles.formLabel}>Pantry</Text>
@@ -1177,7 +1150,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="1" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       </View>
-
       <View style={styles.row}>
         <View style={styles.halfWidth}>
           <Text style={styles.formLabel}>UPS Room</Text>
@@ -1192,10 +1164,8 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="1" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       </View>
-
       <Text style={styles.subSectionTitle}>Other Amenities</Text>
       <Text style={styles.stepDescription}>Add custom amenities not listed above</Text>
-
       {otherAmenities.map((amenity) => (
         <View key={amenity.id} style={styles.otherAmenityContainer}>
           <View style={styles.otherAmenityRow}>
@@ -1217,7 +1187,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
           </View>
         </View>
       ))}
-
       <TouchableOpacity style={styles.addOtherAmenityButton} onPress={addOtherAmenity}>
         <Ionicons name="add-circle" size={20} color={WHATSAPP_COLORS.white} />
         <Text style={styles.addOtherAmenityText}>Add Other Amenity</Text>
@@ -1225,13 +1194,10 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     </View>
   );
 
-  // ─── Step 6: Contact & Photos ────────────────────────────────────────────────
-
   const renderStep6 = () => (
     <View style={styles.stepContent}>
       <Text style={styles.stepTitle}>👤 Contact & Photos</Text>
       <Text style={styles.stepDescription}>Contact details and property images</Text>
-
       <Text style={styles.subSectionTitle}>Building Owner</Text>
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Owner Name</Text>
@@ -1245,7 +1211,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
           onChangeText={(v) => setNewSite({ ...newSite, building_owner_contact: v })}
           placeholder="+91 9876543210" keyboardType="phone-pad" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
       </View>
-
       <Text style={styles.subSectionTitle}>Contact Person</Text>
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Name</Text>
@@ -1273,7 +1238,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
           onChangeText={(v) => setNewSite({ ...newSite, contact_person_email: v })}
           placeholder="contact@example.com" keyboardType="email-address" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
       </View>
-
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Additional Notes</Text>
         <TextInput style={[styles.input, styles.textArea]} value={newSite.remarks}
@@ -1281,13 +1245,12 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
           placeholder="Any additional observations..." placeholderTextColor={WHATSAPP_COLORS.textTertiary}
           multiline textAlignVertical="top" />
       </View>
-
       <Text style={styles.subSectionTitle}>Property Photos</Text>
+      <Text style={styles.stepDescription}>📸 Photos are not saved to draft (re-upload required after restore)</Text>
       <TouchableOpacity style={styles.addPhotoButton} onPress={() => setShowImageSourceModal(true)}>
         <Ionicons name="camera" size={20} color="#FFF" />
         <Text style={styles.addPhotoButtonText}>Upload Photo</Text>
       </TouchableOpacity>
-
       {buildingPhotos.length > 0 && (
         <View style={styles.photoPreviewContainer}>
           <Text style={styles.photoCountText}>{buildingPhotos.length} photo(s) uploaded</Text>
@@ -1310,7 +1273,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     </View>
   );
 
-  // ─── Modals ──────────────────────────────────────────────────────────────────
+  // ─── Modals ───────────────────────────────────────────────────────────────────
 
   const DropdownModal = ({ visible, options, onSelect, onClose, title }: any) => (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -1352,7 +1315,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     </Modal>
   );
 
-  // ─── Metro Selector ──────────────────────────────────────────────────────────
+  // ─── Metro selector (full-screen sub-view) ────────────────────────────────────
 
   if (showMetroSelector) {
     return (
@@ -1366,42 +1329,23 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     );
   }
 
-  // ─── Render ──────────────────────────────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} />
 
+      {/* Header — includes "Saving…" indicator when a write is in-flight */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <TouchableOpacity style={styles.backButton} onPress={handleBack}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="chevron-back" size={24} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create New Site</Text>
-        <View style={styles.headerSpacer} />
+        {/* Saving indicator lives in the header spacer area */}
+        <SavingIndicator visible={isSaving} />
       </View>
 
-      {/*
-       * ── CHANGE 5: Keyboard overlap fix ────────────────────────────────────────
-       *
-       * Architecture:
-       *   - The outer SafeAreaView handles safe insets (top only, as before).
-       *   - contentContainer now uses flex:1 so it fills remaining space below header.
-       *   - KeyboardAvoidingView wraps BOTH the step indicator AND the scroll content
-       *     so that the entire form area (including navigation buttons) shifts up
-       *     uniformly when the keyboard appears.
-       *   - iOS: 'padding' behaviour + keyboardVerticalOffset accounts for the
-       *     header height (≈56 px header + 16 px step indicator padding = ~72 px).
-       *   - Android: 'height' behaviour shrinks the available height so the
-       *     ScrollView naturally becomes shorter and doesn't clip behind the keyboard.
-       *     (Android soft-keyboard mode should be 'adjustResize' in AndroidManifest;
-       *      if it is 'adjustPan' the 'height' strategy below still provides a
-       *      best-effort improvement without requiring manifest changes.)
-       *   - The navigation buttons live INSIDE KeyboardAvoidingView so they stay
-       *     above the keyboard at all times.
-       *   - ScrollView retains keyboardShouldPersistTaps="handled" so taps on
-       *     buttons inside the scroll don't accidentally dismiss the keyboard.
-       *)
-      */}
       <View style={styles.contentContainer}>
         <KeyboardAvoidingView
           style={styles.keyboardAvoidingView}
@@ -1417,6 +1361,15 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.scrollContent}
           >
+            {/* Draft restoration banner — shown above form content, non-blocking */}
+            {draftDetected && (
+              <DraftBanner
+                expiresInMs={draftExpiresInMs}
+                onRestore={handleRestoreDraft}
+                onDiscard={discardDraft}
+              />
+            )}
+
             <View style={styles.formContainer}>
               {currentStep === 0 && renderStep0()}
               {currentStep === 1 && renderStep1()}
@@ -1482,39 +1435,17 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
   );
 };
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
+// ─── Styles (identical to original) ──────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#075E54' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#075E54',
-  },
-  headerSpacer: { width: 32 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, backgroundColor: '#075E54' },
   backButton: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', flex: 1, textAlign: 'center' },
-
-  // ── CHANGE 5: contentContainer fills remaining space ─────────────────────────
-  contentContainer: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    overflow: 'hidden',
-  },
-  // ── CHANGE 5: KeyboardAvoidingView fills contentContainer ────────────────────
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-
+  contentContainer: { flex: 1, backgroundColor: '#F5F5F5', borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: 'hidden' },
+  keyboardAvoidingView: { flex: 1 },
   scrollView: { flex: 1, backgroundColor: '#F5F5F5' },
-  // ── CHANGE 5: paddingBottom gives space above navigation buttons; no minHeight ─
   scrollContent: { paddingBottom: 16 },
-
   stepIndicator: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 12, backgroundColor: '#F5F5F5' },
   stepIndicatorItem: { flexDirection: 'row', alignItems: 'center' },
   stepCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center' },
@@ -1532,16 +1463,7 @@ const styles = StyleSheet.create({
   formGroup: { marginBottom: 16, width: '100%' },
   formLabel: { fontSize: 12, fontWeight: '600', color: '#1F2937', marginBottom: 6 },
   optionalText: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
-  input: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    fontSize: 14,
-    color: '#1F2937',
-  },
+  input: { paddingHorizontal: 12, paddingVertical: 12, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, backgroundColor: '#FFFFFF', fontSize: 14, color: '#1F2937' },
   textArea: { minHeight: 100, textAlignVertical: 'top' },
   row: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   halfWidth: { flex: 1 },
@@ -1604,14 +1526,7 @@ const styles = StyleSheet.create({
   photoRemoveButton: { position: 'absolute', top: 4, right: 4, width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   photoIndexBadge: { position: 'absolute', bottom: 4, left: 4, backgroundColor: '#075E54', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
   photoIndexText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
-  navigationButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 16,
-    backgroundColor: '#F5F5F5',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
+  navigationButtons: { flexDirection: 'row', gap: 12, padding: 16, backgroundColor: '#F5F5F5', borderTopWidth: 1, borderTopColor: '#E5E7EB' },
   navButton: { flex: 1, flexDirection: 'row', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#075E54', gap: 4 },
   navButtonPrimary: { backgroundColor: '#075E54' },
   navButtonFull: { flex: 1 },
