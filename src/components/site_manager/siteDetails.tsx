@@ -20,7 +20,16 @@ import {
   Animated,
 } from 'react-native';
 import SiteDetailedInfo from './SiteDetailedInfo';
-import { SafeAreaView } from 'react-native-safe-area-context';
+// ─── KEY FIX: import useSafeAreaInsets instead of relying on SafeAreaView ────
+// SafeAreaView reads insets asynchronously. On the FIRST mount the context
+// hasn't resolved yet (insets.top === 0), so no padding is applied and the
+// header sits behind the notch. On subsequent opens the context is already
+// initialised and the correct value is used — which is why the bug only shows
+// on the first open.
+//
+// useSafeAreaInsets() returns a reactive value: React re-renders the component
+// the instant insets resolve, guaranteeing the correct padding on every open.
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -218,6 +227,14 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
   firstLoad = true,
   onFirstLoadComplete,
 }) => {
+  // ─── THE FIX ────────────────────────────────────────────────────────────────
+  // Read safe-area insets via the hook. This value is reactive: as soon as the
+  // SafeAreaProvider resolves the real device insets (even if that happens after
+  // the first paint), React re-renders this component with the correct value.
+  // We then apply it directly as paddingTop on a plain <View> — no SafeAreaView
+  // wrapping the header, no race condition, no first-open/second-open mismatch.
+  const insets = useSafeAreaInsets();
+
   const [loading, setLoading] = useState(true);
   const [siteData, setSiteData] = useState<SiteData | null>(null);
   const [siteVisits, setSiteVisits] = useState<SiteVisit[]>([]);
@@ -255,8 +272,8 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
   const lastScrollY = useRef(0);
   const scrollDirection = useRef<'up' | 'down'>('down');
   const paginationTriggeredAt = useRef(0);
-  const PAGINATION_COOLDOWN = 1000; // 1 second cooldown between pagination requests
-  const SCROLL_THRESHOLD = 50; // Trigger when within 50px of top
+  const PAGINATION_COOLDOWN = 1000;
+  const SCROLL_THRESHOLD = 50;
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -265,7 +282,9 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
         if (userData) {
           const parsedData = JSON.parse(userData);
           setCurrentUserEmployeeId(parsedData.employee_id);
-          setCurrentUserName(`${parsedData.first_name || ''} ${parsedData.last_name || ''}`.trim() || 'You');
+          setCurrentUserName(
+            `${parsedData.first_name || ''} ${parsedData.last_name || ''}`.trim() || 'You',
+          );
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
@@ -294,11 +313,11 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
   useEffect(() => {
     const showSubscription = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      handleKeyboardShow
+      handleKeyboardShow,
     );
     const hideSubscription = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      handleKeyboardHide
+      handleKeyboardHide,
     );
 
     return () => {
@@ -338,7 +357,6 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
 
     try {
       setLoading(true);
-      console.log('Fetching site details for site ID:', site.id);
 
       const response = await fetch(`${BACKEND_URL}/manager/getSite`, {
         method: 'POST',
@@ -347,32 +365,27 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
           token: apiToken,
           site_id: site.id,
           page: 1,
-          page_size: 50
+          page_size: 50,
         }),
       });
-
-      console.log('Response status:', response.status);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('Site details response:', data);
 
       if (data.message === 'Site details fetched successfully') {
         setSiteData(data.site);
         setSiteVisits(data.site_visits || []);
         setComments(data.comments || []);
 
-        // Set pagination info
         if (data.pagination) {
           setPaginationInfo(data.pagination);
           setCurrentPage(data.pagination.current_page);
           setHasMoreComments(data.pagination.has_next);
         }
 
-        // Mark initial load as done and enable auto-scroll for this first load only
         setInitialLoadDone(true);
         shouldAutoScrollRef.current = true;
         setIsFirstLoad(true);
@@ -388,15 +401,17 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
   };
 
   const fetchMoreComments = async () => {
-    // Check cooldown period
     const now = Date.now();
-    if (now - paginationTriggeredAt.current < PAGINATION_COOLDOWN) {
-      console.log('Pagination on cooldown, skipping...');
-      return;
-    }
+    if (now - paginationTriggeredAt.current < PAGINATION_COOLDOWN) return;
 
-    // Don't load more if first load, already loading, or no more comments
-    if (!apiToken || !site?.id || !hasMoreComments || isLoadingMoreRef.current || loadingMore || isFirstLoad) {
+    if (
+      !apiToken ||
+      !site?.id ||
+      !hasMoreComments ||
+      isLoadingMoreRef.current ||
+      loadingMore ||
+      isFirstLoad
+    ) {
       return;
     }
 
@@ -406,7 +421,6 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
 
     try {
       const nextPage = currentPage + 1;
-      console.log(`Fetching page ${nextPage} of comments...`);
 
       const response = await fetch(`${BACKEND_URL}/manager/getSite`, {
         method: 'POST',
@@ -415,31 +429,24 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
           token: apiToken,
           site_id: site.id,
           page: nextPage,
-          page_size: 50
+          page_size: 50,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
       const data = await response.json();
 
       if (data.message === 'Site details fetched successfully') {
-        // Prepend the new comments to existing ones
         const newComments = data.comments || [];
         setComments(prevComments => [...newComments, ...prevComments]);
 
-        // Update pagination info
         if (data.pagination) {
           setPaginationInfo(data.pagination);
           setCurrentPage(data.pagination.current_page);
           setHasMoreComments(data.pagination.has_next);
         }
 
-        console.log(`Successfully loaded page ${nextPage}`);
-
-        // DO NOT auto-scroll when loading older messages via pagination
         shouldAutoScrollRef.current = false;
       }
     } catch (error) {
@@ -455,7 +462,6 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
     const { contentOffset } = event.nativeEvent;
     const currentY = contentOffset.y;
 
-    // Determine scroll direction
     if (currentY > lastScrollY.current) {
       scrollDirection.current = 'down';
     } else if (currentY < lastScrollY.current) {
@@ -465,14 +471,7 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
     lastScrollY.current = currentY;
     scrollPositionRef.current = currentY;
 
-    // Only trigger pagination when:
-    // 1. Scrolling up (towards older messages)
-    // 2. Within threshold of top
-    // 3. Not on first load
-    // 4. Has more comments to load
-    // 5. Not already loading
     const isNearTop = currentY < SCROLL_THRESHOLD;
-
     const shouldLoadMore =
       scrollDirection.current === 'up' &&
       isNearTop &&
@@ -481,10 +480,7 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
       !loadingMore &&
       !isLoadingMoreRef.current;
 
-    if (shouldLoadMore) {
-      console.log('Triggering pagination - scroll position:', currentY);
-      fetchMoreComments();
-    }
+    if (shouldLoadMore) fetchMoreComments();
   };
 
   const formatTime = useCallback((dateString?: string): string => {
@@ -494,7 +490,7 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
     return d.toLocaleTimeString('en-IN', {
       hour: '2-digit',
       minute: '2-digit',
-      hour12: false
+      hour12: false,
     });
   }, []);
 
@@ -506,27 +502,29 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
 
     const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const compareToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const compareYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+    const compareYesterday = new Date(
+      yesterday.getFullYear(),
+      yesterday.getMonth(),
+      yesterday.getDate(),
+    );
 
-    if (compareDate.getTime() === compareToday.getTime()) {
-      return 'Today';
-    } else if (compareDate.getTime() === compareYesterday.getTime()) {
-      return 'Yesterday';
-    } else if (today.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) {
+    if (compareDate.getTime() === compareToday.getTime()) return 'Today';
+    if (compareDate.getTime() === compareYesterday.getTime()) return 'Yesterday';
+    if (today.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000) {
       return date.toLocaleDateString('en-US', { weekday: 'short' });
-    } else {
-      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
     }
+    return date.toLocaleDateString('en-US', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
   }, []);
 
   const getInitials = (name: string): string => {
     if (!name || name.trim().length === 0) return '?';
     const nameParts = name.trim().split(/\s+/);
-    if (nameParts.length === 1) {
-      return nameParts[0].charAt(0).toUpperCase();
-    } else {
-      return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
-    }
+    if (nameParts.length === 1) return nameParts[0].charAt(0).toUpperCase();
+    return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
   };
 
   const truncateFileName = (fileName: string, maxLength: number = 25): string => {
@@ -571,7 +569,6 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
           size: asset.fileSize,
           lastModified: Date.now(),
         };
-
         setSelectedDocuments(prev => [...prev, newFile]);
         setTimeout(() => inputRef.current?.focus(), 100);
       }
@@ -591,7 +588,10 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Photo library permissions are needed to select images.');
+        Alert.alert(
+          'Permission Required',
+          'Photo library permissions are needed to select images.',
+        );
         setIsPickerActive(false);
         setShowAttachmentModal(false);
         return;
@@ -606,17 +606,18 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const newFiles: DocumentPicker.DocumentPickerAsset[] = result.assets.map((asset, index) => {
-          const extension = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
-          return {
-            uri: asset.uri,
-            name: `image_${Date.now()}_${index}.${extension}`,
-            mimeType: `image/${extension === 'png' ? 'png' : 'jpeg'}`,
-            size: asset.fileSize,
-            lastModified: Date.now(),
-          };
-        });
-
+        const newFiles: DocumentPicker.DocumentPickerAsset[] = result.assets.map(
+          (asset, index) => {
+            const extension = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
+            return {
+              uri: asset.uri,
+              name: `image_${Date.now()}_${index}.${extension}`,
+              mimeType: `image/${extension === 'png' ? 'png' : 'jpeg'}`,
+              size: asset.fileSize,
+              lastModified: Date.now(),
+            };
+          },
+        );
         setSelectedDocuments(prev => [...prev, ...newFiles]);
         setTimeout(() => inputRef.current?.focus(), 100);
       }
@@ -662,16 +663,15 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
       Alert.alert('Error', 'Please enter a message or attach a file');
       return;
     }
-
     if (!apiToken) {
       Alert.alert('Error', 'Authentication token not found');
       return;
     }
-
     if (!site?.id) {
       Alert.alert('Error', 'Site information not found');
       return;
     }
+
     try {
       setAddingComment(true);
 
@@ -680,9 +680,8 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
       formData.append('site_id', site.id.toString());
       formData.append('content', newComment.trim());
 
-      // Add documents if any
       if (selectedDocuments.length > 0) {
-        selectedDocuments.forEach((doc) => {
+        selectedDocuments.forEach(doc => {
           const file: any = {
             uri: doc.uri,
             type: doc.mimeType || 'application/octet-stream',
@@ -695,19 +694,14 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
       const response = await fetch(`${BACKEND_URL}/manager/siteAddComment`, {
         method: 'POST',
         body: formData,
-        headers: {
-          'Accept': 'application/json',
-        },
+        headers: { Accept: 'application/json' },
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to add comment');
-      }
+      if (!response.ok) throw new Error(data.message || 'Failed to add comment');
 
       if (data.message === 'Comment added successfully') {
-        // Add the new comment to the local state for real-time update
         const newCommentData: Comment = {
           id: data.comment.id,
           user: {
@@ -719,17 +713,11 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
           documents: data.comment.documents || [],
         };
 
-        // Append the new comment to the comments array
         setComments(prevComments => [...prevComments, newCommentData]);
-
-        // Clear input and documents
         setNewComment('');
         setSelectedDocuments([]);
-
-        // Enable auto-scroll for user's new comment
         shouldAutoScrollRef.current = true;
 
-        // Scroll to bottom after a short delay to ensure the new message is rendered
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: true });
         }, 100);
@@ -738,10 +726,7 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
       }
     } catch (error: any) {
       console.error('Error adding comment:', error);
-      Alert.alert(
-        'Error',
-        error.message || 'Failed to add comment. Please try again.'
-      );
+      Alert.alert('Error', error.message || 'Failed to add comment. Please try again.');
     } finally {
       setAddingComment(false);
     }
@@ -753,9 +738,8 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
     const processed: ChatMessage[] = [];
     let lastDate = '';
 
-    // Sort comments by date (oldest to newest)
-    const sortedComments = [...comments].sort((a, b) =>
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    const sortedComments = [...comments].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
 
     sortedComments.forEach((comment, index) => {
@@ -766,7 +750,7 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
           type: 'dateSeparator',
           id: `date-${commentDate}-${index}`,
           date: commentDate,
-          originalDate: comment.created_at
+          originalDate: comment.created_at,
         });
         lastDate = commentDate;
       }
@@ -774,21 +758,20 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
       processed.push({
         type: 'comment',
         id: comment.id?.toString() || `comment-${index}`,
-        data: comment
+        data: comment,
       });
     });
 
     return processed;
   }, [comments, formatWhatsAppDate]);
 
-  // Auto-scroll effect - only for initial load and new user comments
+  // Auto-scroll — only for initial load and new user comments
   useEffect(() => {
     if (initialLoadDone && shouldAutoScrollRef.current && comments.length > 0) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
         shouldAutoScrollRef.current = false;
 
-        // After successfully scrolling to bottom, mark first load as complete
         if (isFirstLoad) {
           setTimeout(() => {
             setIsFirstLoad(false);
@@ -799,74 +782,84 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
     }
   }, [comments, initialLoadDone, isFirstLoad, onFirstLoadComplete]);
 
-  const renderChatItem = useCallback(({ item }: { item: ChatMessage }) => {
-    if (item.type === 'dateSeparator') {
+  const renderChatItem = useCallback(
+    ({ item }: { item: ChatMessage }) => {
+      if (item.type === 'dateSeparator') {
+        return (
+          <View style={styles.dateSeparatorContainer}>
+            <View style={styles.dateSeparatorBubble}>
+              <Text style={styles.dateSeparatorText}>{item.date}</Text>
+            </View>
+          </View>
+        );
+      }
+
+      const comment = item.data;
+      if (!comment) return null;
+
+      const time = formatTime(comment.created_at);
+      const isCurrentUser = comment.user?.employee_id === currentUserEmployeeId;
+
       return (
-        <View style={styles.dateSeparatorContainer}>
-          <View style={styles.dateSeparatorBubble}>
-            <Text style={styles.dateSeparatorText}>{item.date}</Text>
+        <View
+          style={[
+            styles.messageRow,
+            isCurrentUser ? styles.messageRowRight : styles.messageRowLeft,
+          ]}
+        >
+          <View
+            style={[
+              styles.messageBubble,
+              isCurrentUser ? styles.currentUserBubble : styles.otherUserBubble,
+            ]}
+          >
+            {!isCurrentUser && (
+              <View style={styles.senderHeader}>
+                <Text style={styles.senderName}>{comment.user?.full_name || 'User'}</Text>
+              </View>
+            )}
+            {comment.content && (
+              <Text style={styles.messageText}>{comment.content}</Text>
+            )}
+            {comment.documents && comment.documents.length > 0 && (
+              <View style={styles.documentsContainer}>
+                {comment.documents.map((doc, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.documentAttachment}
+                    onPress={() => {
+                      if (doc.document) Linking.openURL(doc.document);
+                    }}
+                  >
+                    <MaterialIcons
+                      name="insert-drive-file"
+                      size={20}
+                      color={WHATSAPP_COLORS.primary}
+                    />
+                    <Text style={styles.documentName} numberOfLines={1}>
+                      {truncateFileName(doc.document_name, 25)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            <View style={styles.messageFooter}>
+              <Text style={styles.messageTime}>{time}</Text>
+              {isCurrentUser && (
+                <Ionicons
+                  name="checkmark-done"
+                  size={14}
+                  color={WHATSAPP_COLORS.primary}
+                  style={styles.deliveryIcon}
+                />
+              )}
+            </View>
           </View>
         </View>
       );
-    }
-
-    const comment = item.data;
-    if (!comment) return null;
-
-    const time = formatTime(comment.created_at);
-    const isCurrentUser = comment.user?.employee_id === currentUserEmployeeId;
-
-    return (
-      <View style={[
-        styles.messageRow,
-        isCurrentUser ? styles.messageRowRight : styles.messageRowLeft
-      ]}>
-        <View style={[
-          styles.messageBubble,
-          isCurrentUser ? styles.currentUserBubble : styles.otherUserBubble
-        ]}>
-          {!isCurrentUser && (
-            <View style={styles.senderHeader}>
-              <Text style={styles.senderName}>
-                {comment.user?.full_name || 'User'}
-              </Text>
-            </View>
-          )}
-          {comment.content && (
-            <Text style={styles.messageText}>
-              {comment.content}
-            </Text>
-          )}
-          {comment.documents && comment.documents.length > 0 && (
-            <View style={styles.documentsContainer}>
-              {comment.documents.map((doc, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={styles.documentAttachment}
-                  onPress={() => {
-                    if (doc.document) {
-                      Linking.openURL(doc.document);
-                    }
-                  }}
-                >
-                  <MaterialIcons name="insert-drive-file" size={20} color={WHATSAPP_COLORS.primary} />
-                  <Text style={styles.documentName} numberOfLines={1}>
-                    {truncateFileName(doc.document_name, 25)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-          <View style={styles.messageFooter}>
-            <Text style={styles.messageTime}>{time}</Text>
-            {isCurrentUser && (
-              <Ionicons name="checkmark-done" size={14} color={WHATSAPP_COLORS.primary} style={styles.deliveryIcon} />
-            )}
-          </View>
-        </View>
-      </View>
-    );
-  }, [currentUserEmployeeId, formatTime, truncateFileName]);
+    },
+    [currentUserEmployeeId, formatTime, truncateFileName],
+  );
 
   const BackIcon = () => (
     <View style={styles.backIcon}>
@@ -875,17 +868,22 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
     </View>
   );
 
-  const DetailsModal = useMemo(() => (
-    <SiteDetailedInfo
-      visible={showDetailsModal}
-      onClose={() => setShowDetailsModal(false)}
-      siteData={siteData}
-    />
-  ), [showDetailsModal, siteData]);
+  const DetailsModal = useMemo(
+    () => (
+      <SiteDetailedInfo
+        visible={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        siteData={siteData}
+      />
+    ),
+    [showDetailsModal, siteData],
+  );
 
+  // ─── Loading state ─────────────────────────────────────────────────────────
+  // Plain View with paddingTop from the hook — same fix applies here.
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -898,13 +896,14 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
           <ActivityIndicator size="large" color={WHATSAPP_COLORS.primary} />
           <Text style={styles.loadingText}>Loading site details...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
+  // ─── Error / not-found state ───────────────────────────────────────────────
   if (!siteData) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
         <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -920,13 +919,17 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
+  // ─── Header — THE FIX in action ───────────────────────────────────────────
+  // We use a plain <View> instead of <SafeAreaView> and apply insets.top as
+  // paddingTop. Because useSafeAreaInsets() is reactive, this is always correct
+  // on every open — no flash, no double-padding.
   const MainContent = (
     <>
-      <SafeAreaView style={styles.headerSafeArea} edges={['top']}>
+      <View style={[styles.headerSafeArea, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} />
           <View style={styles.headerContent}>
@@ -956,7 +959,7 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
             </View>
           </View>
         </View>
-      </SafeAreaView>
+      </View>
 
       {DetailsModal}
 
@@ -965,9 +968,7 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
           <View style={styles.emptyChat}>
             <MaterialIcons name="forum" size={64} color={WHATSAPP_COLORS.border} />
             <Text style={styles.emptyChatTitle}>No comments yet</Text>
-            <Text style={styles.emptyChatText}>
-              Site comments will appear here
-            </Text>
+            <Text style={styles.emptyChatText}>Site comments will appear here</Text>
           </View>
         ) : (
           <>
@@ -981,14 +982,13 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
               ref={flatListRef}
               data={getProcessedComments()}
               renderItem={renderChatItem}
-              keyExtractor={(item) => item.id}
+              keyExtractor={item => item.id}
               inverted={false}
               contentContainerStyle={styles.chatListContent}
               showsVerticalScrollIndicator={false}
               onScroll={handleScroll}
               scrollEventThrottle={400}
               onContentSizeChange={() => {
-                // Only auto-scroll if the flag is set (initial load or new user comment)
                 if (shouldAutoScrollRef.current) {
                   setTimeout(() => {
                     flatListRef.current?.scrollToEnd({ animated: true });
@@ -1002,18 +1002,26 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
 
       {selectedDocuments.length > 0 && (
         <View style={styles.selectedFilesPreview}>
-          <Text style={styles.selectedFilesTitle}>Attachments ({selectedDocuments.length})</Text>
+          <Text style={styles.selectedFilesTitle}>
+            Attachments ({selectedDocuments.length})
+          </Text>
           <FlatList
             horizontal
             data={selectedDocuments}
             renderItem={({ item: doc, index }) => (
               <View style={styles.selectedDocumentItem}>
-                <MaterialIcons name="insert-drive-file" size={20} color={WHATSAPP_COLORS.primary} />
+                <MaterialIcons
+                  name="insert-drive-file"
+                  size={20}
+                  color={WHATSAPP_COLORS.primary}
+                />
                 <View style={styles.selectedDocumentInfo}>
                   <Text style={styles.selectedDocumentName} numberOfLines={1}>
                     {truncateFileName(doc.name, 20)}
                   </Text>
-                  <Text style={styles.selectedDocumentSize}>{formatFileSize(doc.size)}</Text>
+                  <Text style={styles.selectedDocumentSize}>
+                    {formatFileSize(doc.size)}
+                  </Text>
                 </View>
                 <TouchableOpacity onPress={() => handleRemoveDocument(index)}>
                   <Ionicons name="close" size={18} color={WHATSAPP_COLORS.textTertiary} />
@@ -1026,6 +1034,7 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
         </View>
       )}
 
+      {/* Full-image viewer modal */}
       <Modal
         visible={showFullImage}
         transparent={true}
@@ -1085,23 +1094,20 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
         </View>
       </Modal>
 
+      {/* Attachment picker modal */}
       <Modal
         visible={showAttachmentModal}
         transparent={true}
         animationType="slide"
         onRequestClose={() => {
-          if (!isPickerActive) {
-            setShowAttachmentModal(false);
-          }
+          if (!isPickerActive) setShowAttachmentModal(false);
         }}
       >
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => {
-            if (!isPickerActive) {
-              setShowAttachmentModal(false);
-            }
+            if (!isPickerActive) setShowAttachmentModal(false);
           }}
         >
           <View style={styles.attachmentModalContent}>
@@ -1143,62 +1149,77 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
     </>
   );
 
+  // ─── Shared message input ─────────────────────────────────────────────────
+  const MessageInput = (
+    <View style={styles.inputRow}>
+      <TouchableOpacity
+        style={styles.attachmentButton}
+        onPress={() => setShowAttachmentModal(true)}
+        disabled={addingComment || isPickerActive}
+      >
+        <Ionicons name="attach" size={22} color={WHATSAPP_COLORS.primary} />
+        {selectedDocuments.length > 0 && (
+          <View style={styles.fileCounterBadge}>
+            <Text style={styles.fileCounterText}>{selectedDocuments.length}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
+      <View style={styles.inputField}>
+        <TextInput
+          ref={inputRef}
+          style={styles.messageInput}
+          value={newComment}
+          onChangeText={setNewComment}
+          placeholder="Type your message..."
+          multiline
+          maxLength={1000}
+          placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+          editable={!addingComment}
+        />
+      </View>
+
+      <TouchableOpacity
+        style={[
+          styles.sendButton,
+          {
+            backgroundColor:
+              newComment.trim() || selectedDocuments.length > 0
+                ? WHATSAPP_COLORS.primary
+                : WHATSAPP_COLORS.border,
+          },
+        ]}
+        onPress={handleAddComment}
+        disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
+      >
+        {addingComment ? (
+          <ActivityIndicator color="#FFF" size="small" />
+        ) : (
+          <Ionicons
+            name="send"
+            size={18}
+            color={
+              newComment.trim() || selectedDocuments.length > 0
+                ? '#FFF'
+                : WHATSAPP_COLORS.textTertiary
+            }
+          />
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+
+  // ─── Android path ─────────────────────────────────────────────────────────
   if (Platform.OS === 'android') {
     return (
       <View style={styles.mainContainer}>
         {MainContent}
-        <Animated.View style={[styles.androidInputContainer, { marginBottom: keyboardHeightAnim }]}>
+        <Animated.View
+          style={[styles.androidInputContainer, { marginBottom: keyboardHeightAnim }]}
+        >
           <SafeAreaView style={styles.inputSafeArea} edges={['bottom']}>
             <View style={styles.inputContainer}>
-              <View style={styles.inputWrapper}>
-                <View style={styles.inputRow}>
-                  <TouchableOpacity
-                    style={styles.attachmentButton}
-                    onPress={() => setShowAttachmentModal(true)}
-                    disabled={addingComment || isPickerActive}
-                  >
-                    <Ionicons name="attach" size={22} color={WHATSAPP_COLORS.primary} />
-                    {selectedDocuments.length > 0 && (
-                      <View style={styles.fileCounterBadge}>
-                        <Text style={styles.fileCounterText}>{selectedDocuments.length}</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-
-                  <View style={styles.inputField}>
-                    <TextInput
-                      ref={inputRef}
-                      style={styles.messageInput}
-                      value={newComment}
-                      onChangeText={setNewComment}
-                      placeholder="Type your message..."
-                      multiline
-                      maxLength={1000}
-                      placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-                      editable={!addingComment}
-                    />
-                  </View>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.sendButton,
-                      { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.border }
-                    ]}
-                    onPress={handleAddComment}
-                    disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
-                  >
-                    {addingComment ? (
-                      <ActivityIndicator color="#FFF" size="small" />
-                    ) : (
-                      <Ionicons
-                        name="send"
-                        size={18}
-                        color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : WHATSAPP_COLORS.textTertiary}
-                      />
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <View style={styles.inputWrapper}>{MessageInput}</View>
             </View>
           </SafeAreaView>
         </Animated.View>
@@ -1206,6 +1227,7 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
     );
   }
 
+  // ─── iOS path ─────────────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
       style={styles.mainContainer}
@@ -1213,79 +1235,38 @@ const SiteDetails: React.FC<SiteDetailsProps> = ({
       keyboardVerticalOffset={0}
     >
       {MainContent}
-      <View style={[
-        styles.inputContainerWrapper,
-        { marginBottom: isKeyboardVisible ? 0 : -30 }
-      ]}>
+      <View
+        style={[
+          styles.inputContainerWrapper,
+          { marginBottom: isKeyboardVisible ? 0 : -30 },
+        ]}
+      >
         <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
-            <View style={styles.inputRow}>
-              <TouchableOpacity
-                style={styles.attachmentButton}
-                onPress={() => setShowAttachmentModal(true)}
-                disabled={addingComment || isPickerActive}
-              >
-                <Ionicons name="attach" size={22} color={WHATSAPP_COLORS.primary} />
-                {selectedDocuments.length > 0 && (
-                  <View style={styles.fileCounterBadge}>
-                    <Text style={styles.fileCounterText}>{selectedDocuments.length}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-
-              <View style={styles.inputField}>
-                <TextInput
-                  ref={inputRef}
-                  style={styles.messageInput}
-                  value={newComment}
-                  onChangeText={setNewComment}
-                  placeholder="Type your message..."
-                  multiline
-                  maxLength={1000}
-                  placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-                  editable={!addingComment}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.sendButton,
-                  { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? WHATSAPP_COLORS.primary : WHATSAPP_COLORS.border }
-                ]}
-                onPress={handleAddComment}
-                disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
-              >
-                {addingComment ? (
-                  <ActivityIndicator color="#FFF" size="small" />
-                ) : (
-                  <Ionicons
-                    name="send"
-                    size={18}
-                    color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : WHATSAPP_COLORS.textTertiary}
-                  />
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
+          <View style={styles.inputWrapper}>{MessageInput}</View>
         </View>
       </View>
     </KeyboardAvoidingView>
   );
 };
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
-    backgroundColor: WHATSAPP_COLORS.chatBg
+    backgroundColor: WHATSAPP_COLORS.chatBg,
   },
+  // Used for loading & error screens.
+  // paddingTop is supplied inline via insets.top — do NOT add it here.
   container: {
     flex: 1,
-    marginTop: 10,
     backgroundColor: WHATSAPP_COLORS.primary,
   },
-  // Header Styles
+  // ── headerSafeArea ────────────────────────────────────────────────────────
+  // paddingTop is applied inline as { paddingTop: insets.top }.
+  // The green backgroundColor fills the status-bar / notch zone correctly on
+  // every device and every open with zero flicker.
   headerSafeArea: {
-
     backgroundColor: WHATSAPP_COLORS.primary,
   },
   header: {
@@ -1304,16 +1285,14 @@ const styles = StyleSheet.create({
     height: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    display: 'flex',
     flexDirection: 'row',
-    alignContent: 'center',
   },
   backArrow: {
     width: 12,
     height: 12,
     borderLeftWidth: 2,
     borderTopWidth: 2,
-    borderColor: "#fff",
+    borderColor: '#fff',
     transform: [{ rotate: '-45deg' }],
   },
   backText: {
@@ -1373,10 +1352,10 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 40,
   },
-  // Chat Container
+  // Chat
   chatContainer: {
     flex: 1,
-    backgroundColor: WHATSAPP_COLORS.chatBg
+    backgroundColor: WHATSAPP_COLORS.chatBg,
   },
   chatListContent: {
     paddingHorizontal: 6,
@@ -1396,7 +1375,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: WHATSAPP_COLORS.textSecondary,
   },
-  // Date Separator
+  // Date separator
   dateSeparatorContainer: {
     alignItems: 'center',
     marginVertical: 10,
@@ -1412,7 +1391,7 @@ const styles = StyleSheet.create({
     color: '#666',
     fontWeight: '500',
   },
-  // Message Styles
+  // Messages
   messageRow: {
     flexDirection: 'row',
     marginBottom: 6,
@@ -1487,19 +1466,10 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: WHATSAPP_COLORS.textTertiary,
   },
-  visitIdBadge: {
-    fontSize: 9,
-    color: WHATSAPP_COLORS.primary,
-    backgroundColor: WHATSAPP_COLORS.primary + '20',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    fontWeight: '600',
-  },
   deliveryIcon: {
     marginLeft: 3,
   },
-  // Input Styles
+  // Input
   androidInputContainer: {
     borderTopWidth: 1,
     borderTopColor: WHATSAPP_COLORS.border,
@@ -1575,7 +1545,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Selected Files Preview
+  // Selected files preview
   selectedFilesPreview: {
     backgroundColor: WHATSAPP_COLORS.surface,
     borderTopWidth: 1,
@@ -1601,7 +1571,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   selectedDocumentInfo: {
-    flex: 1
+    flex: 1,
   },
   selectedDocumentName: {
     fontSize: 12,
@@ -1611,9 +1581,9 @@ const styles = StyleSheet.create({
   },
   selectedDocumentSize: {
     fontSize: 10,
-    color: WHATSAPP_COLORS.textTertiary
+    color: WHATSAPP_COLORS.textTertiary,
   },
-  // Loading & Empty States
+  // Loading & empty states
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
@@ -1660,7 +1630,7 @@ const styles = StyleSheet.create({
   emptyChatTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: WHATSAPP_COLORS.textPrimary
+    color: WHATSAPP_COLORS.textPrimary,
   },
   emptyChatText: {
     fontSize: 13,
@@ -1668,40 +1638,32 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 180,
   },
-  // Modal Styles
+  // Modal styles
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: WHATSAPP_COLORS.primary
+    backgroundColor: WHATSAPP_COLORS.primary,
   },
   modalBackButton: {
     padding: 8,
-    marginRight: 12
+    marginRight: 12,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#FFF',
-    flex: 1
+    flex: 1,
   },
-  modalScrollContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    flexGrow: 1
-  },
-  modalBottomSpacing: {
-    height: 40
-  },
-  // Container Box Styles
+  // Container boxes (used by child modal — kept for consistency)
   containerBox: {
     backgroundColor: WHATSAPP_COLORS.surface,
     marginBottom: 12,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: WHATSAPP_COLORS.border,
-    overflow: 'hidden'
+    overflow: 'hidden',
   },
   containerHeader: {
     flexDirection: 'row',
@@ -1711,20 +1673,20 @@ const styles = StyleSheet.create({
     backgroundColor: WHATSAPP_COLORS.primary + '08',
     borderBottomWidth: 1,
     borderBottomColor: WHATSAPP_COLORS.border,
-    gap: 10
+    gap: 10,
   },
   containerTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: WHATSAPP_COLORS.primary,
-    flex: 1
+    flex: 1,
   },
   containerContent: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    gap: 12
+    gap: 12,
   },
-  // Site Info Styles
+  // Site info (used by child modal)
   siteInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1732,10 +1694,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: WHATSAPP_COLORS.border,
-    gap: 16
+    gap: 16,
   },
   siteAvatarSection: {
-    alignItems: 'center'
+    alignItems: 'center',
   },
   siteAvatar: {
     width: 60,
@@ -1745,22 +1707,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: WHATSAPP_COLORS.primary
+    borderColor: WHATSAPP_COLORS.primary,
   },
   siteAvatarText: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFF'
+    color: '#FFF',
   },
   siteHeaderSection: {
     flex: 1,
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
   siteNameText: {
     fontSize: 20,
     fontWeight: '700',
     color: WHATSAPP_COLORS.textPrimary,
-    marginBottom: 4
+    marginBottom: 4,
   },
   locationContainer: {
     flexDirection: 'row',
@@ -1778,7 +1740,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    gap: 10
+    gap: 10,
   },
   statusBadgeBox: {
     paddingHorizontal: 12,
@@ -1787,11 +1749,11 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
   statusBadgeBoxText: {
     fontSize: 12,
-    fontWeight: '600'
+    fontWeight: '600',
   },
   typeBadge: {
     flexDirection: 'row',
@@ -1843,15 +1805,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  // Info Item Styles
   infoItem: {
-    marginBottom: 12
+    marginBottom: 12,
   },
   infoItemLabel: {
     fontSize: 13,
     fontWeight: '600',
     color: WHATSAPP_COLORS.textSecondary,
-    marginBottom: 6
+    marginBottom: 6,
   },
   infoItemBox: {
     flexDirection: 'row',
@@ -1861,14 +1822,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: WHATSAPP_COLORS.border
+    borderColor: WHATSAPP_COLORS.border,
   },
   infoItemValue: {
     fontSize: 14,
     color: WHATSAPP_COLORS.textPrimary,
-    flex: 1
+    flex: 1,
   },
-  // Metadata Styles
   metadataItem: {
     paddingVertical: 10,
     borderBottomWidth: 1,
@@ -1878,13 +1838,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: WHATSAPP_COLORS.textSecondary,
-    marginBottom: 4
+    marginBottom: 4,
   },
   metadataValue: {
     fontSize: 14,
-    color: WHATSAPP_COLORS.textPrimary
+    color: WHATSAPP_COLORS.textPrimary,
   },
-  // Photo Grid
+  // Photo grid
   photosGridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1901,7 +1861,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  // Full Image Modal
+  // Full-image modal
   fullImageModal: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.9)',
@@ -1960,7 +1920,7 @@ const styles = StyleSheet.create({
   nextButton: {
     right: 20,
   },
-  // Attachment Modal
+  // Attachment modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
