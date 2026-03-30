@@ -9,7 +9,9 @@ import {
   Alert,
   Modal,
   TextInput,
-  Platform,
+  Platform, 
+  Dimensions,
+  
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -24,6 +26,8 @@ import PayslipModal from './payslip';
 import DocumentModal from './document';
 import EditEmployeeModal from './editEmployee';
 import alert from '../../utils/Alert';
+import ExemptionModal from './exemptionModal';
+
 
 interface OverviewProps {
   employee: Employee;
@@ -40,7 +44,7 @@ export const Overview: React.FC<OverviewProps> = ({
   token,
   onRefresh,
   onEditLeaves,
-  onEditEmployeeSuccess 
+  onEditEmployeeSuccess
 }) => {
   const [showActionMenu, setShowActionMenu] = useState(false);
   const [showMediclaimModal, setShowMediclaimModal] = useState(false);
@@ -48,18 +52,19 @@ export const Overview: React.FC<OverviewProps> = ({
   const [showOffboardingModal, setShowOffboardingModal] = useState(false);
   const [showSpecialAttendanceModal, setShowSpecialAttendanceModal] = useState(false);
   const [showUnlockDeviceModal, setShowUnlockDeviceModal] = useState(false);
-  const [showExemptAttendanceModal, setShowExemptAttendanceModal] = useState(false);
   const [showEditEmployeeModal, setShowEditEmployeeModal] = useState(false);
   const [specialAttendanceDate, setSpecialAttendanceDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showPayslipModal, setShowPayslipModal] = useState(false);
   const [showDocumentModal, setShowDocumentModal] = useState(false);
+  const [showExemptAttendanceModal, setShowExemptAttendanceModal] = useState(false);
+  const [showExemptGeofenceModal, setShowExemptGeofenceModal] = useState(false);
 
   const getInitials = (firstName: string | null | undefined, lastName: string | null | undefined): string => {
-  const first = firstName && firstName.trim() ? firstName.charAt(0).toUpperCase() : 'F';
-  const last = lastName && lastName.trim() ? lastName.charAt(0).toUpperCase() : '_';
-  return `${first}${last}`;
-};
+    const first = firstName && firstName.trim() ? firstName.charAt(0).toUpperCase() : 'F';
+    const last = lastName && lastName.trim() ? lastName.charAt(0).toUpperCase() : '_';
+    return `${first}${last}`;
+  };
 
   const markGiftBasketSent = async () => {
     try {
@@ -194,81 +199,88 @@ export const Overview: React.FC<OverviewProps> = ({
     color?: string;
     hidden?: boolean;
   }> = [
-    {
-      label: 'Payslip',
-      icon: 'document-text-outline',
-      action: () => {
-        setShowActionMenu(false);
-        uploadPayslip();
-      }
-    },
-    {
-      label: 'Documents',
-      icon: 'folder-outline',
-      action: () => {
-        setShowActionMenu(false);
-        uploadDocument();
-      }
-    },
-    // {
-    //   label: 'Mark Gift Basket Sent',
-    //   icon: 'gift-outline',
-    //   action: () => {
-    //     setShowActionMenu(false);
-    //     markGiftBasketSent();
-    //   },
-    //   hidden: employee.gift_basket_sent
-    // },
-    {
-      label: 'Mediclaim',
-      icon: 'medkit-outline',
-      action: () => {
-        setShowActionMenu(false);
-        setShowMediclaimModal(true);
-      }
-    },
-    {
-      label: 'Assets',
-      icon: 'cube-outline',
-      action: () => {
-        setShowActionMenu(false);
-        setShowAssetsModal(true);
-      }
-    },
-    {
-      label: 'Special Attendance',
-      icon: 'calendar-outline',
-      action: () => {
-        setShowActionMenu(false);
-        setShowSpecialAttendanceModal(true);
-      }
-    },
-    {
-      label: 'Unlock Device',
-      icon: 'lock-open-outline',
-      action: () => {
-        setShowActionMenu(false);
-        handleUnlockDevice();
-      }
-    },
-    {
-      label: 'Edit Employee',
-      icon: 'settings-outline',
-      action: () => {
-        setShowActionMenu(false);
-        setShowEditEmployeeModal(true);
-      }
-    },
-    {
-      label: 'Offboard Employee',
-      icon: 'person-remove-outline',
-      action: () => {
-        setShowActionMenu(false);
-        setShowOffboardingModal(true);
+      {
+        label: 'Payslip',
+        icon: 'document-text-outline',
+        action: () => {
+          setShowActionMenu(false);
+          uploadPayslip();
+        }
       },
-      color: '#D32F2F'
-    },
-  ];
+      {
+        label: 'Documents',
+        icon: 'folder-outline',
+        action: () => {
+          setShowActionMenu(false);
+          uploadDocument();
+        }
+      },
+      {
+        label: 'Exempt Attendance',
+        icon: 'finger-print-outline',
+        action: () => {
+          setShowActionMenu(false);
+          setShowExemptAttendanceModal(true);
+        }
+      },
+      {
+        label: 'Exempt Geofence',
+        icon: 'location-outline',
+        action: () => {
+          setShowActionMenu(false);
+          setShowExemptGeofenceModal(true);
+        }
+      },
+      {
+        label: 'Mediclaim',
+        icon: 'medkit-outline',
+        action: () => {
+          setShowActionMenu(false);
+          setShowMediclaimModal(true);
+        }
+      },
+      {
+        label: 'Assets',
+        icon: 'cube-outline',
+        action: () => {
+          setShowActionMenu(false);
+          setShowAssetsModal(true);
+        }
+      },
+      {
+        label: 'Special Attendance',
+        icon: 'calendar-outline',
+        action: () => {
+          setShowActionMenu(false);
+          setShowSpecialAttendanceModal(true);
+        }
+      },
+      {
+        label: 'Unlock Device',
+        icon: 'lock-open-outline',
+        action: () => {
+          setShowActionMenu(false);
+          handleUnlockDevice();
+        }
+      },
+      {
+        label: 'Edit Employee',
+        icon: 'settings-outline',
+        action: () => {
+          setShowActionMenu(false);
+          setShowEditEmployeeModal(true);
+        }
+      },
+      {
+        label: 'Offboard Employee',
+        icon: 'person-remove-outline',
+        action: () => {
+          setShowActionMenu(false);
+          setShowOffboardingModal(true);
+        },
+        color: '#D32F2F'
+      },
+    ];
 
   return (
     <View style={{ flex: 1 }}>
@@ -301,11 +313,11 @@ export const Overview: React.FC<OverviewProps> = ({
 
             <View style={styles.profileInfo}>
               <Text style={styles.profileName}>
-                {employee.first_name && employee.last_name 
-                  ? `${employee.first_name} ${employee.last_name}` 
-                  : employee.first_name 
-                  ? `${employee.first_name}   ` 
-                  : 'Employee'}
+                {employee.first_name && employee.last_name
+                  ? `${employee.first_name} ${employee.last_name}`
+                  : employee.first_name
+                    ? `${employee.first_name}   `
+                    : 'Employee'}
               </Text>
               <Text style={styles.profileDesignation}>
                 {employee.designation || employee.designation}
@@ -495,65 +507,79 @@ export const Overview: React.FC<OverviewProps> = ({
       </ScrollView>
 
       {/* Action Menu Modal - This appears on top */}
-     <Modal
-  visible={showActionMenu}
-  transparent
-  animationType="fade"
-  onRequestClose={() => setShowActionMenu(false)}
->
-  <TouchableOpacity
-    style={{
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.3)',
-      justifyContent: Platform.OS === 'web' ? 'center' : 'flex-start',
-      alignItems: Platform.OS === 'web' ? 'center' : 'flex-end',
-    }}
-    activeOpacity={1}
-    onPress={() => setShowActionMenu(false)}
-  >
-    <View
-      style={{
-        position: Platform.OS === 'web' ? 'relative' : 'absolute',
-        top: Platform.OS === 'web' ? 0 : 295,
-        right: Platform.OS === 'web' ? 0 : 16,
-        backgroundColor: WHATSAPP_COLORS.surface,
-        borderRadius: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
-        minWidth: 220,
-        maxWidth: 280,
-      }}
-    >
-            {actionMenuItems.filter(item => !item.hidden).map((item, index) => (
-              <TouchableOpacity
-                key={index}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  padding: 16,
-                  gap: 12,
-                  borderBottomWidth: index < actionMenuItems.filter(i => !i.hidden).length - 1 ? 1 : 0,
-                  borderBottomColor: WHATSAPP_COLORS.border,
-                }}
-                onPress={item.action}
-              >
-                <Ionicons
-                  name={item.icon as any}
-                  size={20}
-                  color={item.color || WHATSAPP_COLORS.textPrimary}
-                />
-                <Text style={{
-                  fontSize: 14,
-                  color: item.color || WHATSAPP_COLORS.textPrimary,
-                  fontWeight: '500',
-                }}>
-                  {item.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+      <Modal
+        visible={showActionMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowActionMenu(false)}
+      >
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.3)',
+            justifyContent: Platform.OS === 'web' ? 'center' : 'flex-start',
+            alignItems: Platform.OS === 'web' ? 'center' : 'flex-end',
+          }}
+          activeOpacity={1}
+          onPress={() => setShowActionMenu(false)}
+        >
+          <View
+            style={{
+              position: Platform.OS === 'web' ? 'relative' : 'absolute',
+              top: Platform.OS === 'web' ? 0 : 295,
+              right: Platform.OS === 'web' ? 0 : 16,
+              backgroundColor: WHATSAPP_COLORS.surface,
+              borderRadius: 8,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+              minWidth: 220,
+              maxWidth: 280,
+              // Cap at 60% of screen height so it never overflows on any device
+              maxHeight: Dimensions.get('window').height * 0.54,
+              overflow: 'hidden',
+            }}
+          >
+            <ScrollView
+              bounces={false}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+              style={{ flexGrow: 0 }}        // prevents ScrollView from expanding beyond maxHeight
+              contentContainerStyle={{ flexGrow: 0 }}
+            >
+              {actionMenuItems.filter(item => !item.hidden).map((item, index) => {
+                const visibleItems = actionMenuItems.filter(i => !i.hidden);
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 16,
+                      gap: 12,
+                      borderBottomWidth: index < visibleItems.length - 1 ? 1 : 0,
+                      borderBottomColor: WHATSAPP_COLORS.border,
+                    }}
+                    onPress={item.action}
+                  >
+                    <Ionicons
+                      name={item.icon as any}
+                      size={20}
+                      color={item.color || WHATSAPP_COLORS.textPrimary}
+                    />
+                    <Text style={{
+                      fontSize: 14,
+                      color: item.color || WHATSAPP_COLORS.textPrimary,
+                      fontWeight: '500',
+                    }}>
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -660,6 +686,23 @@ export const Overview: React.FC<OverviewProps> = ({
         employeeDetails={employeeDetails}
         token={token}
         onSuccess={onEditEmployeeSuccess || onRefresh}
+      />
+      <ExemptionModal
+        visible={showExemptAttendanceModal}
+        onClose={() => setShowExemptAttendanceModal(false)}
+        exemptionType="attendance"
+        employeeId={employee.employee_id}
+        token={token}
+        onSuccess={onRefresh}
+      />
+
+      <ExemptionModal
+        visible={showExemptGeofenceModal}
+        onClose={() => setShowExemptGeofenceModal(false)}
+        exemptionType="geofence"
+        employeeId={employee.employee_id}
+        token={token}
+        onSuccess={onRefresh}
       />
     </View>
   );

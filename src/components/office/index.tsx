@@ -204,12 +204,12 @@ export default function OfficeModule({ onBack, isDark = false }: OfficeModulePro
 
 const styles = StyleSheet.create({
   container: {
-    // flex: 1,
+    flex: 1,
     backgroundColor: '#FFFFFF',
   },
   listContent: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 60,
   },
   loadingContainer: {
     flex: 1,

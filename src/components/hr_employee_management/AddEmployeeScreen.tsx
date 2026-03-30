@@ -25,6 +25,29 @@ import * as ImagePicker from 'expo-image-picker';
 import alert from '../../utils/Alert';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
+// ==================== DESIGNATION OPTIONS ====================
+interface DesignationOption {
+  value: string;
+  label: string;
+  subtitle?: string;
+}
+
+const DESIGNATION_OPTIONS: DesignationOption[] = [
+  { value: 'BDT',              label: 'BDT',              subtitle: 'Transaction Team' },
+  { value: 'BD Manager',       label: 'BD Manager' },
+  { value: 'BUP',              label: 'BUP' },
+  { value: 'Database Manager', label: 'Database Manager' },
+  { value: 'Scouting Team',    label: 'Scouting Team' },
+  { value: 'Driver',           label: 'Driver' },
+  { value: 'Driver Manager',   label: 'Driver Manager' },
+  { value: 'HouseKeeping',     label: 'HouseKeeping' },
+  { value: 'HR',               label: 'HR' },
+  { value: 'Finance',          label: 'Finance' },
+  { value: 'Content Manager',  label: 'Content Manager' },
+  { value: 'Admin',            label: 'Admin' },
+  { value: 'Other',            label: 'Other',            subtitle: 'Specify below' },
+];
+
 // ==================== TYPES ====================
 interface Office {
   id: string;
@@ -69,6 +92,7 @@ interface BasicInfoData {
   sick_leaves: string;
   casual_leaves: string;
   designation: string;
+  other_designation: string;
   login_time: string;
   logout_time: string;
 }
@@ -91,7 +115,6 @@ const TimeInputField: React.FC<TimeInputProps> = ({
 }) => {
   const [showPicker, setShowPicker] = useState(false);
 
-  // Parse "HH:MM" string → Date object for the picker
   const parseTimeToDate = (timeStr: string): Date => {
     const now = new Date();
     if (timeStr && timeStr.includes(':')) {
@@ -101,7 +124,6 @@ const TimeInputField: React.FC<TimeInputProps> = ({
     return now;
   };
 
-  // Web: use native <input type="time">
   if (Platform.OS === 'web') {
     return (
       <input
@@ -121,11 +143,9 @@ const TimeInputField: React.FC<TimeInputProps> = ({
     );
   }
 
-  // Android / iOS: tappable field that opens native time picker
   const handlePress = () => setShowPicker(true);
 
   const handleChange = (_event: any, selectedDate?: Date) => {
-    // On Android, the picker auto-dismisses on selection or cancel
     setShowPicker(Platform.OS === 'ios');
     if (selectedDate) {
       const hours = selectedDate.getHours().toString().padStart(2, '0');
@@ -157,7 +177,6 @@ const TimeInputField: React.FC<TimeInputProps> = ({
 
       {showPicker && (
         <>
-          {/* iOS: show inline with a Done button */}
           {Platform.OS === 'ios' ? (
             <View
               style={{
@@ -185,19 +204,12 @@ const TimeInputField: React.FC<TimeInputProps> = ({
                   borderTopColor: '#eee',
                 }}
               >
-                <Text
-                  style={{
-                    color: WHATSAPP_COLORS.primary,
-                    fontSize: 16,
-                    fontWeight: '600',
-                  }}
-                >
+                <Text style={{ color: WHATSAPP_COLORS.primary, fontSize: 16, fontWeight: '600' }}>
                   Done
                 </Text>
               </TouchableOpacity>
             </View>
           ) : (
-            // Android: system time-picker dialog
             <DateTimePicker
               mode="time"
               display="default"
@@ -234,13 +246,11 @@ const OfficePickerModal: React.FC<OfficePickerModalProps> = ({
     transparent={true}
     onRequestClose={onClose}
   >
-    {/* Semi-transparent backdrop */}
     <TouchableOpacity
       style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }}
       activeOpacity={1}
       onPress={onClose}
     >
-      {/* Bottom sheet container — stops touch propagation */}
       <TouchableOpacity
         activeOpacity={1}
         style={{
@@ -252,9 +262,145 @@ const OfficePickerModal: React.FC<OfficePickerModalProps> = ({
           borderTopLeftRadius: 20,
           borderTopRightRadius: 20,
           maxHeight: '75%',
-          paddingBottom: Platform.OS === 'ios' ? 34 : 16, // safe area
+          paddingBottom: Platform.OS === 'ios' ? 34 : 16,
         }}
-        onPress={() => {}} // swallow touches so backdrop doesn't fire
+        onPress={() => {}}
+      >
+        <View
+          style={{
+            width: 40,
+            height: 4,
+            backgroundColor: '#D1D1D6',
+            borderRadius: 2,
+            alignSelf: 'center',
+            marginTop: 10,
+            marginBottom: 4,
+          }}
+        />
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 20,
+            paddingVertical: 12,
+            borderBottomWidth: 1,
+            borderBottomColor: '#F0F0F0',
+          }}
+        >
+          <Text style={{ fontSize: 18, fontWeight: '700', color: '#1C1C1E' }}>
+            Select Office
+          </Text>
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={26} color="#8E8E93" />
+          </TouchableOpacity>
+        </View>
+
+        <FlatList
+          data={offices}
+          keyExtractor={(item) => item.id}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={true}
+          renderItem={({ item: office }) => {
+            const isSelected = selectedOfficeId === office.id;
+            return (
+              <TouchableOpacity
+                onPress={() => { onSelect(office.id); onClose(); }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 20,
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#F2F2F7',
+                  backgroundColor: isSelected ? '#F0FAF7' : '#fff',
+                }}
+                activeOpacity={0.6}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: isSelected ? WHATSAPP_COLORS.primary : '#F2F2F7',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 14,
+                  }}
+                >
+                  <Ionicons name="business" size={20} color={isSelected ? '#fff' : '#666'} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: isSelected ? '600' : '400',
+                      color: isSelected ? WHATSAPP_COLORS.primary : '#1C1C1E',
+                    }}
+                    numberOfLines={1}
+                  >
+                    {office.name}
+                  </Text>
+                  <Text style={{ fontSize: 13, color: '#8E8E93', marginTop: 2 }} numberOfLines={1}>
+                    {office.city}, {office.state}
+                  </Text>
+                </View>
+                {isSelected && (
+                  <Ionicons name="checkmark-circle" size={24} color={WHATSAPP_COLORS.primary} style={{ marginLeft: 8 }} />
+                )}
+              </TouchableOpacity>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+              <Text style={{ fontSize: 15, color: '#8E8E93' }}>No offices available</Text>
+            </View>
+          }
+        />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  </Modal>
+);
+
+// ==================== DESIGNATION PICKER MODAL ====================
+interface DesignationPickerModalProps {
+  visible: boolean;
+  selectedValue: string;
+  onSelect: (value: string) => void;
+  onClose: () => void;
+}
+
+const DesignationPickerModal: React.FC<DesignationPickerModalProps> = ({
+  visible,
+  selectedValue,
+  onSelect,
+  onClose,
+}) => (
+  <Modal
+    visible={visible}
+    animationType="slide"
+    transparent={true}
+    onRequestClose={onClose}
+  >
+    <TouchableOpacity
+      style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }}
+      activeOpacity={1}
+      onPress={onClose}
+    >
+      <TouchableOpacity
+        activeOpacity={1}
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: '#fff',
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          maxHeight: '80%',
+          paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+        }}
+        onPress={() => {}}
       >
         {/* Handle bar */}
         <View
@@ -282,27 +428,25 @@ const OfficePickerModal: React.FC<OfficePickerModalProps> = ({
           }}
         >
           <Text style={{ fontSize: 18, fontWeight: '700', color: '#1C1C1E' }}>
-            Select Office
+            Select Designation
           </Text>
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close-circle" size={26} color="#8E8E93" />
           </TouchableOpacity>
         </View>
 
-        {/* Office list — fully scrollable FlatList */}
+        {/* Designation list */}
         <FlatList
-          data={offices}
-          keyExtractor={(item) => item.id}
+          data={DESIGNATION_OPTIONS}
+          keyExtractor={(item) => item.value}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={true}
-          renderItem={({ item: office }) => {
-            const isSelected = selectedOfficeId === office.id;
+          renderItem={({ item }) => {
+            const isSelected = selectedValue === item.value;
+            const isOther = item.value === 'Other';
             return (
               <TouchableOpacity
-                onPress={() => {
-                  onSelect(office.id);
-                  onClose();
-                }}
+                onPress={() => { onSelect(item.value); onClose(); }}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -320,37 +464,55 @@ const OfficePickerModal: React.FC<OfficePickerModalProps> = ({
                     width: 40,
                     height: 40,
                     borderRadius: 20,
-                    backgroundColor: isSelected ? WHATSAPP_COLORS.primary : '#F2F2F7',
+                    backgroundColor: isSelected
+                      ? WHATSAPP_COLORS.primary
+                      : isOther
+                      ? '#FFF3E0'
+                      : '#F2F2F7',
                     alignItems: 'center',
                     justifyContent: 'center',
                     marginRight: 14,
                   }}
                 >
                   <Ionicons
-                    name="business"
+                    name={
+                      isOther
+                        ? 'create-outline'
+                        : isSelected
+                        ? 'person'
+                        : 'person-outline'
+                    }
                     size={20}
-                    color={isSelected ? '#fff' : '#666'}
+                    color={
+                      isSelected
+                        ? '#fff'
+                        : isOther
+                        ? '#FF9800'
+                        : '#666'
+                    }
                   />
                 </View>
 
-                {/* Office info */}
+                {/* Label + subtitle */}
                 <View style={{ flex: 1 }}>
                   <Text
                     style={{
                       fontSize: 16,
                       fontWeight: isSelected ? '600' : '400',
-                      color: isSelected ? WHATSAPP_COLORS.primary : '#1C1C1E',
+                      color: isSelected
+                        ? WHATSAPP_COLORS.primary
+                        : isOther
+                        ? '#FF9800'
+                        : '#1C1C1E',
                     }}
-                    numberOfLines={1}
                   >
-                    {office.name}
+                    {item.label}
                   </Text>
-                  <Text
-                    style={{ fontSize: 13, color: '#8E8E93', marginTop: 2 }}
-                    numberOfLines={1}
-                  >
-                    {office.city}, {office.state}
-                  </Text>
+                  {item.subtitle ? (
+                    <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                      {item.subtitle}
+                    </Text>
+                  ) : null}
                 </View>
 
                 {/* Checkmark */}
@@ -365,11 +527,6 @@ const OfficePickerModal: React.FC<OfficePickerModalProps> = ({
               </TouchableOpacity>
             );
           }}
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-              <Text style={{ fontSize: 15, color: '#8E8E93' }}>No offices available</Text>
-            </View>
-          }
         />
       </TouchableOpacity>
     </TouchableOpacity>
@@ -392,6 +549,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   const [selectedReportingTag, setSelectedReportingTag] = useState<string>('');
   const [documents, setDocuments] = useState<Document[]>([]);
   const [showOfficePicker, setShowOfficePicker] = useState<boolean>(false);
+  const [showDesignationPicker, setShowDesignationPicker] = useState<boolean>(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const [keyboardVisible, setKeyboardVisible] = useState<boolean>(false);
 
@@ -407,6 +565,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     sick_leaves: '0',
     casual_leaves: '0',
     designation: '',
+    other_designation: '',
     login_time: '',
     logout_time: '',
   });
@@ -449,6 +608,13 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     [selectedTags, tags]
   );
 
+  // Derived: the designation label to display in the picker button
+  const designationLabel = useMemo(() => {
+    if (!basicInfo.designation) return '';
+    const opt = DESIGNATION_OPTIONS.find((d) => d.value === basicInfo.designation);
+    return opt ? opt.label : basicInfo.designation;
+  }, [basicInfo.designation]);
+
   // ==================== EFFECTS ====================
   useEffect(() => {
     fetchInitialData();
@@ -459,14 +625,12 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
     const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
     const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
+    return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
   useEffect(() => {
     setShowOfficePicker(false);
+    setShowDesignationPicker(false);
     if (scrollViewRef.current) {
       scrollViewRef.current.scrollTo({ y: 0, animated: false });
     }
@@ -533,6 +697,15 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     []
   );
 
+  const handleDesignationSelect = useCallback((value: string) => {
+    setBasicInfo((prev) => ({
+      ...prev,
+      designation: value,
+      // Clear other_designation when switching away from Other
+      other_designation: value !== 'Other' ? '' : prev.other_designation,
+    }));
+  }, []);
+
   const handleAddressChange = useCallback(
     (
       addressType: 'home_address' | 'current_address',
@@ -588,10 +761,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
 
   const pickDocuments = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
-        multiple: true,
-      });
+      const result = await DocumentPicker.getDocumentAsync({ type: '*/*', multiple: true });
       if (!result.canceled && result.assets) {
         const newDocuments: Document[] = result.assets.map((doc) => ({
           uri: doc.uri,
@@ -644,6 +814,13 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
         errorMessage: 'Please enter a valid phone number (minimum 10 digits)',
       };
     }
+    // If designation is "Other", require other_designation
+    if (basicInfo.designation === 'Other' && !basicInfo.other_designation.trim()) {
+      return {
+        isValid: false,
+        errorMessage: 'Please specify the designation in the "Other Designation" field',
+      };
+    }
     return { isValid: true };
   };
 
@@ -680,6 +857,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   const handleNext = () => {
     Keyboard.dismiss();
     setShowOfficePicker(false);
+    setShowDesignationPicker(false);
     let validationResult: StepValidationResult = { isValid: true };
     switch (currentStep) {
       case 1: validationResult = validateStep1(); break;
@@ -697,6 +875,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
   const handlePrevious = () => {
     Keyboard.dismiss();
     setShowOfficePicker(false);
+    setShowDesignationPicker(false);
     if (currentStep > 1) {
       setCurrentStep((prev) => prev - 1);
     } else {
@@ -752,6 +931,13 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       formData.append('token', token);
 
       Object.entries(basicInfo).forEach(([key, value]) => {
+        if (key === 'other_designation') {
+          // Only send other_designation when designation is "Other"
+          if (basicInfo.designation === 'Other' && value) {
+            formData.append(key, value);
+          }
+          return;
+        }
         if (value) {
           if (key.includes('leaves')) {
             formData.append(key, String(parseInt(value) || 0));
@@ -870,17 +1056,13 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
             <View
               style={[
                 styles.stepIndicator,
-                currentStep >= step
-                  ? styles.stepIndicatorActive
-                  : styles.stepIndicatorInactive,
+                currentStep >= step ? styles.stepIndicatorActive : styles.stepIndicatorInactive,
               ]}
             >
               <Text
                 style={[
                   styles.stepIndicatorText,
-                  currentStep >= step
-                    ? styles.stepIndicatorTextActive
-                    : styles.stepIndicatorTextInactive,
+                  currentStep >= step ? styles.stepIndicatorTextActive : styles.stepIndicatorTextInactive,
                 ]}
               >
                 {step}
@@ -890,9 +1072,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
               <View
                 style={[
                   styles.stepConnector,
-                  currentStep > step
-                    ? styles.stepConnectorActive
-                    : styles.stepConnectorInactive,
+                  currentStep > step ? styles.stepConnectorActive : styles.stepConnectorInactive,
                 ]}
               />
             )}
@@ -900,16 +1080,14 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
         ))}
       </View>
       <View style={styles.stepLabelsContainer}>
-        {['Basic Info', 'Address', 'Tags', 'Reporting', 'Documents'].map(
-          (label, i) => (
-            <Text
-              key={label}
-              style={[styles.stepLabel, currentStep === i + 1 && styles.stepLabelActive]}
-            >
-              {label}
-            </Text>
-          )
-        )}
+        {['Basic Info', 'Address', 'Tags', 'Reporting', 'Documents'].map((label, i) => (
+          <Text
+            key={label}
+            style={[styles.stepLabel, currentStep === i + 1 && styles.stepLabelActive]}
+          >
+            {label}
+          </Text>
+        ))}
       </View>
     </View>
   );
@@ -974,10 +1152,19 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       keyboardDismissMode="interactive"
       contentContainerStyle={{ paddingBottom: 0, backgroundColor: '#FFFFFF' }}
     >
+      {/* Designation picker modal — rendered at this level so it overlays everything */}
+      <DesignationPickerModal
+        visible={showDesignationPicker}
+        selectedValue={basicInfo.designation}
+        onSelect={handleDesignationSelect}
+        onClose={() => setShowDesignationPicker(false)}
+      />
+
       <View style={styles.section}>
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Basic Information
         </Text>
+
         <View style={styles.formGroup}>
           <Text style={styles.label}>Employee ID *</Text>
           <TextInput
@@ -1013,16 +1200,109 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
           </View>
         </View>
 
+        {/* ── Designation Picker ── */}
         <View style={styles.formGroup}>
           <Text style={styles.label}>Designation</Text>
-          <TextInput
-            style={styles.input}
-            value={basicInfo.designation}
-            onChangeText={(v) => handleBasicInfoChange('designation', v)}
-            placeholder="e.g., Software Engineer, HR Manager"
-            returnKeyType="next"
-          />
+          <TouchableOpacity
+            style={[
+              styles.input,
+              {
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingVertical: 12,
+              },
+            ]}
+            onPress={() => {
+              Keyboard.dismiss();
+              setShowDesignationPicker(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text
+              style={{
+                fontSize: 16,
+                color: basicInfo.designation ? '#000' : '#999',
+                flex: 1,
+              }}
+              numberOfLines={1}
+            >
+              {designationLabel || 'Select designation'}
+            </Text>
+            <Ionicons name="chevron-down" size={20} color="#666" />
+          </TouchableOpacity>
+
+          {/* Inline chip showing selected designation (optional UX reinforcement) */}
+          {basicInfo.designation && basicInfo.designation !== 'Other' && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                marginTop: 6,
+                backgroundColor: '#F0FAF7',
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                alignSelf: 'flex-start',
+              }}
+            >
+              <Ionicons name="person-circle-outline" size={14} color={WHATSAPP_COLORS.primary} />
+              <Text style={{ fontSize: 12, color: WHATSAPP_COLORS.primary, marginLeft: 4, fontWeight: '500' }}>
+                {designationLabel}
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleDesignationSelect('')}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                style={{ marginLeft: 6 }}
+              >
+                <Ionicons name="close-circle" size={14} color={WHATSAPP_COLORS.primary} />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
+
+        {/* ── Other Designation text input — only shown when "Other" is selected ── */}
+        {basicInfo.designation === 'Other' && (
+          <View style={[styles.formGroup, { marginTop: -4 }]}>
+            <Text style={styles.label}>
+              Other Designation *{' '}
+              <Text style={{ fontSize: 12, color: '#8E8E93', fontWeight: '400' }}>
+                (please specify)
+              </Text>
+            </Text>
+            <View style={{ position: 'relative' }}>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    borderColor: '#FF9800',
+                    borderWidth: 1.5,
+                    paddingRight: 40,
+                  },
+                ]}
+                value={basicInfo.other_designation}
+                onChangeText={(v) => handleBasicInfoChange('other_designation', v)}
+                placeholder="e.g., Project Manager, Legal Advisor…"
+                autoFocus
+                returnKeyType="next"
+              />
+              <View
+                style={{
+                  position: 'absolute',
+                  right: 12,
+                  top: 0,
+                  bottom: 0,
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="create-outline" size={18} color="#FF9800" />
+              </View>
+            </View>
+            <Text style={[styles.helperText, { color: '#FF9800' }]}>
+              This field is required when designation is "Other"
+            </Text>
+          </View>
+        )}
 
         <View style={styles.formGroup}>
           <Text style={styles.label}>Email</Text>
@@ -1141,7 +1421,6 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
       keyboardDismissMode="interactive"
       contentContainerStyle={{ paddingBottom: 16, backgroundColor: '#FFFFFF' }}
     >
-      {/* Office Picker Modal (Fix 2) */}
       <OfficePickerModal
         visible={showOfficePicker}
         offices={offices}
@@ -1172,9 +1451,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
               activeOpacity={0.7}
             >
               <Text style={addressInfo.office_id ? {} : { color: '#999' }}>
-                {addressInfo.office_id
-                  ? selectedOffice?.name || 'Select Office'
-                  : 'Select Office'}
+                {addressInfo.office_id ? selectedOffice?.name || 'Select Office' : 'Select Office'}
               </Text>
               <Ionicons name="chevron-down" size={20} color="#666" />
             </TouchableOpacity>
@@ -1344,9 +1621,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
         <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
           Assign Tags *
         </Text>
-        <Text style={styles.sectionSubtitle}>
-          Select one or more tags for the employee
-        </Text>
+        <Text style={styles.sectionSubtitle}>Select one or more tags for the employee</Text>
         {tags.length === 0 ? (
           <Text style={styles.noDataText}>No tags available</Text>
         ) : (
@@ -1354,18 +1629,10 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
             {tags.map((tag) => (
               <TouchableOpacity
                 key={tag.tag_id}
-                style={[
-                  styles.tagItem,
-                  selectedTags.includes(tag.tag_id) && styles.tagItemSelected,
-                ]}
+                style={[styles.tagItem, selectedTags.includes(tag.tag_id) && styles.tagItemSelected]}
                 onPress={() => toggleTagSelection(tag.tag_id)}
               >
-                <Text
-                  style={[
-                    styles.tagText,
-                    selectedTags.includes(tag.tag_id) && styles.tagTextSelected,
-                  ]}
-                >
+                <Text style={[styles.tagText, selectedTags.includes(tag.tag_id) && styles.tagTextSelected]}>
                   {tag.tag_name}
                 </Text>
                 {tag.tag_type && <Text style={styles.tagType}>{tag.tag_type}</Text>}
@@ -1401,18 +1668,10 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
             {tags.map((tag) => (
               <TouchableOpacity
                 key={tag.tag_id}
-                style={[
-                  styles.tagItem,
-                  selectedReportingTag === tag.tag_id && styles.tagItemSelected,
-                ]}
+                style={[styles.tagItem, selectedReportingTag === tag.tag_id && styles.tagItemSelected]}
                 onPress={() => selectReportingTag(tag.tag_id)}
               >
-                <Text
-                  style={[
-                    styles.tagText,
-                    selectedReportingTag === tag.tag_id && styles.tagTextSelected,
-                  ]}
-                >
+                <Text style={[styles.tagText, selectedReportingTag === tag.tag_id && styles.tagTextSelected]}>
                   {tag.tag_name}
                 </Text>
                 {tag.tag_type && <Text style={styles.tagType}>{tag.tag_type}</Text>}
@@ -1441,11 +1700,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
         <Text style={styles.sectionSubtitle}>
           Upload required documents (Aadhar, PAN, Educational, etc.)
         </Text>
-        <TouchableOpacity
-          style={styles.uploadButton}
-          onPress={showPickerOptions}
-          disabled={submitting}
-        >
+        <TouchableOpacity style={styles.uploadButton} onPress={showPickerOptions} disabled={submitting}>
           <Ionicons name="cloud-upload-outline" size={24} color={WHATSAPP_COLORS.primary} />
           <Text style={styles.uploadButtonText}>Browse Documents</Text>
           <Text style={styles.uploadButtonSubtext}>PDF, DOC, JPG, PNG supported</Text>
@@ -1459,16 +1714,10 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
             {documents.map((doc, index) => (
               <View key={index} style={styles.documentItem}>
                 <View style={styles.documentIcon}>
-                  <Ionicons
-                    name={getDocumentIcon(doc.type)}
-                    size={20}
-                    color={WHATSAPP_COLORS.primary}
-                  />
+                  <Ionicons name={getDocumentIcon(doc.type)} size={20} color={WHATSAPP_COLORS.primary} />
                 </View>
                 <View style={styles.documentInfo}>
-                  <Text style={styles.documentName} numberOfLines={1}>
-                    {doc.name}
-                  </Text>
+                  <Text style={styles.documentName} numberOfLines={1}>{doc.name}</Text>
                   <Text style={styles.documentSize}>{formatFileSize(doc.size || 0)}</Text>
                 </View>
                 <TouchableOpacity
@@ -1487,12 +1736,16 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
           <Text style={[styles.sectionTitleAlt, { fontSize: 20, marginBottom: 12 }]}>
             Review Information
           </Text>
-          <ReviewSection
-            label="Employee:"
-            value={`${basicInfo.first_name} ${basicInfo.last_name}`}
-          />
+          <ReviewSection label="Employee:" value={`${basicInfo.first_name} ${basicInfo.last_name}`} />
           <ReviewSection label="Employee ID:" value={basicInfo.employee_id} />
-          <ReviewSection label="Designation:" value={basicInfo.designation || 'Not specified'} />
+          <ReviewSection
+            label="Designation:"
+            value={
+              basicInfo.designation === 'Other'
+                ? `Other — ${basicInfo.other_designation || 'not specified'}`
+                : designationLabel || 'Not specified'
+            }
+          />
           <ReviewSection
             label="Contact:"
             value={basicInfo.email || basicInfo.phone_number || 'Not provided'}
@@ -1530,8 +1783,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
             label="Reporting Tag:"
             value={
               selectedReportingTag
-                ? tags.find((t) => t.tag_id === selectedReportingTag)?.tag_name ||
-                  selectedReportingTag
+                ? tags.find((t) => t.tag_id === selectedReportingTag)?.tag_name || selectedReportingTag
                 : 'Not selected'
             }
           />
@@ -1575,8 +1827,7 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
               flexDirection: 'row',
               alignItems: 'center',
               paddingHorizontal: 16,
-              paddingTop:
-                (StatusBar.currentHeight ?? 0) + (Platform.OS === 'ios' ? 44 : 8),
+              paddingTop: (StatusBar.currentHeight ?? 0) + (Platform.OS === 'ios' ? 44 : 8),
               paddingBottom: 8,
               backgroundColor: '#fff',
               borderBottomWidth: 1,

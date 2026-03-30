@@ -89,14 +89,11 @@ export interface ReasonOption {
 export const CHECKIN_REASONS: ReasonOption[] = [
   { value: 'client_visit', label: 'Client visit/meeting' },
   { value: 'field_work', label: 'Field work' },
-  { value: 'sick', label: 'Sick/Medical appointment' },
-  { value: 'personal_work', label: 'Personal work' },
   { value: 'other', label: 'Other (please specify)' }
 ];
 
 export const CHECKOUT_REASONS: ReasonOption[] = [
   { value: 'client_meeting', label: 'Client meeting outside' },
-  { value: 'personal_work', label: 'Personal work' },
   { value: 'sick', label: 'Feeling unwell' },
   { value: 'emergency', label: 'Emergency' },
   { value: 'other', label: 'Other (please specify)' }

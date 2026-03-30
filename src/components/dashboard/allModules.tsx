@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
@@ -46,6 +47,7 @@ const AllModulesModal: React.FC<AllModulesModalProps> = ({
     theme,
     currentColors,
 }) => {
+    const insets = useSafeAreaInsets();           // ← add this
     const [slideAnim] = useState(new Animated.Value(height));
     const [fadeAnim] = useState(new Animated.Value(0));
     const itemWidth = (width - 60) / 2;
@@ -111,16 +113,9 @@ const AllModulesModal: React.FC<AllModulesModalProps> = ({
                 backgroundColor="transparent"
                 translucent={true}
             />
-            
-            {/* Backdrop */}
-            <Animated.View
-                style={[
-                    styles.backdrop,
-                    {
-                        opacity: fadeAnim,
-                    },
-                ]}
-            >
+
+            {/* Backdrop — unchanged */}
+            <Animated.View style={[styles.backdrop, { opacity: fadeAnim }]}>
                 <TouchableOpacity
                     style={StyleSheet.absoluteFill}
                     activeOpacity={1}
@@ -128,30 +123,29 @@ const AllModulesModal: React.FC<AllModulesModalProps> = ({
                 />
             </Animated.View>
 
-            {/* Modal Content */}
+            {/* Modal Content — unchanged */}
             <Animated.View
                 style={[
                     styles.modalContainer,
                     { backgroundColor: theme.bgColor },
-                    {
-                        transform: [{ translateY: slideAnim }],
-                    },
+                    { transform: [{ translateY: slideAnim }] },
                 ]}
             >
-                {/* Header with Gradient */}
+                {/* Header — paddingTop now uses insets.top instead of hardcoded values */}
                 <LinearGradient
                     colors={[currentColors.gradientStart, currentColors.gradientEnd]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={styles.headerGradient}
+                    style={[
+                        styles.headerGradient,
+                        { paddingTop: insets.top + 20 },   // ← replaces the hardcoded paddingTop in StyleSheet
+                    ]}
                 >
-                    {/* Decorative sketch elements */}
+                    {/* Everything inside the gradient is unchanged */}
                     <View style={styles.sketchCircle1} />
                     <View style={styles.sketchCircle2} />
                     <View style={styles.sketchWave} />
-                    
                     <View style={styles.headerContent}>
-                        {/* Top Bar */}
                         <View style={styles.topBar}>
                             <TouchableOpacity
                                 onPress={handleClose}
@@ -161,18 +155,14 @@ const AllModulesModal: React.FC<AllModulesModalProps> = ({
                                 <Ionicons name="chevron-back" size={24} color="white" />
                                 <Text style={styles.backText}>Back</Text>
                             </TouchableOpacity>
-                            
                             <View style={styles.headerTextContainer}>
                                 <Text style={styles.headerTitle}>All Modules</Text>
                                 <Text style={styles.headerSubtitle}>
                                     {modules.length} {modules.length === 1 ? 'module' : 'modules'} available
                                 </Text>
                             </View>
-                            
                             <View style={styles.backButtonSpacer} />
                         </View>
-
-                        {/* Search Bar */}
                         <View style={styles.searchWrapper}>
                             <View style={styles.searchBar}>
                                 <Ionicons
@@ -208,24 +198,26 @@ const AllModulesModal: React.FC<AllModulesModalProps> = ({
                     </View>
                 </LinearGradient>
 
-                {/* Content Area */}
+                {/* Content Area — paddingBottom now uses insets.bottom */}
                 <View style={[styles.contentWrapper, { backgroundColor: theme.bgColor }]}>
                     <ScrollView
                         style={styles.scrollView}
-                        contentContainerStyle={styles.scrollContent}
+                        contentContainerStyle={[
+                            styles.scrollContent,
+                            { paddingBottom: insets.bottom + 40 },   // ← replaces the hardcoded paddingBottom in StyleSheet
+                        ]}
                         showsVerticalScrollIndicator={false}
                         bounces={true}
                     >
+                        {/* Everything inside ScrollView is unchanged */}
                         {modules.length === 0 ? (
                             <View style={styles.emptyState}>
                                 <View style={[styles.emptyIconContainer, {
-                                    backgroundColor: theme.cardBg === '#111a2d' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5',
+                                    backgroundColor: theme.cardBg === '#111a2d'
+                                        ? 'rgba(255, 255, 255, 0.05)'
+                                        : '#f5f5f5',
                                 }]}>
-                                    <Ionicons
-                                        name="search-outline"
-                                        size={48}
-                                        color={theme.textSub || '#999'}
-                                    />
+                                    <Ionicons name="search-outline" size={48} color={theme.textSub || '#999'} />
                                 </View>
                                 <Text style={[styles.emptyTitle, { color: theme.textMain }]}>
                                     No modules found
@@ -301,8 +293,8 @@ const ModuleCard: React.FC<{
             >
                 <View style={styles.moduleCardInner}>
                     <View style={[styles.iconContainer, {
-                        backgroundColor: theme.cardBg === '#111a2d' 
-                            ? 'rgba(255, 255, 255, 0.05)' 
+                        backgroundColor: theme.cardBg === '#111a2d'
+                            ? 'rgba(255, 255, 255, 0.05)'
                             : '#f8f9fa',
                     }]}>
                         <Image

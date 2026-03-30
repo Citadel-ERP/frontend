@@ -5,11 +5,7 @@
     "owner": "ananyavishnoi",
     "version": "1.2.1",
     "projectId": "fba32196-78ea-4b4d-9ccb-d57375d90e9f",
-    "platforms": [
-      "ios",
-      "android",
-      "web"
-    ],
+    "platforms": ["ios", "android", "web"],
     "orientation": "portrait",
     "icon": "./src/assets/app-icon-ios.png",
     "userInterfaceStyle": "light",
@@ -19,9 +15,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#e7e6e5"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.citadelnetinc.app",
@@ -38,16 +32,17 @@
           "com.citadelnetinc.app.location",
           "com.citadelnetinc.app.processing"
         ],
-        "NSLocationWhenInUseUsageDescription": "Citadel uses your location while the app is in use to verify your presence at assigned work sites and mark your attendance. For example, when you log in or mark attendance, your location is checked to ensure you are within the permitted office or site area.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Citadel uses your location in the background to automatically detect when you enter or leave assigned work locations for attendance tracking. For example, the app can mark your check-in when you arrive at the office and check-out when you leave.",
-        "NSLocationAlwaysUsageDescription": "Citadel uses your location even when the app is not in use to support geofencing-based attendance. For example, your attendance is automatically updated when you enter or exit designated office locations without opening the app.",
-        "NSCameraUsageDescription": "Citadel uses your camera to capture profile photos and upload documents. For example, you can take a photo for your profile or scan required documents.",
-        "NSPhotoLibraryUsageDescription": "Citadel uses your photo library to allow you to select images for profile pictures and document uploads. For example, you can upload an existing image as your profile photo.",
-        "NSPhotoLibraryAddUsageDescription": "Citadel saves images such as downloaded documents or generated media to your photo library when you choose to save them.",
-        "NSFaceIDUsageDescription": "Citadel uses Face ID to securely authenticate you and provide quick access to your account.",
-        "NSContactsUsageDescription": "Citadel uses your contacts to help you share information with colleagues. For example, you can select contacts to share details through the app.",
+        "NSLocationWhenInUseUsageDescription": "Citadel needs your location to verify you are at your assigned office or work site when marking attendance. Without this, attendance cannot be verified.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Citadel uses background location to automatically check you in and out when you enter or leave your assigned work site, so you don't need to open the app to mark attendance.",
+        "NSLocationAlwaysUsageDescription": "Citadel uses your location in the background to detect when you arrive at or leave your work site and mark attendance automatically — even when the app is closed.",
+        "NSCameraUsageDescription": "Citadel uses your camera to take profile photos, capture document images, and enable video or photo sharing within team chats.",
+        "NSPhotoLibraryUsageDescription": "Citadel accesses your photo library so you can upload profile pictures, share images in chats, and attach documents stored on your device.",
+        "NSPhotoLibraryAddUsageDescription": "Citadel saves documents and shared media from your workplace to your photo library when you choose to download them.",
+        "NSMicrophoneUsageDescription": "Citadel uses your microphone to record and send voice messages in team chats and to support audio during calls.",
+        "NSFaceIDUsageDescription": "Citadel uses Face ID so you can log in quickly and securely without entering your password every time.",
+        "NSContactsUsageDescription": "Citadel accesses your contacts so you can find and message colleagues, and saves contact details shared by teammates in chats directly to your address book.",
         "NSLocationTemporaryUsageDescriptionDictionary": {
-          "attendance": "Your location is temporarily used to verify your presence at the assigned office or work site when marking attendance."
+          "attendance": "Citadel temporarily checks your location to confirm you are at your assigned work site when marking attendance."
         },
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -72,14 +67,18 @@
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
         "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.READ_CONTACTS",
-        "android.permission.WRITE_CONTACTS"
+        "android.permission.WRITE_CONTACTS",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
       ]
     },
     "web": {
@@ -92,15 +91,15 @@
       [
         "expo-contacts",
         {
-          "contactsPermission": "Citadel needs access to your contacts so you can share them in chats."
+          "contactsPermission": "Citadel needs access to your contacts so you can find colleagues and share contact details within the app."
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow Citadel to access your location while using the app.",
-          "locationAlwaysAndWhenInUsePermission": "Allow Citadel to access your location in the background for attendance tracking.",
-          "locationAlwaysPermission": "Allow Citadel to access your location even when the app is closed.",
+          "locationWhenInUsePermission": "Citadel needs your location while using the app to verify you are at your assigned work site when marking attendance.",
+          "locationAlwaysAndWhenInUsePermission": "Citadel uses background location to automatically check you in and out of your work site for attendance, even when the app is not open.",
+          "locationAlwaysPermission": "Citadel uses your location in the background to detect when you arrive at or leave your work site and mark attendance automatically.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
         }
@@ -108,20 +107,20 @@
       [
         "expo-av",
         {
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for voice messages."
+          "microphonePermission": "Citadel uses your microphone to record voice messages and support audio during calls in team chats."
         }
       ],
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Allow Citadel to use Face ID for secure authentication."
+          "faceIDPermission": "Citadel uses Face ID so you can log in quickly and securely without entering your password."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Citadel needs access to your photo library to select photos for profile pictures and document uploads.",
-          "cameraPermission": "Citadel needs access to your camera to take photos for profile pictures and document uploads.",
+          "photosPermission": "Citadel needs your photo library to upload profile pictures, share images in chats, and attach documents.",
+          "cameraPermission": "Citadel uses your camera to take profile photos, capture documents, and share images in team chats.",
           "saveToPhotosAlbum": true
         }
       ],

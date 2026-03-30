@@ -10,7 +10,8 @@ import {
   TouchableOpacity,
   Platform
 } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from './src/config/config';
 import SplashScreen from './src/components/SplashScreen';
@@ -87,12 +88,12 @@ function App(): React.JSX.Element {
   // Get backend URL from environment variables
   const getBackendUrl = (): string => {
     const backendUrl = BACKEND_URL;
-    
+
     if (!backendUrl) {
       console.error('BACKEND_URL not found in environment variables');
       throw new Error('Backend URL not configured. Please check your environment setup.');
     }
-    
+
     return backendUrl;
   };
 
@@ -108,7 +109,7 @@ function App(): React.JSX.Element {
         console.log('🔍 Running initial system validation...');
         const isValid = await ConfigValidator.runValidation();
         const inExpoGo = Constants.appOwnership === 'expo';
-        
+
         if (inExpoGo && Platform.OS === 'ios') {
           console.log('');
           console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -135,45 +136,47 @@ function App(): React.JSX.Element {
           console.log('ℹ️  Access detailed validation: Menu → System Validation');
         }
       };
-      
+
       runInitialValidation();
     }
   }, []);
 
   // Single unified useEffect for initializing all background services
+  // App.tsx — replace the initializeBackgroundServices useEffect
+
   useEffect(() => {
     const initializeBackgroundServices = async () => {
-      if (userData.isAuthenticated) {
-        try {
-          console.log('🚀 User authenticated, initializing all background services...');
-          
-          // Initialize all attendance services (polling + geofencing)
-          const results = await BackgroundAttendanceService.initializeAll();
-          console.log('📊 Background attendance services:', results);
-          
-          if (results.backgroundFetch) {
-            console.log('✅ Background fetch: Ready');
-          } else {
-            console.log('⚠️ Background fetch: Failed');
-          }
-          
-          if (results.geofencing) {
-            console.log('✅ Geofencing: Active');
-          } else {
-            console.log('ℹ️ Geofencing: Not configured (office location needed)');
-          }
-          
-          // Initialize random location tracking
-          const locationInitialized = await BackgroundLocationService.initialize();
-          console.log('📍 Random location tracking:', locationInitialized ? 'Active' : 'Failed');
-          
-          if (locationInitialized) {
-            const locationInfo = await BackgroundLocationService.getLastTrackedInfo();
-            console.log('📊 Location tracking info:', locationInfo);
-          }
-        } catch (error) {
-          console.error('❌ Failed to initialize background services:', error);
+      if (!userData.isAuthenticated) return;
+      if (Platform.OS === 'web') return;
+      if (Constants.appOwnership === 'expo') return;
+
+      try {
+        // Step 1: Check what's already granted — no dialogs yet
+        const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
+        const backgroundAlreadyGranted = bgStatus === 'granted';
+
+        if (!backgroundAlreadyGranted) {
+          // Step 2: We need background location — show disclosure FIRST
+          // We can't show the BackgroundLocationDisclosure modal here (it lives in Dashboard)
+          // So we store a flag and let Dashboard handle it on mount
+          await AsyncStorage.setItem('pending_background_location_disclosure', 'true');
+
+          // Only initialize services that don't need background location
+          // (foreground-only features can still start)
+          console.log('ℹ️ Background location not yet granted, deferring initialization');
+          return;
         }
+
+        // Background already granted — safe to initialize everything
+        console.log('🚀 Background location already granted, initializing services...');
+        const results = await BackgroundAttendanceService.initializeAll();
+        console.log('📊 Background attendance services:', results);
+
+        const locationInitialized = await BackgroundLocationService.initialize();
+        console.log('📍 Random location tracking:', locationInitialized ? 'Active' : 'Failed');
+
+      } catch (error) {
+        console.error('❌ Failed to initialize background services:', error);
       }
     };
 
@@ -182,7 +185,7 @@ function App(): React.JSX.Element {
 
   const handleAppStateChange = async (nextAppState: AppStateStatus) => {
     setAppState(nextAppState);
-    
+
     // Re-initialize background service when app becomes active and user is authenticated
     if (nextAppState === 'active' && userData.isAuthenticated) {
       try {
@@ -196,10 +199,10 @@ function App(): React.JSX.Element {
   const loginAPI = async (email: string, password: string, isBrowser: boolean): Promise<LoginResponse> => {
     try {
       const BACKEND_URL = getBackendUrl();
-      
+
       console.log('Using Backend URL:', BACKEND_URL);
       console.log('Is Browser:', isBrowser);
-      
+
       const response = await fetch(`${BACKEND_URL}/core/login`, {
         method: 'POST',
         headers: {
@@ -238,7 +241,7 @@ function App(): React.JSX.Element {
   const mpinLoginAPI = async (token: string, mpin: string): Promise<LoginResponse> => {
     try {
       const BACKEND_URL = getBackendUrl();
-      
+
       const response = await fetch(`${BACKEND_URL}/core/login`, {
         method: 'POST',
         headers: {
@@ -275,7 +278,7 @@ function App(): React.JSX.Element {
   const resetPasswordAPI = async (email: string, oldPassword: string, newPassword: string): Promise<ResetPasswordResponse> => {
     try {
       const BACKEND_URL = getBackendUrl();
-      
+
       const response = await fetch(`${BACKEND_URL}/core/resetPassword`, {
         method: 'POST',
         headers: {
@@ -344,7 +347,7 @@ function App(): React.JSX.Element {
 
       // Store email and user data
       await AsyncStorage.setItem('user_email', email);
-      
+
       // Store first_name and last_name if available
       if (response.user?.first_name) {
         await AsyncStorage.setItem('user_first_name', response.user.first_name);
@@ -375,11 +378,11 @@ function App(): React.JSX.Element {
       } else if (response.first_login === false && response.token) {
         // Not first login and we have token - save it and proceed
         await AsyncStorage.setItem(TOKEN_2_KEY, response.token);
-        
+
         // Generate token1 and proceed to welcome/dashboard
         const token1 = generateRandomToken();
         await AsyncStorage.setItem(TOKEN_1_KEY, token1);
-        
+
         setCurrentScreen('welcome');
       } else {
         // Handle unexpected response
@@ -387,9 +390,9 @@ function App(): React.JSX.Element {
       }
     } catch (error) {
       console.error('Login error:', error);
-      
+
       let errorMessage = 'Login failed. Please try again.';
-      
+
       if (error instanceof Error) {
         if (error.message.includes('Backend URL not configured')) {
           errorMessage = 'Configuration error. Please contact support.';
@@ -401,7 +404,7 @@ function App(): React.JSX.Element {
           errorMessage = error.message;
         }
       }
-      
+
       Alert.alert(
         'Login Error',
         errorMessage,
@@ -434,7 +437,7 @@ function App(): React.JSX.Element {
 
       // Update userData to authenticated state
       setUserData(prev => ({ ...prev, isAuthenticated: true }));
-      
+
       setCurrentScreen('welcome');
     } catch (error) {
       console.error('Error storing MPIN data:', error);
@@ -448,7 +451,7 @@ function App(): React.JSX.Element {
     setIsLoading(true);
     try {
       const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
-      
+
       if (!storedToken) {
         throw new Error('No authentication token found');
       }
@@ -481,10 +484,10 @@ function App(): React.JSX.Element {
         return;
       } catch (backendError) {
         console.log('Backend MPIN login failed, trying local verification:', backendError);
-        
+
         // Fallback to local MPIN verification
         const storedMPin = await AsyncStorage.getItem(MPIN_KEY);
-        
+
         if (mpin === storedMPin) {
           setUserData(prev => ({ ...prev, isAuthenticated: true }));
           setCurrentScreen('welcome');
@@ -498,13 +501,13 @@ function App(): React.JSX.Element {
       }
     } catch (error) {
       console.error('MPIN login error:', error);
-      
+
       let errorMessage = 'Something went wrong. Please login with your email and password.';
-      
+
       if (error instanceof Error && error.message.includes('Backend URL not configured')) {
         errorMessage = 'Configuration error. Please contact support.';
       }
-      
+
       Alert.alert(
         'Authentication Error',
         errorMessage,
@@ -531,9 +534,9 @@ function App(): React.JSX.Element {
   const handleResendOTP = async (email: string) => {
     try {
       const BACKEND_URL = getBackendUrl();
-      
+
       console.log('Resending OTP to:', email);
-      
+
       const response = await fetch(`${BACKEND_URL}/core/forgotPassword`, {
         method: 'POST',
         headers: {
@@ -618,13 +621,13 @@ function App(): React.JSX.Element {
   const handleLogout = async () => {
     try {
       console.log('🔄 Logging out and stopping all background services...');
-      
+
       // Stop all background services before logout
       await BackgroundAttendanceService.stopAll();
       await BackgroundLocationService.stop();
-      
+
       console.log('✅ All background services stopped');
-      
+
       // Clear all stored data
       await AsyncStorage.multiRemove([
         TOKEN_1_KEY,
@@ -642,7 +645,7 @@ function App(): React.JSX.Element {
       setUser(null);
       setTempData({});
       setCurrentScreen('login');
-      
+
       console.log('✅ Logout complete');
     } catch (error) {
       console.error('❌ Error during logout:', error);
@@ -690,7 +693,7 @@ function App(): React.JSX.Element {
     switch (currentScreen) {
       case 'splash':
         return <SplashScreen onSplashComplete={handleSplashComplete} />;
-      
+
       case 'login':
         return (
           <Login
@@ -700,7 +703,7 @@ function App(): React.JSX.Element {
             isLoading={isLoading}
           />
         );
-      
+
       case 'createMPIN':
         return (
           <CreateMPIN
@@ -711,7 +714,7 @@ function App(): React.JSX.Element {
             newPassword={tempData.newPassword || ''}
           />
         );
-      
+
       case 'mpinLogin':
         return (
           <MPINLogin
@@ -731,7 +734,7 @@ function App(): React.JSX.Element {
             userEmail={userData.email}
           />
         );
-      
+
       case 'forgotPassword':
         return (
           <ForgotPassword
@@ -740,7 +743,7 @@ function App(): React.JSX.Element {
             isLoading={isLoading}
           />
         );
-      
+
       case 'otpVerification':
         return (
           <OTPVerification
@@ -751,7 +754,7 @@ function App(): React.JSX.Element {
             isLoading={isLoading}
           />
         );
-      
+
       case 'resetPassword':
         return (
           <ResetPassword
@@ -763,7 +766,7 @@ function App(): React.JSX.Element {
             isLoading={isLoading}
           />
         );
-      
+
       case 'welcome':
         return (
           <WelcomeScreen
@@ -771,54 +774,22 @@ function App(): React.JSX.Element {
             onContinue={() => setCurrentScreen('dashboard')}
           />
         );
-      
+
       case 'dashboard':
         return <Dashboard onLogout={handleLogout} />;
-      
+
       default:
         return <SplashScreen onSplashComplete={handleSplashComplete} />;
     }
   };
-
   return (
-    <SafeAreaProvider>
-      <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaProvider style={{ backgroundColor: '#FFFFFF' }}>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: colors.buttonsBackground }}
+        edges={['bottom']}
+      >
         {renderScreen()}
-      </View>
-
-      {/* {__DEV__ && showDevMenu && (
-        <TouchableOpacity
-          style={{
-            position: 'absolute',
-            bottom: 100,
-            right: 20,
-            width: 60,
-            height: 60,
-            borderRadius: 30,
-            backgroundColor: '#3B82F6',
-            alignItems: 'center',
-            justifyContent: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 8,
-            zIndex: 9999,
-          }}
-          onPress={async () => {
-            await ConfigValidator.runValidation();
-            Alert.alert(
-              'System Validation',
-              'Check console for results. Access full report via Menu → System Validation',
-              [{ text: 'OK' }]
-            );
-          }}
-        >
-          <View>
-            <Text style={{ color: 'white', fontSize: 24 }}>🔍</Text>
-          </View>
-        </TouchableOpacity>
-      )} */}
+      </SafeAreaView>
     </SafeAreaProvider>
   );
 }

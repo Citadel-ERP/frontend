@@ -8,6 +8,8 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { colors, spacing, fontSize, borderRadius } from '../../styles/theme';
 import { ReasonOption } from './types';
@@ -50,12 +52,27 @@ const ReasonModal: React.FC<ReasonModalProps> = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
+      {/* KeyboardAvoidingView lifts content above the keyboard on iOS */}
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <TouchableOpacity
+          style={StyleSheet.absoluteFillObject}
+          activeOpacity={1}
+          onPress={onClose}
+        />
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>{title}</Text>
           <Text style={styles.modalSubtitle}>{subtitle}</Text>
 
-          <ScrollView style={styles.reasonsList}>
+          {/* ScrollView lets the whole form scroll when keyboard is up */}
+          <ScrollView
+            style={styles.reasonsList}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             {reasons.map((reason) => (
               <TouchableOpacity
                 key={reason.value}
@@ -87,25 +104,29 @@ const ReasonModal: React.FC<ReasonModalProps> = ({
                 </Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
 
-          {showCustomInput && (
-            <View style={styles.customReasonContainer}>
-              <Text style={styles.customReasonLabel}>
-                Please specify your reason:
-              </Text>
-              <TextInput
-                style={styles.customReasonInput}
-                placeholder={`Enter ${type === 'checkin' ? 'attendance' : 'checkout'} reason...`}
-                value={customReason}
-                onChangeText={onCustomReasonChange}
-                multiline
-                numberOfLines={3}
-                maxLength={200}
-                editable={!loading}
-              />
-            </View>
-          )}
+            {/* Custom reason input lives INSIDE the ScrollView so it scrolls
+                into view automatically when the keyboard opens */}
+            {showCustomInput && (
+              <View style={styles.customReasonContainer}>
+                <Text style={styles.customReasonLabel}>
+                  Please specify your reason:
+                </Text>
+                <TextInput
+                  style={styles.customReasonInput}
+                  placeholder={`Enter ${type === 'checkin' ? 'attendance' : 'checkout'} reason...`}
+                  value={customReason}
+                  onChangeText={onCustomReasonChange}
+                  multiline
+                  numberOfLines={3}
+                  maxLength={200}
+                  editable={!loading}
+                  // Scroll the field into view when focused on iOS
+                  scrollEnabled={false}
+                />
+              </View>
+            )}
+          </ScrollView>
 
           <View style={styles.modalButtons}>
             <TouchableOpacity
@@ -119,13 +140,13 @@ const ReasonModal: React.FC<ReasonModalProps> = ({
               style={[
                 styles.modalButton,
                 styles.submitButton,
-                (!selectedReason || (showCustomInput && !customReason.trim())) && 
+                (!selectedReason || (showCustomInput && !customReason.trim())) &&
                 styles.submitButtonDisabled
               ]}
               onPress={onSubmit}
               disabled={
-                loading || 
-                !selectedReason || 
+                loading ||
+                !selectedReason ||
                 (showCustomInput && !customReason.trim())
               }
             >
@@ -139,7 +160,7 @@ const ReasonModal: React.FC<ReasonModalProps> = ({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -183,7 +204,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   reasonsList: {
-    maxHeight: 200,
+    maxHeight: 280,
     marginBottom: spacing.lg,
   },
   reasonOption: {

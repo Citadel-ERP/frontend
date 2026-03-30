@@ -31,6 +31,11 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
+
+import { BackgroundLocationDisclosure } from './BackgroundLocationDisclosure';
+import { BackgroundLocationService } from '../services/backgroundLocationTracking';
+
+
 // Import all pages
 import Profile from './Profile';
 import PrivacyPolicy from './PrivacyPolicy';
@@ -130,30 +135,30 @@ interface ModuleConfig {
 const MODULE_CONFIGURATIONS: Record<string, ModuleConfig> = {
   'attendance': { icon: 'book-open', iconFamily: 'FontAwesome5', gradientColors: ['#00d285', '#00b872'], displayName: 'Attendance' },
   'Attendance': { icon: 'book-open', iconFamily: 'FontAwesome5', gradientColors: ['#00d285', '#00b872'], displayName: 'Attendance' },
-  'office':     { icon: 'business',  iconFamily: 'Ionicons',      gradientColors: ['#003580', '#004d69'], displayName: 'Offices' },
-  'offices':    { icon: 'business',  iconFamily: 'Ionicons',      gradientColors: ['#003580', '#004d69'], displayName: 'Offices' },
-  'asset':      { icon: 'hardware-chip', iconFamily: 'Ionicons',  gradientColors: ['#80006b', '#4d0069'], displayName: 'Assets' },
-  'assets':     { icon: 'hardware-chip', iconFamily: 'Ionicons',  gradientColors: ['#80006b', '#4d0069'], displayName: 'Assets' },
-  'cab':        { icon: 'car',       iconFamily: 'FontAwesome5',  gradientColors: ['#ff5e7a', '#ff4168'], displayName: 'Car' },
-  'Cab':        { icon: 'car',       iconFamily: 'FontAwesome5',  gradientColors: ['#ff5e7a', '#ff4168'], displayName: 'Car' },
-  'VehicleAdmin':{ icon: 'car-side', iconFamily: 'FontAwesome5',  gradientColors: ['#ff5e7a', '#ff4168'], displayName: 'Vehicle Admin' },
-  'hr':         { icon: 'users',     iconFamily: 'FontAwesome5',  gradientColors: ['#ffb157', '#ff9d3f'], displayName: 'HR' },
-  'HR':         { icon: 'users',     iconFamily: 'FontAwesome5',  gradientColors: ['#ffb157', '#ff9d3f'], displayName: 'HR' },
-  'hr_employee_management': { icon: 'user-tie',    iconFamily: 'FontAwesome5', gradientColors: ['#ff4168', '#ff4168'], displayName: 'Employees' },
+  'office': { icon: 'business', iconFamily: 'Ionicons', gradientColors: ['#003580', '#004d69'], displayName: 'Offices' },
+  'offices': { icon: 'business', iconFamily: 'Ionicons', gradientColors: ['#003580', '#004d69'], displayName: 'Offices' },
+  'asset': { icon: 'hardware-chip', iconFamily: 'Ionicons', gradientColors: ['#80006b', '#4d0069'], displayName: 'Assets' },
+  'assets': { icon: 'hardware-chip', iconFamily: 'Ionicons', gradientColors: ['#80006b', '#4d0069'], displayName: 'Assets' },
+  'cab': { icon: 'car', iconFamily: 'FontAwesome5', gradientColors: ['#ff5e7a', '#ff4168'], displayName: 'Car' },
+  'Cab': { icon: 'car', iconFamily: 'FontAwesome5', gradientColors: ['#ff5e7a', '#ff4168'], displayName: 'Car' },
+  'VehicleAdmin': { icon: 'car-side', iconFamily: 'FontAwesome5', gradientColors: ['#ff5e7a', '#ff4168'], displayName: 'Vehicle Admin' },
+  'hr': { icon: 'users', iconFamily: 'FontAwesome5', gradientColors: ['#ffb157', '#ff9d3f'], displayName: 'HR' },
+  'HR': { icon: 'users', iconFamily: 'FontAwesome5', gradientColors: ['#ffb157', '#ff9d3f'], displayName: 'HR' },
+  'hr_employee_management': { icon: 'user-tie', iconFamily: 'FontAwesome5', gradientColors: ['#ff4168', '#ff4168'], displayName: 'Employees' },
   'hr_manager': { icon: 'user-shield', iconFamily: 'FontAwesome5', gradientColors: ['#ff9d3f', '#ff8c2e'], displayName: 'HR Management' },
   'EmployeesAdmin': { icon: 'users-cog', iconFamily: 'FontAwesome5', gradientColors: ['#ffb157', '#ff9d3f'], displayName: 'Employees' },
-  'driver':     { icon: 'steering-wheel', iconFamily: 'MaterialCommunityIcons', gradientColors: ['#6c5ce7', '#5f4fd1'], displayName: 'Driver' },
+  'driver': { icon: 'steering-wheel', iconFamily: 'MaterialCommunityIcons', gradientColors: ['#6c5ce7', '#5f4fd1'], displayName: 'Driver' },
   'driver_manager': { icon: 'id-card', iconFamily: 'FontAwesome5', gradientColors: ['#6c5ce7', '#5f4fd1'], displayName: 'Duty Manager' },
   'site_manager': { icon: 'hard-hat', iconFamily: 'FontAwesome5', gradientColors: ['#fd79a8', '#e84393'], displayName: 'Database' },
-  'bup':        { icon: 'chart-line', iconFamily: 'FontAwesome5', gradientColors: ['#ffb157', '#ff9d3f'], displayName: 'BUP' },
-  'bdt':        { icon: 'exchange-alt', iconFamily: 'FontAwesome5', gradientColors: ['#0984e3', '#0773d1'], displayName: 'Transaction' },
-  'medical':    { icon: 'medkit',    iconFamily: 'FontAwesome5',  gradientColors: ['#d63031', '#c92a2b'], displayName: 'Mediclaim' },
-  'mediclaim':  { icon: 'medkit',    iconFamily: 'FontAwesome5',  gradientColors: ['#d63031', '#c92a2b'], displayName: 'Mediclaim' },
-  'scout_boy':  { icon: 'user-alt',  iconFamily: 'FontAwesome5',  gradientColors: ['#fdcb6e', '#f6b93b'], displayName: 'Scout' },
-  'reminder':   { icon: 'bell',      iconFamily: 'FontAwesome5',  gradientColors: ['#a29bfe', '#6c5ce7'], displayName: 'Reminder' },
+  'bup': { icon: 'chart-line', iconFamily: 'FontAwesome5', gradientColors: ['#ffb157', '#ff9d3f'], displayName: 'BUP' },
+  'bdt': { icon: 'exchange-alt', iconFamily: 'FontAwesome5', gradientColors: ['#0984e3', '#0773d1'], displayName: 'Transaction' },
+  'medical': { icon: 'medkit', iconFamily: 'FontAwesome5', gradientColors: ['#d63031', '#c92a2b'], displayName: 'Mediclaim' },
+  'mediclaim': { icon: 'medkit', iconFamily: 'FontAwesome5', gradientColors: ['#d63031', '#c92a2b'], displayName: 'Mediclaim' },
+  'scout_boy': { icon: 'user-alt', iconFamily: 'FontAwesome5', gradientColors: ['#fdcb6e', '#f6b93b'], displayName: 'Scout' },
+  'reminder': { icon: 'bell', iconFamily: 'FontAwesome5', gradientColors: ['#a29bfe', '#6c5ce7'], displayName: 'Reminder' },
   'employee_management': { icon: 'users', iconFamily: 'FontAwesome5', gradientColors: ['#74b9ff', '#0984e3'], displayName: 'Employees' },
-  'default':    { icon: 'cube',      iconFamily: 'FontAwesome5',  gradientColors: ['#636e72', '#546E7A'], displayName: 'Module' },
-  'access':     { icon: 'shield-checkmark', iconFamily: 'Ionicons', gradientColors: ['#00b894', '#00cec9'], displayName: 'Access Control' },
+  'default': { icon: 'cube', iconFamily: 'FontAwesome5', gradientColors: ['#636e72', '#546E7A'], displayName: 'Module' },
+  'access': { icon: 'shield-checkmark', iconFamily: 'Ionicons', gradientColors: ['#00b894', '#00cec9'], displayName: 'Access Control' },
 };
 
 const getModuleConfig = (moduleUniqueName: string): ModuleConfig =>
@@ -260,6 +265,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [isDark, setIsDark] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
+  const [disclosureVisible, setDisclosureVisible] = useState(false);
+  const disclosureResolveRef = useRef<((accepted: boolean) => void) | null>(null);
+
   // Modules modal / search
   const [allModulesVisible, setAllModulesVisible] = useState(false);
   const [showAsset, setShowAsset] = useState(false);
@@ -280,18 +288,18 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Animations
   const circleScale = useRef(new Animated.Value(0)).current;
   const switchToggle = useRef(new Animated.Value(0)).current;
-  const slideAnim  = useRef(new Animated.Value(isWeb ? 0 : -300)).current;
-  const bulgeAnim  = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(isWeb ? 0 : -300)).current;
+  const bulgeAnim = useRef(new Animated.Value(0)).current;
 
   const currentColors = useMemo(() => isDark ? darkColors : lightColors, [isDark]);
 
   const theme = useMemo(() => ({
-    bgColor:    isDark ? '#050b18' : '#ece5dd',
-    cardBg:     isDark ? '#111a2d' : '#f6f6f6',
-    textMain:   isDark ? '#ffffff' : '#333333',
-    textSub:    isDark ? '#a0a0a0' : '#666666',
+    bgColor: isDark ? '#050b18' : '#ece5dd',
+    cardBg: isDark ? '#111a2d' : '#f6f6f6',
+    textMain: isDark ? '#ffffff' : '#333333',
+    textSub: isDark ? '#a0a0a0' : '#666666',
     accentBlue: isDark ? '#008069' : '#008069',
-    navBg:      isDark ? '#0a111f' : '#ffffff',
+    navBg: isDark ? '#0a111f' : '#ffffff',
   }), [isDark]);
 
   // --------------------------------------------------------------------------
@@ -342,32 +350,32 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // --------------------------------------------------------------------------
   const restorePage = useCallback((page: MobilePageKey) => {
     switch (page) {
-      case 'attendance':          setShowAttendance(true);          break;
-      case 'profile':             setShowProfile(true);             break;
-      case 'hr':                  setShowHR(true);                  break;
-      case 'cab':                 setShowCab(true);                 break;
-      case 'driver':              setShowDriver(true);              break;
-      case 'bdt':                 setShowBDT(true);                 break;
-      case 'medical':             setShowMedical(true);             break;
-      case 'scoutBoy':            setShowScoutBoy(true);            break;
-      case 'reminder':            setShowReminder(true);            break;
-      case 'bup':                 setShowBUP(true);                 break;
-      case 'siteManager':         setShowSiteManager(true);         break;
-      case 'settings':            setShowSettings(true);            break;
-      case 'employeeManagement':  setShowEmployeeManagement(true);  break;
-      case 'hrEmployeeManager':   setShowHREmployeeManagement(true);break;
-      case 'chat':                setShowChat(true);                break;
-      case 'chatRoom':            setShowChatRoom(true);            break;
-      case 'notifications':       setShowNotifications(true);       break;
-      case 'driverManager':       setShowDriverManager(true);       break;
-      case 'hrManager':           setShowHrManager(true);           break;
-      case 'validation':          setShowValidation(true);          break;
-      case 'asset':               setShowAsset(true);               break;
-      case 'office':              setShowOffice(true);              break;
-      case 'access':              setShowAccess(true);              break;
-      case 'privacy':             setShowPrivacy(true);             break;
-      case 'about':               setShowAbout(true);               break;
-      case 'support':             setShowSupport(true);             break;
+      case 'attendance': setShowAttendance(true); break;
+      case 'profile': setShowProfile(true); break;
+      case 'hr': setShowHR(true); break;
+      case 'cab': setShowCab(true); break;
+      case 'driver': setShowDriver(true); break;
+      case 'bdt': setShowBDT(true); break;
+      case 'medical': setShowMedical(true); break;
+      case 'scoutBoy': setShowScoutBoy(true); break;
+      case 'reminder': setShowReminder(true); break;
+      case 'bup': setShowBUP(true); break;
+      case 'siteManager': setShowSiteManager(true); break;
+      case 'settings': setShowSettings(true); break;
+      case 'employeeManagement': setShowEmployeeManagement(true); break;
+      case 'hrEmployeeManager': setShowHREmployeeManagement(true); break;
+      case 'chat': setShowChat(true); break;
+      case 'chatRoom': setShowChatRoom(true); break;
+      case 'notifications': setShowNotifications(true); break;
+      case 'driverManager': setShowDriverManager(true); break;
+      case 'hrManager': setShowHrManager(true); break;
+      case 'validation': setShowValidation(true); break;
+      case 'asset': setShowAsset(true); break;
+      case 'office': setShowOffice(true); break;
+      case 'access': setShowAccess(true); break;
+      case 'privacy': setShowPrivacy(true); break;
+      case 'about': setShowAbout(true); break;
+      case 'support': setShowSupport(true); break;
       case 'dashboard':           /* dashboard is default */        break;
     }
   }, []);
@@ -392,7 +400,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       }
 
       const entry = prev[prev.length - 1];
-      const next  = prev.slice(0, -1);
+      const next = prev.slice(0, -1);
 
       closeAllPages();
 
@@ -418,7 +426,24 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // Alias for child components that still use the old name
   const handleBackFromPage = handleBack;
+  const showBackgroundLocationDisclosure = useCallback((): Promise<boolean> => {
+    return new Promise(resolve => {
+      disclosureResolveRef.current = resolve;
+      setDisclosureVisible(true);
+    });
+  }, []);
 
+  const handleDisclosureAccept = useCallback(() => {
+    setDisclosureVisible(false);
+    disclosureResolveRef.current?.(true);
+    disclosureResolveRef.current = null;
+  }, []);
+
+  const handleDisclosureDecline = useCallback(() => {
+    setDisclosureVisible(false);
+    disclosureResolveRef.current?.(false);
+    disclosureResolveRef.current = null;
+  }, []);
   // --------------------------------------------------------------------------
   // NAVIGATE TO  (defined after closeAllPages — pushes current page onto stack)
   // --------------------------------------------------------------------------
@@ -444,8 +469,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     const normalized = moduleIdentifier.toLowerCase().trim();
 
     const profileModalMap: Record<string, string> = {
-      'profile-assets':    'assets',
-      'profile-payslips':  'payslips',
+      'profile-assets': 'assets',
+      'profile-payslips': 'payslips',
       'profile-documents': 'documents',
     };
 
@@ -471,40 +496,40 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setActivePage(targetPage);
     } else {
       const navigationActions: Record<ActivePage, () => void> = {
-        'dashboard':          () => { },
-        'attendance':         () => {
+        'dashboard': () => { },
+        'attendance': () => {
           setAttendanceKey(prev => prev + 1);
           setAttendanceOpenLeaves(normalized === 'attendance-leaves');
           setShowAttendance(true);
         },
-        'hr':                 () => setShowHR(true),
-        'cab':                () => setShowCab(true),
-        'driver':             () => setShowDriver(true),
-        'bdt':                () => setShowBDT(true),
-        'medical':            () => setShowMedical(true),
-        'scoutBoy':           () => setShowScoutBoy(true),
-        'reminder':           () => setShowReminder(true),
-        'bup':                () => setShowBUP(true),
-        'siteManager':        () => setShowSiteManager(true),
+        'hr': () => setShowHR(true),
+        'cab': () => setShowCab(true),
+        'driver': () => setShowDriver(true),
+        'bdt': () => setShowBDT(true),
+        'medical': () => setShowMedical(true),
+        'scoutBoy': () => setShowScoutBoy(true),
+        'reminder': () => setShowReminder(true),
+        'bup': () => setShowBUP(true),
+        'siteManager': () => setShowSiteManager(true),
         'employeeManagement': () => setShowEmployeeManagement(true),
-        'hrEmployeeManager':  () => setShowHREmployeeManagement(true),
-        'driverManager':      () => setShowDriverManager(true),
-        'hrManager':          () => {
+        'hrEmployeeManager': () => setShowHREmployeeManagement(true),
+        'driverManager': () => setShowDriverManager(true),
+        'hrManager': () => {
           setHrManagerInitialTab(normalized === 'hr-grievance' ? 'grievances' : 'requests');
           setShowHrManager(true);
         },
-        'profile':            () => setShowProfile(true),
-        'settings':           () => setShowSettings(true),
-        'notifications':      () => setShowNotifications(true),
-        'validation':         () => setShowValidation(true),
-        'privacy':            () => setShowPrivacy(true),
-        'messages':           () => setShowChat(true),
-        'chat':               () => setShowChat(true),
-        'chatRoom':           () => setShowChatRoom(true),
-        'assets':             () => setShowAsset(true),
-        'asset':              () => setShowAsset(true),
-        'office':             () => setShowOffice(true),
-        'access':             () => setShowAccess(true),
+        'profile': () => setShowProfile(true),
+        'settings': () => setShowSettings(true),
+        'notifications': () => setShowNotifications(true),
+        'validation': () => setShowValidation(true),
+        'privacy': () => setShowPrivacy(true),
+        'messages': () => setShowChat(true),
+        'chat': () => setShowChat(true),
+        'chatRoom': () => setShowChatRoom(true),
+        'assets': () => setShowAsset(true),
+        'asset': () => setShowAsset(true),
+        'office': () => setShowOffice(true),
+        'access': () => setShowAccess(true),
       };
       navigationActions[targetPage]?.();
     }
@@ -533,13 +558,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
           setUserData(transformedUserData);
           setModules(data.modules || []);
-          if (data.big_tile)    setBigTile(data.big_tile);
+          if (data.big_tile) setBigTile(data.big_tile);
           if (data.small_tile_1) setSmallTile1(data.small_tile_1);
           if (data.small_tile_2) setSmallTile2(data.small_tile_2);
 
           await AsyncStorage.setItem('user_data', JSON.stringify(transformedUserData));
           await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
-          if (data.city)      await AsyncStorage.setItem('city', data.city);
+          if (data.city) await AsyncStorage.setItem('city', data.city);
           await AsyncStorage.setItem('is_admin', JSON.stringify(data.is_admin ?? false));
           if (data.user_city) await AsyncStorage.setItem('user_city', data.user_city);
 
@@ -568,11 +593,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                 );
                 return backendModule
                   ? {
-                      ...storedModule,
-                      iconUrl: backendModule.module_icon,
-                      title: backendModule.module_name.charAt(0).toUpperCase() +
-                             backendModule.module_name.slice(1).replace('_', ' '),
-                    }
+                    ...storedModule,
+                    iconUrl: backendModule.module_icon,
+                    title: backendModule.module_name.charAt(0).toUpperCase() +
+                      backendModule.module_name.slice(1).replace('_', ' '),
+                  }
                   : storedModule;
               });
               const seen = new Set<string>();
@@ -686,6 +711,59 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     }
   }, [showProfile]);
 
+  // Dashboard.tsx — replace the background services useEffect
+
+useEffect(() => {
+  if (!token || !userData || isWeb) return;
+  if (Constants.appOwnership === 'expo') return;
+
+  const init = async () => {
+    try {
+      // Check if App.tsx deferred initialization pending our disclosure
+      const pendingDisclosure = await AsyncStorage.getItem(
+        'pending_background_location_disclosure'
+      );
+
+      const { status: fgStatus } = await Location.getForegroundPermissionsAsync();
+      const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
+      const backgroundAlreadyGranted = bgStatus === 'granted';
+
+      if (!backgroundAlreadyGranted) {
+        // Show our prominent disclosure BEFORE any system dialog
+        const accepted = await showBackgroundLocationDisclosure();
+
+        if (!accepted) {
+          await AsyncStorage.removeItem('pending_background_location_disclosure');
+          // Initialize only foreground-safe services
+          await BackgroundAttendanceService.initialize(showBackgroundLocationDisclosure);
+          return;
+        }
+      }
+
+      // Clear the pending flag
+      await AsyncStorage.removeItem('pending_background_location_disclosure');
+
+      // NOW request permissions (system dialog comes AFTER our disclosure)
+      const perms = await AttendanceUtils.requestLocationPermissions();
+      if (!perms.foreground) return;
+
+      // Initialize all services
+      await BackgroundAttendanceService.initialize(showBackgroundLocationDisclosure);
+      if (perms.background) {
+        await GeofencingService.initialize();
+        // Also trigger App.tsx-level services now that we have permission
+        await BackgroundAttendanceService.initializeAll();
+        await BackgroundLocationService.initialize();
+      }
+
+    } catch (e) {
+      console.warn('Background services failed:', e);
+    }
+  };
+
+  init();
+}, [token, userData, isWeb, showBackgroundLocationDisclosure]);
+
   // Push notifications setup
   useEffect(() => {
     if (isWeb) return;
@@ -710,15 +788,15 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           const data = r.notification.request.content.data;
           if (data?.page === 'autoMarkAttendance') AttendanceUtils.executeAttendanceFlow('manual', true);
           else if (data?.go_to) handleNavigateFromNotification(data.go_to as string);
-          else if (data?.page)  handleNavigateFromNotification(data.page as string);
+          else if (data?.page) handleNavigateFromNotification(data.page as string);
         });
 
         const lastResp = await NotificationsExpo.getLastNotificationResponseAsync();
         if (lastResp) {
           const data = lastResp.notification.request.content.data;
-          if (data?.page === 'autoMarkAttendance')      setTimeout(() => AttendanceUtils.executeAttendanceFlow('manual', true), 1000);
+          if (data?.page === 'autoMarkAttendance') setTimeout(() => AttendanceUtils.executeAttendanceFlow('manual', true), 1000);
           else if (data?.go_to) setTimeout(() => handleNavigateFromNotification(data.go_to as string), 500);
-          else if (data?.page)  setTimeout(() => handleNavigateFromNotification(data.page as string), 500);
+          else if (data?.page) setTimeout(() => handleNavigateFromNotification(data.page as string), 500);
         }
       } catch (err: any) {
         await logPushTokenError('Unhandled error in setupNotifications', { error: err.message });
@@ -828,7 +906,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             if (isMounted) {
               setUserData(transformedUserData);
               setModules(data.modules || []);
-              if (data.big_tile)    setBigTile(data.big_tile);
+              if (data.big_tile) setBigTile(data.big_tile);
               if (data.small_tile_1) setSmallTile1(data.small_tile_1);
               if (data.small_tile_2) setSmallTile2(data.small_tile_2);
             }
@@ -836,7 +914,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
             try {
               await AsyncStorage.setItem('user_data', JSON.stringify(transformedUserData));
               await AsyncStorage.setItem('is_driver', JSON.stringify(data.is_driver || false));
-              if (data.city)      await AsyncStorage.setItem('city', data.city);
+              if (data.city) await AsyncStorage.setItem('city', data.city);
               await AsyncStorage.setItem('is_admin', JSON.stringify(data.is_admin ?? false));
               if (data.user_city) await AsyncStorage.setItem('user_city', data.user_city);
             } catch (e) { console.error('AsyncStorage error:', e); }
@@ -886,26 +964,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     return () => { isMounted = false; };
   }, []);
 
-  // Background services
-  useEffect(() => {
-    if (!token || !userData || isWeb) return;
-    let isMounted = true;
-
-    const init = async () => {
-      try {
-        const perms = await AttendanceUtils.requestLocationPermissions();
-        if (!perms.foreground) return;
-        if (Constants.appOwnership === 'expo') return;
-
-        await BackgroundAttendanceService.initialize();
-        if (perms.background) await GeofencingService.initialize();
-      } catch (e) { console.warn('Background services failed:', e); }
-    };
-
-    init();
-    return () => { isMounted = false; };
-  }, [token, userData, isWeb]);
-
   // Android hardware back button
   useEffect(() => {
     if (isWeb || Platform.OS !== 'android') return;
@@ -916,13 +974,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setNavStack(prev => {
         if (prev.length === 0) return prev;
         const entry = prev[prev.length - 1];
-        const next  = prev.slice(0, -1);
+        const next = prev.slice(0, -1);
 
         closeAllPages();
 
         if (entry.page === 'dashboard') {
           if (entry.menuWasOpen) { slideAnim.setValue(0); setIsMenuVisible(true); }
-          else                   { slideAnim.setValue(-300); setIsMenuVisible(false); }
+          else { slideAnim.setValue(-300); setIsMenuVisible(false); }
           setActiveMenuItem('Dashboard');
           setActiveNavItem('home');
         } else {
@@ -948,7 +1006,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     if (isAnimating) return;
     setIsAnimating(true);
     Animated.timing(switchToggle, { toValue: isDark ? 0 : 1, duration: 300, useNativeDriver: true }).start();
-    Animated.timing(circleScale,  { toValue: 1, duration: 600, useNativeDriver: true }).start(() => {
+    Animated.timing(circleScale, { toValue: 1, duration: 600, useNativeDriver: true }).start(() => {
       setIsDark(d => !d);
       circleScale.setValue(0);
       setIsAnimating(false);
@@ -1044,11 +1102,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   }, [isWeb, navigateTo]);
 
   const drawerMenuItems = useMemo(() => [
-    { id: 'profile',       title: 'Profile',        icon: 'user',         color: '#3B82F6' },
-    { id: 'settings',      title: 'Settings',        icon: 'settings',     color: '#3B82F6' },
-    { id: 'notifications', title: 'Notifications',   icon: 'notification', color: '#F59E0B' },
-    { id: 'privacy',       title: 'Privacy Policy',  icon: 'shield',       color: '#1E40AF' },
-    { id: 'messages',      title: 'Messages',        icon: 'chatbubbles',  color: '#10B981' },
+    { id: 'profile', title: 'Profile', icon: 'user', color: '#3B82F6' },
+    { id: 'settings', title: 'Settings', icon: 'settings', color: '#3B82F6' },
+    { id: 'notifications', title: 'Notifications', icon: 'notification', color: '#F59E0B' },
+    { id: 'privacy', title: 'Privacy Policy', icon: 'shield', color: '#1E40AF' },
+    { id: 'messages', title: 'Messages', icon: 'chatbubbles', color: '#10B981' },
   ], []);
 
   const handleMenuItemPress = useCallback((item: any) => {
@@ -1068,13 +1126,13 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     } else {
       // All menu navigation originates from 'dashboard'
       const handlers: Partial<Record<ActivePage, () => void>> = {
-        'profile':       () => navigateTo('dashboard', () => setShowProfile(true)),
-        'messages':      () => navigateTo('dashboard', () => setShowChat(true)),
-        'settings':      () => navigateTo('dashboard', () => setShowSettings(true)),
+        'profile': () => navigateTo('dashboard', () => setShowProfile(true)),
+        'messages': () => navigateTo('dashboard', () => setShowChat(true)),
+        'settings': () => navigateTo('dashboard', () => setShowSettings(true)),
         'notifications': () => navigateTo('dashboard', () => setShowNotifications(true)),
-        'validation':    () => navigateTo('dashboard', () => setShowValidation(true)),
-        'privacy':       () => navigateTo('dashboard', () => setShowPrivacy(true)),
-        'assets':        () => navigateTo('dashboard', () => setShowAsset(true)),
+        'validation': () => navigateTo('dashboard', () => setShowValidation(true)),
+        'privacy': () => navigateTo('dashboard', () => setShowPrivacy(true)),
+        'assets': () => navigateTo('dashboard', () => setShowAsset(true)),
       };
       handlers[targetPage]?.();
     }
@@ -1083,7 +1141,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // --------------------------------------------------------------------------
   // COMPUTED VALUES
   // --------------------------------------------------------------------------
-  const displayModules  = useMemo(() => getDisplayModules(modules), [modules]);
+  const displayModules = useMemo(() => getDisplayModules(modules), [modules]);
   const filteredModules = useMemo(() =>
     displayModules.filter(m => m.title.toLowerCase().includes(searchQuery.toLowerCase())),
     [displayModules, searchQuery]
@@ -1101,9 +1159,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     const config = getModuleConfig(moduleUniqueName);
     const IconComponent =
       config.iconFamily === 'Ionicons' ? Ionicons :
-      config.iconFamily === 'MaterialCommunityIcons' ? MaterialCommunityIcons :
-      FontAwesome5;
-    const iconSize      = size === 'big' ? 22 : 18;
+        config.iconFamily === 'MaterialCommunityIcons' ? MaterialCommunityIcons :
+          FontAwesome5;
+    const iconSize = size === 'big' ? 22 : 18;
     const containerStyle = size === 'big' ? styles.moduleAttendance : styles.moduleSmall;
 
     return (
@@ -1161,18 +1219,18 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // MOBILE PAGE RENDERS  (early returns before the main dashboard shell)
   // --------------------------------------------------------------------------
   if (!isWeb) {
-    if (showValidation)                  return <ValidationScreen onBack={handleBack} />;
+    if (showValidation) return <ValidationScreen onBack={handleBack} />;
     if (showChatRoom && selectedChatRoom)
       return <CitadelHub apiBaseUrl={BACKEND_URL} wsBaseUrl={BACKEND_URL_WEBSOCKET} token={token} currentUser={userData} />;
     if (showChat)
       return <CitadelHub apiBaseUrl={BACKEND_URL} wsBaseUrl={BACKEND_URL_WEBSOCKET} token={token} onBack={handleBack} currentUser={userData} />;
     if (showNotifications)
       return <Notifications onBack={handleBack} isDark={isDark} onBadgeUpdate={handleBadgeUpdate} onNavigateToModule={handleNavigateFromNotification} />;
-    if (showDriverManager)       return <DriverManager onBack={handleBack} />;
-    if (showAsset)               return <AssetModule onBack={handleBack} isDark={isDark} />;
-    if (showAccess)              return <AccessModule onBack={handleBack} />;
-    if (showOffice)              return <OfficeModule onBack={handleBack} isDark={isDark} />;
-    if (showHrManager)           return <HR_Manager onBack={handleBack} initialTab={hrManagerInitialTab} />;
+    if (showDriverManager) return <DriverManager onBack={handleBack} />;
+    if (showAsset) return <AssetModule onBack={handleBack} isDark={isDark} />;
+    if (showAccess) return <AccessModule onBack={handleBack} />;
+    if (showOffice) return <OfficeModule onBack={handleBack} isDark={isDark} />;
+    if (showHrManager) return <HR_Manager onBack={handleBack} initialTab={hrManagerInitialTab} />;
     if (showAttendance)
       return <AttendanceWrapper key={attendanceKey} onBack={handleBack} attendanceKey={attendanceKey} initialShowLeaves={attendanceOpenLeaves} />;
     if (showProfile)
@@ -1187,31 +1245,31 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           initialModalToOpen={profileModalToOpen}
         />
       );
-    if (showPrivacy)  return <PrivacyPolicy onBack={handleBack} isDark={isDark} />;
-    if (showAbout)    return <About onBack={handleBack} isDark={isDark} appVersion="1.0.0" />;
-    if (showHR)       return <HR onBack={handleBack} />;
-    if (showCab)      return <Cab onBack={handleBack} />;
-    if (showDriver)   return <Driver onBack={handleBack} />;
-    if (showBDT)      return <BDT onBack={handleBack} />;
-    if (showMedical)  return <Medical onBack={handleBack} />;
+    if (showPrivacy) return <PrivacyPolicy onBack={handleBack} isDark={isDark} />;
+    if (showAbout) return <About onBack={handleBack} isDark={isDark} appVersion="1.0.0" />;
+    if (showHR) return <HR onBack={handleBack} />;
+    if (showCab) return <Cab onBack={handleBack} />;
+    if (showDriver) return <Driver onBack={handleBack} />;
+    if (showBDT) return <BDT onBack={handleBack} />;
+    if (showMedical) return <Medical onBack={handleBack} />;
     if (showScoutBoy) return <ScoutBoy onBack={handleBack} />;
     if (showReminder) return <Reminder onBack={handleBack} onReminderUpdate={handleReminderUpdate} />;
-    if (showBUP)      return <BUP onBack={handleBack} />;
+    if (showBUP) return <BUP onBack={handleBack} />;
     if (showSiteManager) return <SiteManager onBack={handleBack} />;
     if (showSettings)
       return (
         <Settings
           onBack={handleBack}
           isDark={isDark}
-          onHelpCenter={()     => navigateTo('settings', () => setShowSupport(true))}
-          onReportProblem={()  => navigateTo('settings', () => setShowSupport(true))}
-          onPrivacyPolicy={()  => navigateTo('settings', () => setShowPrivacy(true))}
-          onAbout={()          => navigateTo('settings', () => setShowAbout(true))}
+          onHelpCenter={() => navigateTo('settings', () => setShowSupport(true))}
+          onReportProblem={() => navigateTo('settings', () => setShowSupport(true))}
+          onPrivacyPolicy={() => navigateTo('settings', () => setShowPrivacy(true))}
+          onAbout={() => navigateTo('settings', () => setShowAbout(true))}
         />
       );
     if (showEmployeeManagement) return <EmployeeManagement onBack={handleBack} />;
-    if (showHREmployeeManager)  return <HREmployeeManager onBack={handleBack} />;
-    if (showSupport)             return <Support onBack={handleBack} isDark={isDark} />;
+    if (showHREmployeeManager) return <HREmployeeManager onBack={handleBack} />;
+    if (showSupport) return <Support onBack={handleBack} isDark={isDark} />;
   }
 
   // --------------------------------------------------------------------------
@@ -1283,12 +1341,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
               <View style={styles.webNavigation}>
                 {[
-                  { id: 'dashboard',     label: 'Home',           icon: 'home',                    activeColor: currentColors.primaryBlue },
-                  { id: 'profile',       label: 'Profile',         icon: 'person-circle-outline',   activeColor: currentColors.primaryBlue },
-                  { id: 'settings',      label: 'Settings',        icon: 'settings-outline',        activeColor: currentColors.primaryBlue },
-                  { id: 'notifications', label: 'Notifications',   icon: 'notifications-outline',   activeColor: currentColors.warning },
-                  { id: 'privacy',       label: 'Privacy Policy',  icon: 'shield-checkmark-outline', activeColor: '#1E40AF' },
-                  { id: 'messages',      label: 'Messages',        icon: 'chatbubbles-outline',     activeColor: currentColors.success },
+                  { id: 'dashboard', label: 'Home', icon: 'home', activeColor: currentColors.primaryBlue },
+                  { id: 'profile', label: 'Profile', icon: 'person-circle-outline', activeColor: currentColors.primaryBlue },
+                  { id: 'settings', label: 'Settings', icon: 'settings-outline', activeColor: currentColors.primaryBlue },
+                  { id: 'notifications', label: 'Notifications', icon: 'notifications-outline', activeColor: currentColors.warning },
+                  { id: 'privacy', label: 'Privacy Policy', icon: 'shield-checkmark-outline', activeColor: '#1E40AF' },
+                  { id: 'messages', label: 'Messages', icon: 'chatbubbles-outline', activeColor: currentColors.success },
                 ].map(item => {
                   const isActive = activePage === item.id;
                   return (
@@ -1374,23 +1432,23 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                       <AttendanceWrapper onBack={() => { setActivePage('dashboard'); setAttendanceOpenLeaves(false); }}
                         attendanceKey={attendanceKey} initialShowLeaves={attendanceOpenLeaves} />
                     )}
-                    {activePage === 'asset'              && <AssetModule onBack={() => setActivePage('dashboard')} isDark={isDark} />}
-                    {activePage === 'office'             && <OfficeModule onBack={() => setActivePage('dashboard')} isDark={isDark} />}
-                    {activePage === 'hr'                 && <HR onBack={() => setActivePage('dashboard')} />}
-                    {activePage === 'cab'                && <Cab onBack={() => setActivePage('dashboard')} />}
-                    {activePage === 'driver'             && <Driver onBack={() => setActivePage('dashboard')} />}
-                    {activePage === 'bdt'                && <BDT onBack={() => setActivePage('dashboard')} />}
-                    {activePage === 'medical'            && <Medical onBack={() => setActivePage('dashboard')} />}
-                    {activePage === 'scoutBoy'           && <ScoutBoy onBack={() => setActivePage('dashboard')} />}
-                    {activePage === 'reminder'           && <Reminder onBack={() => setActivePage('dashboard')} onReminderUpdate={handleReminderUpdate} />}
-                    {activePage === 'bup'                && <BUP onBack={() => setActivePage('dashboard')} />}
-                    {activePage === 'siteManager'        && <SiteManager onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'asset' && <AssetModule onBack={() => setActivePage('dashboard')} isDark={isDark} />}
+                    {activePage === 'office' && <OfficeModule onBack={() => setActivePage('dashboard')} isDark={isDark} />}
+                    {activePage === 'hr' && <HR onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'cab' && <Cab onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'driver' && <Driver onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'bdt' && <BDT onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'medical' && <Medical onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'scoutBoy' && <ScoutBoy onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'reminder' && <Reminder onBack={() => setActivePage('dashboard')} onReminderUpdate={handleReminderUpdate} />}
+                    {activePage === 'bup' && <BUP onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'siteManager' && <SiteManager onBack={() => setActivePage('dashboard')} />}
                     {activePage === 'employeeManagement' && <EmployeeManagement onBack={() => setActivePage('dashboard')} />}
-                    {activePage === 'hrEmployeeManager'  && <HREmployeeManager onBack={() => setActivePage('dashboard')} />}
-                    {activePage === 'driverManager'      && <DriverManager onBack={() => setActivePage('dashboard')} />}
-                    {activePage === 'hrManager'          && <HR_Manager onBack={() => setActivePage('dashboard')} initialTab={hrManagerInitialTab} />}
-                    {activePage === 'validation'         && <ValidationScreen onBack={() => setActivePage('dashboard')} />}
-                    {activePage === 'access'             && <AccessModule onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'hrEmployeeManager' && <HREmployeeManager onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'driverManager' && <DriverManager onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'hrManager' && <HR_Manager onBack={() => setActivePage('dashboard')} initialTab={hrManagerInitialTab} />}
+                    {activePage === 'validation' && <ValidationScreen onBack={() => setActivePage('dashboard')} />}
+                    {activePage === 'access' && <AccessModule onBack={() => setActivePage('dashboard')} />}
                   </View>
                 </View>
               )}
@@ -1499,6 +1557,11 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
           unreadNotificationCount={unreadNotificationCount}
         />
       )}
+      <BackgroundLocationDisclosure
+        visible={disclosureVisible}
+        onAccept={handleDisclosureAccept}
+        onDecline={handleDisclosureDecline}
+      />
     </View>
   );
 }
@@ -1532,18 +1595,18 @@ const styles = StyleSheet.create({
   mainContentWeb: { maxWidth: 1400, marginHorizontal: 'auto', width: '100%' },
   circleOverlay: {
     position: 'absolute',
-    top:  height / 2,
-    left: width  / 2,
-    width:  Math.sqrt(width * width + height * height) * 2.5,
+    top: height / 2,
+    left: width / 2,
+    width: Math.sqrt(width * width + height * height) * 2.5,
     height: Math.sqrt(width * width + height * height) * 2.5,
     borderRadius: Math.sqrt(width * width + height * height) * 1.25,
     marginLeft: -Math.sqrt(width * width + height * height) * 1.25,
-    marginTop:  -Math.sqrt(width * width + height * height) * 1.25,
+    marginTop: -Math.sqrt(width * width + height * height) * 1.25,
     zIndex: 1000,
   },
   scrollContent: { paddingBottom: 100 },
   webContainer: { flex: 1, flexDirection: 'row', alignItems: 'stretch', minHeight: '100vh' as any, backgroundColor: 'transparent' },
-  webLeftSide:  { width: 280, height: '100vh' as any, flexDirection: 'column', borderRightWidth: 1, borderRightColor: 'rgba(0,0,0,0.1)', overflow: 'hidden' },
+  webLeftSide: { width: 280, height: '100vh' as any, flexDirection: 'column', borderRightWidth: 1, borderRightColor: 'rgba(0,0,0,0.1)', overflow: 'hidden' },
   embeddedPageWrapper: { flex: 1, backgroundColor: 'transparent', overflow: 'hidden', maxWidth: '100%', width: '100%' },
   dashboardContainer: { flex: 1, backgroundColor: 'transparent', maxWidth: '100%', width: '100%' },
   webEmbeddedPage: { flex: 1, backgroundColor: 'transparent', overflow: 'hidden', maxWidth: '100%', width: '100%' },

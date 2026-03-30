@@ -11,7 +11,6 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -131,10 +130,6 @@ interface SiteDetailedInfoProps {
 }
 
 // ─── BulletList ───────────────────────────────────────────────────────────────
-//
-// Pure display component for newline-separated string data.
-// Splits on '\n', renders each non-empty line as a read-only bullet row.
-// No touch handlers, no TextInput — completely inert.
 
 const BulletList: React.FC<{ raw: string }> = ({ raw }) => {
   const lines = raw ? raw.split('\n').filter((l) => l.trim()) : [];
@@ -224,7 +219,6 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
   const formatCurrency = (value: string): string => {
     if (!value || value.trim() === '') return '-';
     const num = parseFloat(value.replace(/[^0-9.]/g, ''));
-    // If the value contains non-numeric text (e.g. "Inclusive"), return it as-is.
     if (isNaN(num)) return value;
     return '₹' + num.toLocaleString('en-IN');
   };
@@ -283,12 +277,6 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
   };
 
   // ── Shared display atoms ───────────────────────────────────────────────────
-  //
-  // renderRow    — label above a plain grey box containing a Text node.
-  // renderBullet — label above a BulletList (for multi-line / newline data).
-  //
-  // Neither contains any interactive element. React Native's <Text> is not
-  // focusable and does not open the keyboard.
 
   const renderRow = (label: string, value: string) => (
     <View style={styles.infoItem}>
@@ -335,7 +323,6 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
   const renderStep0 = () => (
     <View style={styles.stepContent}>
       <View style={styles.containerBox}>
-        {/* Avatar + name */}
         <View style={styles.siteInfoContainer}>
           <View style={styles.siteAvatarSection}>
             <View style={styles.siteAvatar}>
@@ -357,7 +344,6 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
           </View>
         </View>
 
-        {/* Badges */}
         <View style={styles.statusBadgesContainer}>
           {renderPropertyType()}
           <View
@@ -396,7 +382,6 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
           ) : null}
         </View>
 
-        {/* Map CTA — intentionally interactive: opens external Maps app */}
         {siteData?.location_link ? (
           <View style={styles.actionButtons}>
             <TouchableOpacity style={styles.mapButton} onPress={openGoogleMaps}>
@@ -406,7 +391,6 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
           </View>
         ) : null}
 
-        {/* Metadata */}
         <View style={styles.metadataSection}>
           <View style={styles.metadataItem}>
             <Text style={styles.metadataLabel}>Created By</Text>
@@ -430,8 +414,6 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
   );
 
   // ─── Step 1: Basic Information ────────────────────────────────────────────
-  // Nearest Metro Station moved here from Step 0.
-  // area_offered and floor_wise_area rendered as BulletList.
 
   const renderStep1 = () => (
     <View style={styles.stepContent}>
@@ -454,19 +436,13 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
             siteData?.efficiency ? `${siteData.efficiency}%` : '-',
           )}
           {renderRow('Available Floors', siteData?.availble_floors ?? '')}
-
-          {/* Total Available Area — bullet list */}
           {renderBullet('Total Available Area', siteData?.area_offered ?? '')}
-
           {renderRow(
             'Area Per Floor — Typical Floor Plate',
             siteData?.area_per_floor ? `${siteData.area_per_floor} sq ft` : '-',
           )}
-
-          {/* Floor-wise Availability — bullet list */}
           {renderBullet('Floor-wise Availability', siteData?.floor_wise_area ?? '')}
 
-          {/* Micro Market */}
           {siteData?.micro_market ? (
             <View style={styles.infoItem}>
               <Text style={styles.infoItemLabel}>Micro Market</Text>
@@ -489,7 +465,6 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
             </View>
           ) : null}
 
-          {/* Nearest Metro Station */}
           {siteData?.nearest_metro_station ? (
             <View style={styles.infoItem}>
               <Text style={styles.infoItemLabel}>Nearest Metro Station</Text>
@@ -517,7 +492,6 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
   );
 
   // ─── Step 2: Financial Details ────────────────────────────────────────────
-  // CAM displayed as plain text — supports alphanumeric stored values.
 
   const renderStep2 = () => (
     <View style={styles.stepContent}>
@@ -623,8 +597,6 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
   };
 
   // ─── Step 6: Additional Details ───────────────────────────────────────────
-  // Number of Units and Seats per Unit use BulletList when managed_property
-  // is true, plain text otherwise.
 
   const renderStep6 = () => (
     <View style={styles.stepContent}>
@@ -729,63 +701,82 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
 
   if (!siteData) return null;
 
+  // ─── THE FIX ──────────────────────────────────────────────────────────────
+  //
+  // Root cause: SafeAreaView resolves insets asynchronously. On the FIRST open
+  // the inset is 0, so the header sits behind the notch. On second open it's
+  // already resolved and works fine.
+  //
+  // Fix: Use transparent={true} + marginTop: 44 on the sheet container.
+  // This means zero dependency on safe-area insets — the modal is simply a
+  // sheet that starts 44px from the top on every open, every device, every time.
+  // No SafeAreaView, no useSafeAreaInsets, no race condition.
+
   return (
     <Modal
       animationType="slide"
-      transparent={false}
+      transparent={true}           // ← transparent so marginTop gap shows through
       visible={visible}
       onRequestClose={onClose}
-      statusBarTranslucent
     >
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={onClose} style={styles.modalBackButton}>
-            <Ionicons name="close" size={24} color="#FFF" />
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>Site Details</Text>
-        </View>
-      </SafeAreaView>
+      {/* ── Outer full-screen wrapper — tap outside does nothing (no dismiss) ── */}
+      <View style={styles.modalOverlay}>
 
-      <View style={styles.contentContainer}>
-        {renderStepIndicator()}
+        {/* ── Sheet — starts 44px below the top, rounded top corners ─────── */}
+        <View style={styles.modalSheet}>
 
-        <View style={styles.stepTitleContainer}>
-          <Text style={styles.stepTitle}>{stepTitles[currentStep]}</Text>
-          <Text style={styles.stepDescription}>
-            Step {currentStep + 1} of {stepTitles.length}
-          </Text>
-        </View>
-
-        <ScrollView
-          style={styles.scrollContainer}
-          contentContainerStyle={styles.scrollContentContainer}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="never"
-        >
-          {renderCurrentStep()}
-        </ScrollView>
-
-        <View style={styles.navigationButtons}>
-          {currentStep > 0 ? (
-            <TouchableOpacity
-              style={[styles.navButton, { flex: currentStep < 6 ? 1 : 0 }]}
-              onPress={() => setCurrentStep((s) => s - 1)}
-            >
-              <Ionicons name="arrow-back" size={18} color={WHATSAPP_COLORS.primary} />
-              <Text style={styles.navButtonText}>Previous</Text>
+          {/* ── Header ───────────────────────────────────────────────────── */}
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={onClose} style={styles.modalBackButton}>
+              <Ionicons name="close" size={24} color="#FFF" />
             </TouchableOpacity>
-          ) : null}
-          {currentStep < 6 ? (
-            <TouchableOpacity
-              style={[styles.navButton, styles.navButtonPrimary, { flex: 1 }]}
-              onPress={() => setCurrentStep((s) => s + 1)}
+            <Text style={styles.modalTitle}>Site Details</Text>
+          </View>
+
+          {/* ── Body ─────────────────────────────────────────────────────── */}
+          <View style={styles.contentContainer}>
+            {renderStepIndicator()}
+
+            <View style={styles.stepTitleContainer}>
+              <Text style={styles.stepTitle}>{stepTitles[currentStep]}</Text>
+              <Text style={styles.stepDescription}>
+                Step {currentStep + 1} of {stepTitles.length}
+              </Text>
+            </View>
+
+            <ScrollView
+              style={styles.scrollContainer}
+              contentContainerStyle={styles.scrollContentContainer}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="never"
             >
-              <Text style={styles.navButtonTextPrimary}>Next</Text>
-              <Ionicons name="arrow-forward" size={18} color="#FFF" />
-            </TouchableOpacity>
-          ) : (
-            <View style={{ flex: 1 }} />
-          )}
+              {renderCurrentStep()}
+            </ScrollView>
+
+            <View style={styles.navigationButtons}>
+              {currentStep > 0 ? (
+                <TouchableOpacity
+                  style={[styles.navButton, { flex: currentStep < 6 ? 1 : 0 }]}
+                  onPress={() => setCurrentStep((s) => s - 1)}
+                >
+                  <Ionicons name="arrow-back" size={18} color={WHATSAPP_COLORS.primary} />
+                  <Text style={styles.navButtonText}>Previous</Text>
+                </TouchableOpacity>
+              ) : null}
+              {currentStep < 6 ? (
+                <TouchableOpacity
+                  style={[styles.navButton, styles.navButtonPrimary, { flex: 1 }]}
+                  onPress={() => setCurrentStep((s) => s + 1)}
+                >
+                  <Text style={styles.navButtonTextPrimary}>Next</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                </TouchableOpacity>
+              ) : (
+                <View style={{ flex: 1 }} />
+              )}
+            </View>
+          </View>
+
         </View>
       </View>
     </Modal>
@@ -795,7 +786,34 @@ const SiteDetailedInfo: React.FC<SiteDetailedInfoProps> = ({
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: WHATSAPP_COLORS.primary, paddingTop:0 },
+
+  // ── Modal shell ───────────────────────────────────────────────────────────
+
+  // Full-screen transparent backdrop. The gap between the top of the screen
+  // and the sheet is visible through this — it looks like a sheet sliding up.
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+
+  // The actual sheet. marginTop: 44 is the key fix — the sheet always starts
+  // 44px below the top of the screen regardless of safe-area inset resolution
+  // timing. No async, no race condition, consistent on every open.
+  modalSheet: {
+    flex: 1,
+    marginTop: 44,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: WHATSAPP_COLORS.primary,
+    // Shadow so the sheet looks elevated above the screen behind it
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 16,
+  },
+
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -805,7 +823,15 @@ const styles = StyleSheet.create({
   },
   modalBackButton: { padding: 8, marginRight: 12 },
   modalTitle: { fontSize: 18, fontWeight: '600', color: '#FFF', flex: 1 },
-  contentContainer: { flex: 1, backgroundColor: WHATSAPP_COLORS.background },
+
+  // ── Content area ──────────────────────────────────────────────────────────
+
+  contentContainer: {
+    flex: 1,
+    backgroundColor: WHATSAPP_COLORS.background,
+  },
+
+  // ── Step indicator ────────────────────────────────────────────────────────
 
   stepIndicator: {
     flexDirection: 'row',
@@ -852,6 +878,8 @@ const styles = StyleSheet.create({
   stepContent: { padding: 16 },
   stepLabel: { fontSize: 13, fontWeight: '600', color: WHATSAPP_COLORS.textSecondary },
 
+  // ── Cards ─────────────────────────────────────────────────────────────────
+
   containerBox: {
     backgroundColor: WHATSAPP_COLORS.surface,
     marginBottom: 12,
@@ -872,6 +900,8 @@ const styles = StyleSheet.create({
   },
   containerTitle: { fontSize: 16, fontWeight: '600', color: WHATSAPP_COLORS.primary, flex: 1 },
   containerContent: { paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+
+  // ── Site header card ──────────────────────────────────────────────────────
 
   siteInfoContainer: {
     flexDirection: 'row',
@@ -964,6 +994,8 @@ const styles = StyleSheet.create({
   metadataLabel: { fontSize: 13, fontWeight: '600', color: WHATSAPP_COLORS.textSecondary },
   metadataValue: { fontSize: 13, color: WHATSAPP_COLORS.textPrimary, fontWeight: '500' },
 
+  // ── Info rows ─────────────────────────────────────────────────────────────
+
   infoItem: { marginBottom: 12 },
   infoItemLabel: {
     fontSize: 13,
@@ -1014,6 +1046,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
+  // ── Photos ────────────────────────────────────────────────────────────────
+
   photosGridContainer: { flexDirection: 'row', flexWrap: 'wrap', padding: 8, gap: 8 },
   photoGridItem: {
     width: (screenWidth - 48) / 3,
@@ -1022,6 +1056,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   gridThumbnailImage: { width: '100%', height: '100%' },
+
+  // ── Navigation ────────────────────────────────────────────────────────────
 
   navigationButtons: {
     flexDirection: 'row',

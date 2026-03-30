@@ -87,6 +87,10 @@ interface ListSiteProps {
   onCreateSite: () => void;
   onRefreshParent?: () => void;
   theme: any;
+  // Optional: pre-seed filters from the parent (e.g. property type pill selector)
+  initialFilters?: {
+    property_type?: string[];
+  };
 }
 
 interface FilterOption {
@@ -102,6 +106,7 @@ const ListSite: React.FC<ListSiteProps> = ({
   onCreateSite,
   onRefreshParent,
   theme,
+  initialFilters,
 }) => {
   // State Management
   const [sites, setSites] = useState<Site[]>([]);
@@ -122,11 +127,11 @@ const ListSite: React.FC<ListSiteProps> = ({
   const [queuedModal, setQueuedModal] = useState<string | null>(null);
   const [shouldReopenFilterModal, setShouldReopenFilterModal] = useState(false);
 
-  // ── Local filter state — now includes micro_market and oc ──────────────────
+  // Local filter state — seeded from initialFilters prop when provided
   const [localFilters, setLocalFilters] = useState({
     building_status: [] as string[],
     floor_condition: [] as string[],
-    property_type: [] as string[],
+    property_type: (initialFilters?.property_type ?? []) as string[],
     micro_market: [] as string[],
     oc: null as boolean | null,
   });
@@ -154,7 +159,6 @@ const ListSite: React.FC<ListSiteProps> = ({
     { value: 'for_sale', label: 'For Sale' },
   ];
 
-  // ── NEW: Micro Market options (matches createSite + backend) ───────────────
   const MICRO_MARKET_OPTIONS: FilterOption[] = [
     { value: 'CBD', label: 'CBD' },
     { value: 'North', label: 'North' },
@@ -200,7 +204,7 @@ const ListSite: React.FC<ListSiteProps> = ({
     setShouldReopenFilterModal(true);
   }, []);
 
-  // ── API Call: Search and Filter Sites ──────────────────────────────────────
+  // API Call: Search and Filter Sites
   const searchAndFilterSites = useCallback(async (
     tags: string[] = [],
     filters: any = {},
@@ -227,11 +231,9 @@ const ListSite: React.FC<ListSiteProps> = ({
       if (filters.property_type && filters.property_type.length > 0) {
         apiFilters.property_type = filters.property_type.join(',');
       }
-      // ── NEW: micro_market filter ───────────────────────────────────────────
       if (filters.micro_market && filters.micro_market.length > 0) {
         apiFilters.micro_market = filters.micro_market.join(',');
       }
-      // ── NEW: oc filter (only send when explicitly true) ───────────────────
       if (filters.oc === true) {
         apiFilters.oc = true;
       }
@@ -274,7 +276,7 @@ const ListSite: React.FC<ListSiteProps> = ({
     }
   }, [token]);
 
-  // Initial load
+  // Initial load — uses localFilters which is already seeded from initialFilters prop
   useEffect(() => {
     if (token) {
       searchAndFilterSites([], localFilters, 1, false);
@@ -368,17 +370,19 @@ const ListSite: React.FC<ListSiteProps> = ({
   }, [localFilters, searchTags, searchAndFilterSites]);
 
   const clearFilters = useCallback(() => {
+    // When clearing, keep the initialFilters-seeded property_type so the pill
+    // selection from the parent remains respected
     const emptyFilters = {
       building_status: [],
       floor_condition: [],
-      property_type: [],
+      property_type: (initialFilters?.property_type ?? []) as string[],
       micro_market: [],
       oc: null as boolean | null,
     };
     setLocalFilters(emptyFilters);
     searchAndFilterSites(searchTags, emptyFilters, 1, false);
     setShowFilterModal(false);
-  }, [searchTags, searchAndFilterSites]);
+  }, [searchTags, searchAndFilterSites, initialFilters]);
 
   const removeFilter = useCallback((filterKey: string, value: string) => {
     const newFilters = {
@@ -389,15 +393,12 @@ const ListSite: React.FC<ListSiteProps> = ({
     searchAndFilterSites(searchTags, newFilters, 1, false);
   }, [localFilters, searchTags, searchAndFilterSites]);
 
-  // ── NEW: Toggle OC filter and immediately fire search ─────────────────────
   const toggleOcFilter = useCallback(() => {
     const newOc = localFilters.oc === true ? null : true;
     const newFilters = { ...localFilters, oc: newOc };
     setLocalFilters(newFilters);
-    // Don't search immediately here — user still inside filter modal; apply on "Apply"
   }, [localFilters]);
 
-  // ── NEW: Remove OC chip from active filters bar ───────────────────────────
   const removeOcFilter = useCallback(() => {
     const newFilters = { ...localFilters, oc: null };
     setLocalFilters(newFilters);
@@ -479,15 +480,21 @@ const ListSite: React.FC<ListSiteProps> = ({
   }, [searchAndFilterSites, searchTags, localFilters]);
 
   // Active Filter Count
+  // Note: We only count property_type filters that go BEYOND the initialFilters seed,
+  // so the parent-selected pill doesn't inflate the badge count shown to the user.
   const activeFilterCount = useMemo(() => {
+    const seedCount = initialFilters?.property_type?.length ?? 0;
+    const currentCount = localFilters.property_type.length;
+    // Extra property_type selections the user added inside the filter modal
+    const extraPropertyTypes = Math.max(0, currentCount - seedCount);
     return (
       localFilters.building_status.length +
       localFilters.floor_condition.length +
-      localFilters.property_type.length +
+      extraPropertyTypes +
       localFilters.micro_market.length +
       (localFilters.oc !== null ? 1 : 0)
     );
-  }, [localFilters]);
+  }, [localFilters, initialFilters]);
 
   // Helper function for property type badge color
   const getPropertyTypeBadgeColor = (site: Site): string => {
@@ -738,7 +745,7 @@ const ListSite: React.FC<ListSiteProps> = ({
               </View>
             </TouchableOpacity>
 
-            {/* ── NEW: Micro Market ────────────────────────────────────────── */}
+            {/* Micro Market */}
             <TouchableOpacity style={styles.filterOption} onPress={() => handleOpenNestedFilter('micro_market')}>
               <View style={styles.filterOptionLeft}>
                 <Ionicons name="map" size={20} color={WHATSAPP_COLORS.primary} />
@@ -752,7 +759,7 @@ const ListSite: React.FC<ListSiteProps> = ({
               </View>
             </TouchableOpacity>
 
-            {/* ── NEW: OC Available — inline toggle, no nested modal ────────── */}
+            {/* OC Available — inline toggle */}
             <TouchableOpacity style={styles.filterOption} onPress={toggleOcFilter}>
               <View style={styles.filterOptionLeft}>
                 <Ionicons name="checkmark-circle" size={20} color={WHATSAPP_COLORS.primary} />
@@ -890,18 +897,20 @@ const ListSite: React.FC<ListSiteProps> = ({
       {activeFilterCount > 0 && !selectionMode && (
         <View style={styles.activeFiltersContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {/* Property Type chips */}
-            {localFilters.property_type.map((value) => {
-              const option = PROPERTY_TYPE_OPTIONS.find(o => o.value === value);
-              return (
-                <View key={`prop-${value}`} style={styles.activeFilter}>
-                  <Text style={styles.activeFilterText}>{option?.label || value}</Text>
-                  <TouchableOpacity onPress={() => removeFilter('property_type', value)}>
-                    <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
+            {/* Property Type chips — only show ones beyond the initial seed */}
+            {localFilters.property_type
+              .filter(value => !(initialFilters?.property_type ?? []).includes(value))
+              .map((value) => {
+                const option = PROPERTY_TYPE_OPTIONS.find(o => o.value === value);
+                return (
+                  <View key={`prop-${value}`} style={styles.activeFilter}>
+                    <Text style={styles.activeFilterText}>{option?.label || value}</Text>
+                    <TouchableOpacity onPress={() => removeFilter('property_type', value)}>
+                      <Ionicons name="close" size={14} color={WHATSAPP_COLORS.primary} />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
             {/* Building Status chips */}
             {localFilters.building_status.map((value) => (
               <View key={`status-${value}`} style={styles.activeFilter}>
@@ -920,7 +929,7 @@ const ListSite: React.FC<ListSiteProps> = ({
                 </TouchableOpacity>
               </View>
             ))}
-            {/* ── NEW: Micro Market chips ──────────────────────────────────── */}
+            {/* Micro Market chips */}
             {localFilters.micro_market.map((value) => {
               const option = MICRO_MARKET_OPTIONS.find(o => o.value === value);
               return (
@@ -932,7 +941,7 @@ const ListSite: React.FC<ListSiteProps> = ({
                 </View>
               );
             })}
-            {/* ── NEW: OC chip ─────────────────────────────────────────────── */}
+            {/* OC chip */}
             {localFilters.oc === true && (
               <View style={styles.activeFilter}>
                 <Ionicons name="checkmark-circle" size={12} color={WHATSAPP_COLORS.primary} />
@@ -1008,7 +1017,6 @@ const ListSite: React.FC<ListSiteProps> = ({
           handleFilterChange('floor_condition', newValues);
         }
       )}
-      {/* ── NEW: Micro Market nested dropdown ──────────────────────────────── */}
       {renderFilterDropdown(
         'micro_market', 'Select Location / Micro Market', MICRO_MARKET_OPTIONS,
         localFilters.micro_market,
@@ -1178,7 +1186,6 @@ const styles = StyleSheet.create({
   filterOptionLabel: { fontSize: 16, color: WHATSAPP_COLORS.textPrimary },
   filterOptionRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   filterOptionValue: { fontSize: 14, color: WHATSAPP_COLORS.textSecondary },
-  // ── NEW: OC toggle styles ──────────────────────────────────────────────────
   ocToggle: {
     width: 44, height: 24, borderRadius: 12,
     backgroundColor: WHATSAPP_COLORS.border,

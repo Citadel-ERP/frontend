@@ -380,23 +380,6 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
       room.id === selectedChatRoom.id ? updatedRoom : room
     ));
 
-    if (viewMode === 'chat' && selectedChatRoom) {
-      const tempSystemMessage: Message = {
-        id: `temp_system_${Date.now()}`,
-        sender: currentUser,
-        content: `${newMember.first_name} ${newMember.last_name} was added by ${currentUser.first_name} ${currentUser.last_name}`,
-        message_type: 'system',
-        created_at: new Date().toISOString(),
-        is_edited: false,
-      };
-      setMessages(prev => {
-        const updated = [...prev, tempSystemMessage].sort((a, b) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        );
-        saveMessageCache(selectedChatRoom.id, updated);
-        return updated;
-      });
-    }
 
     console.log('✅ Optimistically added member:', newMember.first_name);
   }, [selectedChatRoom]);
@@ -2994,7 +2977,7 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
             onRefresh={loadChatRoomsInitial}
             isRefreshing={chatListPagination.isLoading}
             onScroll={handleChatListScroll}
-            onLoadMore={() => loadChatRoomsMore(false)} 
+            onLoadMore={() => loadChatRoomsMore(false)}
             hasMore={chatListPagination.hasMore}
             onDeleteChat={handleDeleteChat}
             onMute={(roomId: number, duration: string) => muteChat(roomId, duration)}
@@ -3220,14 +3203,14 @@ export const CitadelHub: React.FC<CitadelHubProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-  flex: 1,
-  backgroundColor: '#ffffff',
-  ...(Platform.OS === 'web' && {
-    height: '100%' as any,
-    maxHeight: '100%' as any,
-    overflow: 'hidden' as any,
-  }),
-},
+    flex: 1,
+    backgroundColor: '#ffffff',
+    ...(Platform.OS === 'web' && {
+      height: '100%' as any,
+      maxHeight: '100%' as any,
+      overflow: 'hidden' as any,
+    }),
+  },
   listView: {
     flex: 1,
   },

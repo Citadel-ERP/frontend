@@ -412,13 +412,12 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   const totalEmployees = pagination?.total_items || allEmployeesCount;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <StatusBar
         barStyle="light-content"
         backgroundColor="#2D3748"
         translucent={false}
       />
-
       <Header
         title="HR Management"
         subtitle={
@@ -429,7 +428,6 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         onBack={onBack}
         showAddEmployee={() => setShowAddEmployeeScreen(true)}
       />
-
       <SearchAndDownload
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -440,7 +438,6 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         onOpenBulkEmployees={() => setShowBulkEmployees(true)}
         placeholder="Search by name, ID, city, or designation..."
       />
-
       <EmployeeList
         employeesByCity={filteredEmployeesByCity}
         loading={loading}
@@ -453,7 +450,6 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         totalEmployees={totalEmployees}
         displayedEmployees={displayedCount}
       />
-
       <AttendanceDownloadModal
         visible={showAttendanceModal}
         onClose={() => setShowAttendanceModal(false)}
