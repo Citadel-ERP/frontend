@@ -1,6 +1,6 @@
 // Add this import at the very top, before other imports
 import './src/services/backgroundAttendance';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   AppState,
@@ -28,6 +28,13 @@ import { colors } from './src/styles/theme';
 import { BackgroundAttendanceService } from './src/services/backgroundAttendance';
 import { ConfigValidator } from './src/utils/configValidator';
 import Constants from 'expo-constants';
+
+// ─── Import the disclosure component here so it can be shown at root level ───
+import { BackgroundLocationDisclosure } from './src/components/BackgroundLocationDisclosure';
+
+// ─── Storage key for tracking whether disclosure has been shown before ───────
+// Once shown (accept OR decline), we never show it again automatically.
+const BG_DISCLOSURE_SHOWN_KEY = 'bg_location_disclosure_shown_v1';
 
 type Screen =
   | 'splash'
@@ -85,6 +92,70 @@ function App(): React.JSX.Element {
   const [tempData, setTempData] = useState<{ email?: string; oldPassword?: string; newPassword?: string; otp?: string }>({});
   const [showDevMenu, setShowDevMenu] = useState(__DEV__);
 
+  // ─── Disclosure modal state ───────────────────────────────────────────────
+  // disclosureVisible: whether the modal is currently shown
+  // disclosureResolved: whether the user has acted on it this session
+  const [disclosureVisible, setDisclosureVisible] = useState(false);
+  const disclosureResolveRef = useRef<((accepted: boolean) => void) | null>(null);
+
+  // ─── Show disclosure and wait for user response ───────────────────────────
+  // Returns a Promise<boolean> — true = accepted, false = declined.
+  // This is the same pattern used in Dashboard.tsx so both can call it.
+  const showBackgroundLocationDisclosure = useCallback((): Promise<boolean> => {
+    return new Promise(resolve => {
+      disclosureResolveRef.current = resolve;
+      setDisclosureVisible(true);
+    });
+  }, []);
+
+  const handleDisclosureAccept = useCallback(async () => {
+    setDisclosureVisible(false);
+    // Mark as shown permanently so it never auto-triggers again
+    await AsyncStorage.setItem(BG_DISCLOSURE_SHOWN_KEY, 'shown');
+    disclosureResolveRef.current?.(true);
+    disclosureResolveRef.current = null;
+  }, []);
+
+  const handleDisclosureDecline = useCallback(async () => {
+    setDisclosureVisible(false);
+    // Still mark as shown — we respect the user's choice, don't spam them
+    await AsyncStorage.setItem(BG_DISCLOSURE_SHOWN_KEY, 'shown');
+    disclosureResolveRef.current?.(false);
+    disclosureResolveRef.current = null;
+  }, []);
+
+  // ─── On first launch: show disclosure BEFORE anything else ───────────────
+  // This is the key fix: Google's scanner checks for a prominent disclosure
+  // that appears at startup, before any permission API is called.
+  // We show it right after splash, independently of any service logic.
+  useEffect(() => {
+    const checkAndShowDisclosure = async () => {
+      // Only run on real device builds, not Expo Go
+      if (Platform.OS === 'web') return;
+      if (Constants.appOwnership === 'expo') return;
+
+      const alreadyShown = await AsyncStorage.getItem(BG_DISCLOSURE_SHOWN_KEY);
+      if (alreadyShown) return; // Already seen it — don't show again
+
+      // Check if bg permission is already granted (e.g. after reinstall with same device)
+      const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
+      if (bgStatus === 'granted') {
+        // Permission already granted — mark disclosure as shown and skip
+        await AsyncStorage.setItem(BG_DISCLOSURE_SHOWN_KEY, 'shown');
+        return;
+      }
+
+      // First launch, bg not granted — show the disclosure now.
+      // We do NOT request any permission here. The disclosure is purely informational.
+      // The actual permission request happens later in the services init flow.
+      await showBackgroundLocationDisclosure();
+    };
+
+    // Small delay so splash screen has a chance to render first
+    const timer = setTimeout(checkAndShowDisclosure, 800);
+    return () => clearTimeout(timer);
+  }, [showBackgroundLocationDisclosure]);
+
   // Get backend URL from environment variables
   const getBackendUrl = (): string => {
     const backendUrl = BACKEND_URL;
@@ -141,9 +212,11 @@ function App(): React.JSX.Element {
     }
   }, []);
 
-  // Single unified useEffect for initializing all background services
-  // App.tsx — replace the initializeBackgroundServices useEffect
-
+  // ─── Background services init — runs after authentication ─────────────────
+  // IMPORTANT: This NO LONGER shows the disclosure itself.
+  // The disclosure is shown at startup (above). By the time we reach here,
+  // the user has already seen it and the flag is set. We only request the
+  // actual system permission dialog here, after the user has been informed.
   useEffect(() => {
     const initializeBackgroundServices = async () => {
       if (!userData.isAuthenticated) return;
@@ -151,24 +224,48 @@ function App(): React.JSX.Element {
       if (Constants.appOwnership === 'expo') return;
 
       try {
-        // Step 1: Check what's already granted — no dialogs yet
+        // Check what's already granted — no dialogs yet
         const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
         const backgroundAlreadyGranted = bgStatus === 'granted';
 
         if (!backgroundAlreadyGranted) {
-          // Step 2: We need background location — show disclosure FIRST
-          // We can't show the BackgroundLocationDisclosure modal here (it lives in Dashboard)
-          // So we store a flag and let Dashboard handle it on mount
-          await AsyncStorage.setItem('pending_background_location_disclosure', 'true');
+          // Disclosure has already been shown at startup.
+          // Check if user accepted it (i.e. the flag exists).
+          const disclosureShown = await AsyncStorage.getItem(BG_DISCLOSURE_SHOWN_KEY);
 
-          // Only initialize services that don't need background location
-          // (foreground-only features can still start)
-          console.log('ℹ️ Background location not yet granted, deferring initialization');
-          return;
+          if (!disclosureShown) {
+            // Edge case: user is authenticated but somehow missed the disclosure
+            // (e.g. they were already logged in from a previous session before
+            // this update). Show it now before requesting permission.
+            const accepted = await showBackgroundLocationDisclosure();
+            if (!accepted) {
+              // Only start foreground-safe services
+              await BackgroundAttendanceService.initialize(showBackgroundLocationDisclosure);
+              return;
+            }
+          }
+
+          // Disclosure was shown and accepted (or already shown previously).
+          // Now it is safe to request the actual system permission.
+          // The system dialog appears AFTER our disclosure — Google compliant.
+          console.log('ℹ️ Requesting background location permission...');
+          const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
+          if (fgStatus !== 'granted') {
+            console.log('Foreground location denied — skipping background request');
+            await BackgroundAttendanceService.initialize(showBackgroundLocationDisclosure);
+            return;
+          }
+
+          const { status: newBgStatus } = await Location.requestBackgroundPermissionsAsync();
+          if (newBgStatus !== 'granted') {
+            console.log('Background location denied — running foreground-only services');
+            await BackgroundAttendanceService.initialize(showBackgroundLocationDisclosure);
+            return;
+          }
         }
 
-        // Background already granted — safe to initialize everything
-        console.log('🚀 Background location already granted, initializing services...');
+        // Background already granted (or just granted above) — initialize everything
+        console.log('🚀 Background location granted, initializing all services...');
         const results = await BackgroundAttendanceService.initializeAll();
         console.log('📊 Background attendance services:', results);
 
@@ -181,7 +278,7 @@ function App(): React.JSX.Element {
     };
 
     initializeBackgroundServices();
-  }, [userData.isAuthenticated]);
+  }, [userData.isAuthenticated, showBackgroundLocationDisclosure]);
 
   const handleAppStateChange = async (nextAppState: AppStateStatus) => {
     setAppState(nextAppState);
@@ -211,7 +308,7 @@ function App(): React.JSX.Element {
         body: JSON.stringify({
           email,
           password,
-          is_browser: isBrowser, // Added is_browser parameter
+          is_browser: isBrowser,
         }),
       });
 
@@ -628,7 +725,9 @@ function App(): React.JSX.Element {
 
       console.log('✅ All background services stopped');
 
-      // Clear all stored data
+      // Clear all stored data EXCEPT the disclosure flag —
+      // we intentionally keep BG_DISCLOSURE_SHOWN_KEY so the user
+      // is not shown the disclosure again after re-login.
       await AsyncStorage.multiRemove([
         TOKEN_1_KEY,
         TOKEN_2_KEY,
@@ -638,7 +737,8 @@ function App(): React.JSX.Element {
         'user_last_name',
         'last_attendance_marked',
         'office_location',
-        'last_location_tracked'
+        'last_location_tracked',
+        // Note: BG_DISCLOSURE_SHOWN_KEY is intentionally NOT cleared here
       ]);
 
       setUserData({});
@@ -659,7 +759,7 @@ function App(): React.JSX.Element {
         'user_last_name',
         'last_attendance_marked',
         'office_location',
-        'last_location_tracked'
+        'last_location_tracked',
       ]);
       setUserData({});
       setUser(null);
@@ -782,6 +882,7 @@ function App(): React.JSX.Element {
         return <SplashScreen onSplashComplete={handleSplashComplete} />;
     }
   };
+
   return (
     <SafeAreaProvider style={{ backgroundColor: '#FFFFFF' }}>
       <SafeAreaView
@@ -789,6 +890,21 @@ function App(): React.JSX.Element {
         edges={['bottom']}
       >
         {renderScreen()}
+
+        {/*
+          ─── Prominent Disclosure Modal ────────────────────────────────────────
+          Rendered at the ROOT level, above all screens. This ensures it is
+          always visible regardless of which screen is currently active, and
+          Google Play's automated scanner can detect it at app startup.
+
+          It uses a React Native Modal (transparent + statusBarTranslucent)
+          so it overlays everything, including the splash screen.
+        */}
+        <BackgroundLocationDisclosure
+          visible={disclosureVisible}
+          onAccept={handleDisclosureAccept}
+          onDecline={handleDisclosureDecline}
+        />
       </SafeAreaView>
     </SafeAreaProvider>
   );
