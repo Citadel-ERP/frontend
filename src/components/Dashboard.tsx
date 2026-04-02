@@ -1,4 +1,4 @@
-// Dashboard.tsx - FIXED VERSION: Stack-based back navigation + web dashboard rendering restored
+// Dashboard.tsx - FIXED VERSION: disclosure owned by App.tsx, compliant background services
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -31,10 +31,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-
-import { BackgroundLocationDisclosure } from './BackgroundLocationDisclosure';
 import { BackgroundLocationService } from '../services/backgroundLocationTracking';
-
 
 // Import all pages
 import Profile from './Profile';
@@ -265,9 +262,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [isDark, setIsDark] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
-  const [disclosureVisible, setDisclosureVisible] = useState(false);
-  const disclosureResolveRef = useRef<((accepted: boolean) => void) | null>(null);
-
   // Modules modal / search
   const [allModulesVisible, setAllModulesVisible] = useState(false);
   const [showAsset, setShowAsset] = useState(false);
@@ -275,7 +269,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  // ── Navigation stack (mobile only) ────────────────────────────────────────
+  // Navigation stack (mobile only)
   const [navStack, setNavStack] = useState<NavEntry[]>([]);
 
   // Notifications badge
@@ -313,7 +307,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   }, []);
 
   // --------------------------------------------------------------------------
-  // CLOSE ALL PAGES  (defined early — used by handleBack & BackHandler)
+  // CLOSE ALL PAGES
   // --------------------------------------------------------------------------
   const closeAllPages = useCallback(() => {
     setShowAttendance(false);
@@ -346,7 +340,7 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   }, []);
 
   // --------------------------------------------------------------------------
-  // RESTORE PAGE  (defined early — used by handleBack & BackHandler)
+  // RESTORE PAGE
   // --------------------------------------------------------------------------
   const restorePage = useCallback((page: MobilePageKey) => {
     switch (page) {
@@ -376,12 +370,12 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       case 'privacy': setShowPrivacy(true); break;
       case 'about': setShowAbout(true); break;
       case 'support': setShowSupport(true); break;
-      case 'dashboard':           /* dashboard is default */        break;
+      case 'dashboard': break;
     }
   }, []);
 
   // --------------------------------------------------------------------------
-  // HANDLE BACK  (defined after closeAllPages & restorePage)
+  // HANDLE BACK
   // --------------------------------------------------------------------------
   const handleBack = useCallback(() => {
     setProfileModalToOpen(null);
@@ -424,28 +418,10 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     });
   }, [isWeb, closeAllPages, restorePage, slideAnim]);
 
-  // Alias for child components that still use the old name
   const handleBackFromPage = handleBack;
-  const showBackgroundLocationDisclosure = useCallback((): Promise<boolean> => {
-    return new Promise(resolve => {
-      disclosureResolveRef.current = resolve;
-      setDisclosureVisible(true);
-    });
-  }, []);
 
-  const handleDisclosureAccept = useCallback(() => {
-    setDisclosureVisible(false);
-    disclosureResolveRef.current?.(true);
-    disclosureResolveRef.current = null;
-  }, []);
-
-  const handleDisclosureDecline = useCallback(() => {
-    setDisclosureVisible(false);
-    disclosureResolveRef.current?.(false);
-    disclosureResolveRef.current = null;
-  }, []);
   // --------------------------------------------------------------------------
-  // NAVIGATE TO  (defined after closeAllPages — pushes current page onto stack)
+  // NAVIGATE TO
   // --------------------------------------------------------------------------
   const navigateTo = useCallback((
     fromPage: MobilePageKey,
@@ -669,16 +645,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     return events.slice(0, 3);
   }, []);
 
-  const debugLog = useCallback(async (message: string, data?: any) => {
-    console.log(message, data);
-    try {
-      const logs = await AsyncStorage.getItem('debug_logs') || '[]';
-      const logArray = JSON.parse(logs);
-      logArray.push({ timestamp: new Date().toISOString(), message, data: data ? JSON.stringify(data) : null });
-      await AsyncStorage.setItem('debug_logs', JSON.stringify(logArray.slice(-50)));
-    } catch { /* non-critical */ }
-  }, []);
-
   const logPushTokenError = useCallback(async (error: string, details?: any) => {
     console.error('[Push Token Error]', error, details);
     try {
@@ -711,58 +677,48 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     }
   }, [showProfile]);
 
-  // Dashboard.tsx — replace the background services useEffect
+  // --------------------------------------------------------------------------
+  // BACKGROUND SERVICES — Google Play compliant version
+  //
+  // The prominent disclosure is now owned by App.tsx and shown at first launch
+  // before any permission API is called. By the time the user reaches the
+  // Dashboard, they have already seen the disclosure. This effect simply checks
+  // the current permission state and starts the appropriate services.
+  //
+  // We do NOT show any disclosure here, and we do NOT request permissions here.
+  // --------------------------------------------------------------------------
+  useEffect(() => {
+    if (!token || !userData || isWeb) return;
+    if (Constants.appOwnership === 'expo') return;
 
-useEffect(() => {
-  if (!token || !userData || isWeb) return;
-  if (Constants.appOwnership === 'expo') return;
+    const init = async () => {
+      try {
+        const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
+        const backgroundGranted = bgStatus === 'granted';
 
-  const init = async () => {
-    try {
-      // Check if App.tsx deferred initialization pending our disclosure
-      const pendingDisclosure = await AsyncStorage.getItem(
-        'pending_background_location_disclosure'
-      );
-
-      const { status: fgStatus } = await Location.getForegroundPermissionsAsync();
-      const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
-      const backgroundAlreadyGranted = bgStatus === 'granted';
-
-      if (!backgroundAlreadyGranted) {
-        // Show our prominent disclosure BEFORE any system dialog
-        const accepted = await showBackgroundLocationDisclosure();
-
-        if (!accepted) {
-          await AsyncStorage.removeItem('pending_background_location_disclosure');
-          // Initialize only foreground-safe services
-          await BackgroundAttendanceService.initialize(showBackgroundLocationDisclosure);
+        if (!backgroundGranted) {
+          // Background permission was not granted (user declined in App.tsx flow
+          // or the system dialog hasn't been triggered yet).
+          // Only start foreground-safe services.
+          console.log('ℹ️ Dashboard: background location not granted, starting foreground-only services');
+          await BackgroundAttendanceService.initialize(async () => false);
           return;
         }
-      }
 
-      // Clear the pending flag
-      await AsyncStorage.removeItem('pending_background_location_disclosure');
-
-      // NOW request permissions (system dialog comes AFTER our disclosure)
-      const perms = await AttendanceUtils.requestLocationPermissions();
-      if (!perms.foreground) return;
-
-      // Initialize all services
-      await BackgroundAttendanceService.initialize(showBackgroundLocationDisclosure);
-      if (perms.background) {
+        // Full background permission granted — start all services
+        console.log('🚀 Dashboard: background location granted, starting all services');
+        await BackgroundAttendanceService.initialize(async () => true);
         await GeofencingService.initialize();
-        // Also trigger App.tsx-level services now that we have permission
         await BackgroundAttendanceService.initializeAll();
         await BackgroundLocationService.initialize();
+
+      } catch (e) {
+        console.warn('Dashboard background services failed:', e);
       }
+    };
 
-    } catch (e) {
-      console.warn('Background services failed:', e);
-    }
-  };
-
-  init();
-}, [token, userData, isWeb, showBackgroundLocationDisclosure]);
+    init();
+  }, [token, userData, isWeb]);
 
   // Push notifications setup
   useEffect(() => {
@@ -1081,7 +1037,6 @@ useEffect(() => {
     }
   }, [isWeb, slideAnim]);
 
-  // handleNavItemPress — defined after navigateTo
   const handleNavItemPress = useCallback((navItem: string) => {
     setActiveNavItem(navItem);
     if (navItem === 'message') {
@@ -1124,7 +1079,6 @@ useEffect(() => {
     if (isWeb) {
       setActivePage(targetPage);
     } else {
-      // All menu navigation originates from 'dashboard'
       const handlers: Partial<Record<ActivePage, () => void>> = {
         'profile': () => navigateTo('dashboard', () => setShowProfile(true)),
         'messages': () => navigateTo('dashboard', () => setShowChat(true)),
@@ -1216,7 +1170,7 @@ useEffect(() => {
   }
 
   // --------------------------------------------------------------------------
-  // MOBILE PAGE RENDERS  (early returns before the main dashboard shell)
+  // MOBILE PAGE RENDERS
   // --------------------------------------------------------------------------
   if (!isWeb) {
     if (showValidation) return <ValidationScreen onBack={handleBack} />;
@@ -1273,7 +1227,7 @@ useEffect(() => {
   }
 
   // --------------------------------------------------------------------------
-  // MAIN DASHBOARD SHELL  (web + mobile scaffold)
+  // MAIN DASHBOARD SHELL
   // --------------------------------------------------------------------------
   return (
     <View style={[styles.safeContainer, { backgroundColor: theme.bgColor }, isWeb && styles.safeContainerWeb]}>
@@ -1557,11 +1511,13 @@ useEffect(() => {
           unreadNotificationCount={unreadNotificationCount}
         />
       )}
-      <BackgroundLocationDisclosure
-        visible={disclosureVisible}
-        onAccept={handleDisclosureAccept}
-        onDecline={handleDisclosureDecline}
-      />
+
+      {/*
+        NOTE: BackgroundLocationDisclosure has been intentionally removed from here.
+        It is now rendered at the root level in App.tsx so Google Play's automated
+        scanner detects it at app startup, before any permission API is called.
+        This satisfies the Prominent Disclosure and Consent Requirement.
+      */}
     </View>
   );
 }
