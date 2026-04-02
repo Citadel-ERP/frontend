@@ -33,19 +33,19 @@ interface DesignationOption {
 }
 
 const DESIGNATION_OPTIONS: DesignationOption[] = [
-  { value: 'BDT',              label: 'BDT',              subtitle: 'Transaction Team' },
-  { value: 'BD Manager',       label: 'BD Manager' },
-  { value: 'BUP',              label: 'BUP' },
+  { value: 'BDT', label: 'BDT', subtitle: 'Transaction Team' },
+  { value: 'BD Manager', label: 'BD Manager' },
+  { value: 'BUP', label: 'BUP' },
   { value: 'Database Manager', label: 'Database Manager' },
-  { value: 'Scouting Team',    label: 'Scouting Team' },
-  { value: 'Driver',           label: 'Driver' },
-  { value: 'Driver Manager',   label: 'Driver Manager' },
-  { value: 'HouseKeeping',     label: 'HouseKeeping' },
-  { value: 'HR',               label: 'HR' },
-  { value: 'Finance',          label: 'Finance' },
-  { value: 'Content Manager',  label: 'Content Manager' },
-  { value: 'Admin',            label: 'Admin' },
-  { value: 'Other',            label: 'Other',            subtitle: 'Specify below' },
+  { value: 'Scouting Team', label: 'Scouting Team' },
+  { value: 'Driver', label: 'Driver' },
+  { value: 'Driver Manager', label: 'Driver Manager' },
+  { value: 'HouseKeeping', label: 'HouseKeeping' },
+  { value: 'HR', label: 'HR' },
+  { value: 'Finance', label: 'Finance' },
+  { value: 'Content Manager', label: 'Content Manager' },
+  { value: 'Admin', label: 'Admin' },
+  { value: 'Other', label: 'Other', subtitle: 'Specify below' },
 ];
 
 // ==================== TYPES ====================
@@ -67,6 +67,7 @@ interface Document {
   name: string;
   type: string;
   size?: number;
+  _file?: File;
 }
 interface AddEmployeeScreenProps {
   token: string;
@@ -264,7 +265,7 @@ const OfficePickerModal: React.FC<OfficePickerModalProps> = ({
           maxHeight: '75%',
           paddingBottom: Platform.OS === 'ios' ? 34 : 16,
         }}
-        onPress={() => {}}
+        onPress={() => { }}
       >
         <View
           style={{
@@ -400,7 +401,7 @@ const DesignationPickerModal: React.FC<DesignationPickerModalProps> = ({
           maxHeight: '80%',
           paddingBottom: Platform.OS === 'ios' ? 34 : 16,
         }}
-        onPress={() => {}}
+        onPress={() => { }}
       >
         {/* Handle bar */}
         <View
@@ -467,8 +468,8 @@ const DesignationPickerModal: React.FC<DesignationPickerModalProps> = ({
                     backgroundColor: isSelected
                       ? WHATSAPP_COLORS.primary
                       : isOther
-                      ? '#FFF3E0'
-                      : '#F2F2F7',
+                        ? '#FFF3E0'
+                        : '#F2F2F7',
                     alignItems: 'center',
                     justifyContent: 'center',
                     marginRight: 14,
@@ -479,16 +480,16 @@ const DesignationPickerModal: React.FC<DesignationPickerModalProps> = ({
                       isOther
                         ? 'create-outline'
                         : isSelected
-                        ? 'person'
-                        : 'person-outline'
+                          ? 'person'
+                          : 'person-outline'
                     }
                     size={20}
                     color={
                       isSelected
                         ? '#fff'
                         : isOther
-                        ? '#FF9800'
-                        : '#666'
+                          ? '#FF9800'
+                          : '#666'
                     }
                   />
                 </View>
@@ -502,8 +503,8 @@ const DesignationPickerModal: React.FC<DesignationPickerModalProps> = ({
                       color: isSelected
                         ? WHATSAPP_COLORS.primary
                         : isOther
-                        ? '#FF9800'
-                        : '#1C1C1E',
+                          ? '#FF9800'
+                          : '#1C1C1E',
                     }}
                   >
                     {item.label}
@@ -737,7 +738,19 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     setSelectedReportingTag(tagId);
   }, []);
 
+  // ==================== DOCUMENT PICKER ====================
+
+  /**
+   * On WEB: Use a single unified <input type="file"> that accepts both images
+   * and documents. This bypasses the Alert dialog (which doesn't support
+   * button callbacks on web) and removes the Gallery/Files split entirely.
+   *
+   * On NATIVE: Show the Alert to let users choose between Gallery and Files,
+   * since native pickers are separate APIs.
+   */
+
   const pickFromGallery = async () => {
+    // This is only called on native (iOS/Android) — see showPickerOptions below.
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       alert('Permission', 'Gallery access is required');
@@ -759,7 +772,8 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     }
   };
 
-  const pickDocuments = async () => {
+  const pickDocumentsNative = async () => {
+    // This is only called on native (iOS/Android) — see showPickerOptions below.
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: '*/*', multiple: true });
       if (!result.canceled && result.assets) {
@@ -777,10 +791,60 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
     }
   };
 
+  const pickDocumentsWeb = () => {
+    // Unified picker for web: accepts images AND documents in one input.
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    // Accept both document types AND images — this is the key fix.
+    input.accept = [
+      '.pdf',
+      '.doc',
+      '.docx',
+      '.xls',
+      '.xlsx',
+      '.jpg',
+      '.jpeg',
+      '.png',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'image/*',
+    ].join(',');
+
+    input.onchange = (e: any) => {
+      const files: File[] = Array.from(e.target.files || []);
+      if (files.length === 0) return;
+
+      const newDocs: Document[] = files.map((file) => ({
+        uri: URL.createObjectURL(file),
+        name: file.name,
+        type: file.type || 'application/octet-stream',
+        size: file.size,
+        _file: file, // preserve raw File for FormData upload
+      }));
+      setDocuments((prev) => [...prev, ...newDocs]);
+    };
+
+    // IMPORTANT: append to body briefly on some browsers to ensure .click() fires
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.click();
+    // Clean up after selection (or abandonment)
+    setTimeout(() => document.body.removeChild(input), 60_000);
+  };
+
   const showPickerOptions = () => {
+    // On web: skip the alert entirely and open the unified picker directly.
+    if (Platform.OS === 'web') {
+      pickDocumentsWeb();
+      return;
+    }
+
+    // On native: show the source chooser as before.
     alert('Upload Document', 'Choose source', [
       { text: 'Gallery', onPress: pickFromGallery },
-      { text: 'Files', onPress: pickDocuments },
+      { text: 'Files', onPress: pickDocumentsNative },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
@@ -984,13 +1048,19 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
           const fieldName = getDocumentFieldName(doc.name || `document_${index}`);
           try {
             if (Platform.OS === 'web') {
-              const response = await fetch(doc.uri);
-              if (!response.ok) throw new Error(`Failed to fetch file: ${response.statusText}`);
-              const blob = await response.blob();
-              const file = new File([blob], doc.name || `document_${index}`, {
-                type: doc.type || 'application/octet-stream',
-              });
-              formData.append(fieldName, file);
+              // If we have the raw File object (from our custom picker), use it directly
+              if (doc._file) {
+                formData.append(fieldName, doc._file, doc.name);
+              } else {
+                // Fallback: fetch blob URL
+                const response = await fetch(doc.uri);
+                if (!response.ok) throw new Error(`Failed to fetch file: ${response.statusText}`);
+                const blob = await response.blob();
+                const file = new File([blob], doc.name || `document_${index}`, {
+                  type: doc.type || 'application/octet-stream',
+                });
+                formData.append(fieldName, file);
+              }
             } else {
               formData.append(fieldName, {
                 uri: doc.uri,
@@ -1756,10 +1826,10 @@ const AddEmployeeScreen: React.FC<AddEmployeeScreenProps> = ({
               basicInfo.login_time && basicInfo.logout_time
                 ? `${basicInfo.login_time} - ${basicInfo.logout_time}`
                 : basicInfo.login_time
-                ? `Login: ${basicInfo.login_time}`
-                : basicInfo.logout_time
-                ? `Logout: ${basicInfo.logout_time}`
-                : 'Not specified'
+                  ? `Login: ${basicInfo.login_time}`
+                  : basicInfo.logout_time
+                    ? `Logout: ${basicInfo.logout_time}`
+                    : 'Not specified'
             }
           />
           <ReviewSection label="Office:" value={selectedOffice?.name || 'Not selected'} />
