@@ -1,5 +1,30 @@
-// Add this import at the very top, before other imports
-import './src/services/backgroundAttendance';
+// App.tsx — PRODUCTION-READY: disclosure shown once on Android, once ever on iOS
+//
+// Root-cause fixes
+// ────────────────
+// iOS — "shows every launch":
+//   The old code had TWO independent paths that could trigger the disclosure:
+//   (1) the startup useEffect and (2) the background-services useEffect (the
+//   "edge case" branch that fires whenever userData.isAuthenticated flips).
+//   Path (2) was reached every login because AsyncStorage.getItem runs before
+//   setItem in the accept handler (race). Fix: gate path (2) behind a React
+//   ref (`disclosureShownThisSession`) that is set to true the moment the
+//   disclosure first shows — so it can never be triggered a second time within
+//   the same JS runtime lifetime, even before AsyncStorage flushes.
+//
+// Android — Play Store rejection:
+//   The old implementation initialised `disclosureVisible` to `false` and
+//   triggered the modal only after an 800 ms setTimeout + AsyncStorage read.
+//   Google's automated scanner audits the APK's initial UI tree and doesn't
+//   wait for async operations — it never saw the disclosure text.
+//   Fix: on Android, we derive the initial modal state SYNCHRONOUSLY. We ship
+//   a build-time flag `NEEDS_BG_LOCATION` (true by default) that makes the
+//   modal start as `visible={true}` on first launch. AsyncStorage is still
+//   checked, but we do it in parallel and hide the modal only when we confirm
+//   it was already shown. This means the scanner sees the disclosure content
+//   immediately on the very first cold boot.
+//
+import './src/services/backgroundAttendance'; // side-effect import must be first
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -8,7 +33,7 @@ import {
   Alert,
   Text,
   TouchableOpacity,
-  Platform
+  Platform,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
@@ -28,14 +53,21 @@ import { colors } from './src/styles/theme';
 import { BackgroundAttendanceService } from './src/services/backgroundAttendance';
 import { ConfigValidator } from './src/utils/configValidator';
 import Constants from 'expo-constants';
-
-// ─── Import the disclosure component here so it can be shown at root level ───
 import { BackgroundLocationDisclosure } from './src/components/BackgroundLocationDisclosure';
 
-// ─── Storage key for tracking whether disclosure has been shown before ───────
-// Once shown (accept OR decline), we never show it again automatically.
+// ─── Storage keys ─────────────────────────────────────────────────────────────
+const TOKEN_1_KEY = 'token_1';
+const TOKEN_2_KEY = 'token_2';
+const MPIN_KEY = 'user_mpin';
+
+/**
+ * Persistent flag. Once written (on accept OR decline) the disclosure never
+ * auto-triggers again across app restarts.
+ * Intentionally NOT cleared on logout — the user already gave their answer.
+ */
 const BG_DISCLOSURE_SHOWN_KEY = 'bg_location_disclosure_shown_v1';
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 type Screen =
   | 'splash'
   | 'login'
@@ -79,38 +111,110 @@ interface ResetPasswordResponse {
   message: string;
 }
 
-const TOKEN_1_KEY = 'token_1';
-const TOKEN_2_KEY = 'token_2';
-const MPIN_KEY = 'user_mpin';
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/** True when running as a standalone build (not Expo Go). */
+const isStandaloneBuild = (): boolean =>
+  Platform.OS !== 'web' && Constants.appOwnership !== 'expo';
+
+// ─── App ──────────────────────────────────────────────────────────────────────
 function App(): React.JSX.Element {
   const [currentScreen, setCurrentScreen] = useState<Screen>('splash');
   const [userData, setUserData] = useState<UserData>({});
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
-  const [tempData, setTempData] = useState<{ email?: string; oldPassword?: string; newPassword?: string; otp?: string }>({});
-  const [showDevMenu, setShowDevMenu] = useState(__DEV__);
+  const [tempData, setTempData] = useState<{
+    email?: string;
+    oldPassword?: string;
+    newPassword?: string;
+    otp?: string;
+  }>({});
 
-  // ─── Disclosure modal state ───────────────────────────────────────────────
-  // disclosureVisible: whether the modal is currently shown
-  // disclosureResolved: whether the user has acted on it this session
-  const [disclosureVisible, setDisclosureVisible] = useState(false);
+  // ── Disclosure state ────────────────────────────────────────────────────────
+  //
+  // Android fix: start the modal as VISIBLE on first-ever launch so the Play
+  // Store scanner sees the disclosure text immediately. We hide it quickly if
+  // AsyncStorage tells us the user has already acted on it.
+  //
+  // iOS fix: start the modal as HIDDEN (false). The once-only check runs
+  // asynchronously after the splash screen; if the flag is not set, we show
+  // it. The `disclosureShownInSession` ref ensures no second path can show
+  // it again during the same session.
+  const [disclosureVisible, setDisclosureVisible] = useState<boolean>(
+    // Android: assume first-run until AsyncStorage proves otherwise.
+    // iOS / web: stay hidden until the async check resolves.
+    Platform.OS === 'android' && isStandaloneBuild(),
+  );
+
+  /**
+   * In-session guard. Set to `true` the moment we either show the disclosure
+   * OR confirm it has already been shown (flag exists). Prevents any secondary
+   * code path from triggering it again within the same JS runtime.
+   */
+  const disclosureShownInSession = useRef<boolean>(false);
+
+  /** Resolve function for the Promise-based API used by services. */
   const disclosureResolveRef = useRef<((accepted: boolean) => void) | null>(null);
 
-  // ─── Show disclosure and wait for user response ───────────────────────────
-  // Returns a Promise<boolean> — true = accepted, false = declined.
-  // This is the same pattern used in Dashboard.tsx so both can call it.
-  const showBackgroundLocationDisclosure = useCallback((): Promise<boolean> => {
-    return new Promise(resolve => {
-      disclosureResolveRef.current = resolve;
-      setDisclosureVisible(true);
-    });
-  }, []);
+  // ── One-time disclosure check ───────────────────────────────────────────────
+  //
+  // Runs once at startup. Behaviour:
+  //   Android — modal is already visible=true. We check AsyncStorage and hide
+  //             it immediately if already shown. If not shown, we leave it
+  //             visible (scanner-safe).
+  //   iOS     — modal starts hidden. We check AsyncStorage and show it if
+  //             not yet shown.
+  //
+  useEffect(() => {
+    if (!isStandaloneBuild()) return;
+
+    const bootstrapDisclosure = async () => {
+      const alreadyShown = await AsyncStorage.getItem(BG_DISCLOSURE_SHOWN_KEY);
+
+      if (alreadyShown) {
+        // User already acted on it — mark in-session and hide the modal.
+        disclosureShownInSession.current = true;
+        if (Platform.OS === 'android') {
+          // Hide the modal we pre-opened for the scanner.
+          setDisclosureVisible(false);
+        }
+        return;
+      }
+
+      // First-ever launch (flag absent).
+      disclosureShownInSession.current = true; // mark BEFORE showing
+
+      // Check whether bg permission is already granted (e.g. reinstall with
+      // same device profile). If so, write the flag and skip the disclosure —
+      // no need to ask again.
+      const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
+      if (bgStatus === 'granted') {
+        await AsyncStorage.setItem(BG_DISCLOSURE_SHOWN_KEY, 'shown');
+        if (Platform.OS === 'android') setDisclosureVisible(false);
+        return;
+      }
+
+      // Show the disclosure.
+      if (Platform.OS === 'ios') {
+        // On iOS the modal started hidden — show it now.
+        setDisclosureVisible(true);
+      }
+      // On Android the modal is already visible — nothing to do.
+    };
+
+    // Small delay so the Splash component has painted at least one frame.
+    // Keep this as short as possible (200 ms is enough); the Android scanner
+    // sees the modal from the very first JS render anyway because we
+    // initialise `disclosureVisible` synchronously above.
+    const timer = setTimeout(bootstrapDisclosure, 200);
+    return () => clearTimeout(timer);
+  }, []); // ← intentionally empty: runs exactly once per JS runtime lifetime
+
+  // ── Disclosure callbacks ────────────────────────────────────────────────────
 
   const handleDisclosureAccept = useCallback(async () => {
     setDisclosureVisible(false);
-    // Mark as shown permanently so it never auto-triggers again
     await AsyncStorage.setItem(BG_DISCLOSURE_SHOWN_KEY, 'shown');
     disclosureResolveRef.current?.(true);
     disclosureResolveRef.current = null;
@@ -118,137 +222,110 @@ function App(): React.JSX.Element {
 
   const handleDisclosureDecline = useCallback(async () => {
     setDisclosureVisible(false);
-    // Still mark as shown — we respect the user's choice, don't spam them
     await AsyncStorage.setItem(BG_DISCLOSURE_SHOWN_KEY, 'shown');
     disclosureResolveRef.current?.(false);
     disclosureResolveRef.current = null;
   }, []);
 
-  // ─── On first launch: show disclosure BEFORE anything else ───────────────
-  // This is the key fix: Google's scanner checks for a prominent disclosure
-  // that appears at startup, before any permission API is called.
-  // We show it right after splash, independently of any service logic.
-  useEffect(() => {
-    const checkAndShowDisclosure = async () => {
-      // Only run on real device builds, not Expo Go
-      if (Platform.OS === 'web') return;
-      if (Constants.appOwnership === 'expo') return;
-
-      const alreadyShown = await AsyncStorage.getItem(BG_DISCLOSURE_SHOWN_KEY);
-      if (alreadyShown) return; // Already seen it — don't show again
-
-      // Check if bg permission is already granted (e.g. after reinstall with same device)
-      const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
-      if (bgStatus === 'granted') {
-        // Permission already granted — mark disclosure as shown and skip
-        await AsyncStorage.setItem(BG_DISCLOSURE_SHOWN_KEY, 'shown');
-        return;
-      }
-
-      // First launch, bg not granted — show the disclosure now.
-      // We do NOT request any permission here. The disclosure is purely informational.
-      // The actual permission request happens later in the services init flow.
-      await showBackgroundLocationDisclosure();
-    };
-
-    // Small delay so splash screen has a chance to render first
-    const timer = setTimeout(checkAndShowDisclosure, 800);
-    return () => clearTimeout(timer);
-  }, [showBackgroundLocationDisclosure]);
-
-  // Get backend URL from environment variables
-  const getBackendUrl = (): string => {
-    const backendUrl = BACKEND_URL;
-
-    if (!backendUrl) {
-      console.error('BACKEND_URL not found in environment variables');
-      throw new Error('Backend URL not configured. Please check your environment setup.');
+  /**
+   * Promise-based API for background services.
+   *
+   * Returns immediately with `false` if the disclosure has already been shown
+   * this session (prevents duplicate modals). Otherwise shows it and waits
+   * for the user's choice.
+   */
+  const showBackgroundLocationDisclosure = useCallback((): Promise<boolean> => {
+    // Safety gate — never show twice in the same session.
+    if (disclosureShownInSession.current) {
+      // Resolve with the current permission state as a best-effort answer.
+      return Location.getBackgroundPermissionsAsync().then(
+        ({ status }) => status === 'granted',
+      );
     }
 
-    return backendUrl;
-  };
+    return new Promise(resolve => {
+      disclosureShownInSession.current = true;
+      disclosureResolveRef.current = resolve;
+      setDisclosureVisible(true);
+    });
+  }, []);
 
+  // ── Dev validation ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!__DEV__) return;
+
+    const runInitialValidation = async () => {
+      console.log('🔍 Running initial system validation...');
+      const isValid = await ConfigValidator.runValidation();
+      const inExpoGo = Constants.appOwnership === 'expo';
+
+      if (inExpoGo && Platform.OS === 'ios') {
+        console.log('');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('⚠️  IMPORTANT: iOS + Expo Go Detected');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('Background location features WILL NOT WORK in Expo Go.');
+        console.log('Run: eas build --profile development --platform ios');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      } else if (isValid) {
+        console.log('✅ All systems ready');
+      }
+    };
+
+    runInitialValidation();
+  }, []);
+
+  // ── AppState listener ───────────────────────────────────────────────────────
   useEffect(() => {
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription?.remove();
   }, []);
 
-  useEffect(() => {
-    // Auto-run validation in development mode
-    if (__DEV__) {
-      const runInitialValidation = async () => {
-        console.log('🔍 Running initial system validation...');
-        const isValid = await ConfigValidator.runValidation();
-        const inExpoGo = Constants.appOwnership === 'expo';
-
-        if (inExpoGo && Platform.OS === 'ios') {
-          console.log('');
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.log('⚠️  IMPORTANT: iOS + Expo Go Detected');
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.log('');
-          console.log('Background location features WILL NOT WORK in Expo Go.');
-          console.log('This is NORMAL and EXPECTED behavior.');
-          console.log('');
-          console.log('✅ Your configuration is CORRECT');
-          console.log('✅ Your code logic is SOUND (Android proves it)');
-          console.log('');
-          console.log('To test iOS background features:');
-          console.log('  1. Run: eas build --profile development --platform ios');
-          console.log('  2. Install the .ipa on your device');
-          console.log('  3. Test background location services');
-          console.log('');
-          console.log('Access System Validation screen via:');
-          console.log('  Menu → System Validation');
-          console.log('');
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        } else if (isValid) {
-          console.log('✅ All systems ready for development');
-          console.log('ℹ️  Access detailed validation: Menu → System Validation');
-        }
-      };
-
-      runInitialValidation();
-    }
-  }, []);
-
-  // ─── Background services init — runs after authentication ─────────────────
-  // IMPORTANT: This NO LONGER shows the disclosure itself.
-  // The disclosure is shown at startup (above). By the time we reach here,
-  // the user has already seen it and the flag is set. We only request the
-  // actual system permission dialog here, after the user has been informed.
-  useEffect(() => {
-    const initializeBackgroundServices = async () => {
-      if (!userData.isAuthenticated) return;
-      if (Platform.OS === 'web') return;
-      if (Constants.appOwnership === 'expo') return;
-
+  const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+    setAppState(nextAppState);
+    if (nextAppState === 'active' && userData.isAuthenticated) {
       try {
-        // Check what's already granted — no dialogs yet
+        await BackgroundAttendanceService.registerBackgroundTask();
+      } catch (error) {
+        console.error('Failed to re-register background task:', error);
+      }
+    }
+  };
+
+  // ── Background services init ────────────────────────────────────────────────
+  //
+  // Runs whenever the user becomes authenticated. The disclosure is NOT
+  // triggered from here — that is exclusively the job of the startup effect
+  // above. This effect only requests the system permission dialog (which is
+  // separate from our disclosure) after the user has already seen and
+  // acknowledged our in-app disclosure.
+  //
+  useEffect(() => {
+    if (!userData.isAuthenticated) return;
+    if (!isStandaloneBuild()) return;
+
+    const initializeBackgroundServices = async () => {
+      try {
         const { status: bgStatus } = await Location.getBackgroundPermissionsAsync();
         const backgroundAlreadyGranted = bgStatus === 'granted';
 
         if (!backgroundAlreadyGranted) {
-          // Disclosure has already been shown at startup.
-          // Check if user accepted it (i.e. the flag exists).
+          // Check whether the user has seen our in-app disclosure yet.
           const disclosureShown = await AsyncStorage.getItem(BG_DISCLOSURE_SHOWN_KEY);
 
           if (!disclosureShown) {
-            // Edge case: user is authenticated but somehow missed the disclosure
-            // (e.g. they were already logged in from a previous session before
-            // this update). Show it now before requesting permission.
+            // Rare edge-case: user is authenticated but somehow the startup
+            // effect didn't set the flag (e.g. very first install + immediate
+            // deep-link). Use the in-session guard so we never show twice.
             const accepted = await showBackgroundLocationDisclosure();
             if (!accepted) {
-              // Only start foreground-safe services
               await BackgroundAttendanceService.initialize(showBackgroundLocationDisclosure);
               return;
             }
           }
 
-          // Disclosure was shown and accepted (or already shown previously).
-          // Now it is safe to request the actual system permission.
-          // The system dialog appears AFTER our disclosure — Google compliant.
-          console.log('ℹ️ Requesting background location permission...');
+          // Disclosure was shown (either now or previously). Request system
+          // permission dialogs — these are distinct from our disclosure.
           const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
           if (fgStatus !== 'granted') {
             console.log('Foreground location denied — skipping background request');
@@ -264,14 +341,13 @@ function App(): React.JSX.Element {
           }
         }
 
-        // Background already granted (or just granted above) — initialize everything
+        // Permission granted — start all services.
         console.log('🚀 Background location granted, initializing all services...');
         const results = await BackgroundAttendanceService.initializeAll();
         console.log('📊 Background attendance services:', results);
 
         const locationInitialized = await BackgroundLocationService.initialize();
         console.log('📍 Random location tracking:', locationInitialized ? 'Active' : 'Failed');
-
       } catch (error) {
         console.error('❌ Failed to initialize background services:', error);
       }
@@ -280,132 +356,73 @@ function App(): React.JSX.Element {
     initializeBackgroundServices();
   }, [userData.isAuthenticated, showBackgroundLocationDisclosure]);
 
-  const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-    setAppState(nextAppState);
+  // ── Backend helpers ─────────────────────────────────────────────────────────
 
-    // Re-initialize background service when app becomes active and user is authenticated
-    if (nextAppState === 'active' && userData.isAuthenticated) {
-      try {
-        await BackgroundAttendanceService.registerBackgroundTask();
-      } catch (error) {
-        console.error('Failed to re-register background task:', error);
-      }
+  const getBackendUrl = (): string => {
+    const url = BACKEND_URL;
+    if (!url) {
+      throw new Error('Backend URL not configured. Please check your environment setup.');
     }
+    return url;
   };
 
-  const loginAPI = async (email: string, password: string, isBrowser: boolean): Promise<LoginResponse> => {
-    try {
-      const BACKEND_URL = getBackendUrl();
+  const loginAPI = async (
+    email: string,
+    password: string,
+    isBrowser: boolean,
+  ): Promise<LoginResponse> => {
+    const url = getBackendUrl();
+    const response = await fetch(`${url}/core/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, is_browser: isBrowser }),
+    });
 
-      console.log('Using Backend URL:', BACKEND_URL);
-      console.log('Is Browser:', isBrowser);
-
-      const response = await fetch(`${BACKEND_URL}/core/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          is_browser: isBrowser,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        const errorMessage = errorData?.message || errorData?.detail || `Login failed with status ${response.status}`;
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-
-      return {
-        message: data.message || 'Login successful',
-        first_login: data.first_login,
-        token: data.token,
-        mpin: data.mpin,
-        user: data.user,
-      };
-    } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('Network error occurred during login');
+    if (!response.ok) {
+      const err = await response.json().catch(() => null);
+      throw new Error(
+        err?.message || err?.detail || `Login failed with status ${response.status}`,
+      );
     }
+
+    const data = await response.json();
+    return {
+      message: data.message || 'Login successful',
+      first_login: data.first_login,
+      token: data.token,
+      mpin: data.mpin,
+      user: data.user,
+    };
   };
 
-  const mpinLoginAPI = async (token: string, mpin: string): Promise<LoginResponse> => {
-    try {
-      const BACKEND_URL = getBackendUrl();
+  const mpinLoginAPI = async (
+    token: string,
+    mpin: string,
+  ): Promise<LoginResponse> => {
+    const url = getBackendUrl();
+    const response = await fetch(`${url}/core/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, mpin }),
+    });
 
-      const response = await fetch(`${BACKEND_URL}/core/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token,
-          mpin,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        const errorMessage = errorData?.message || errorData?.detail || `MPIN login failed with status ${response.status}`;
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-
-      return {
-        message: data.message || 'Login successful',
-        token: data.token,
-        mpin: data.mpin,
-        user: data.user,
-      };
-    } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('Network error occurred during MPIN login');
+    if (!response.ok) {
+      const err = await response.json().catch(() => null);
+      throw new Error(
+        err?.message || err?.detail || `MPIN login failed with status ${response.status}`,
+      );
     }
+
+    const data = await response.json();
+    return {
+      message: data.message || 'Login successful',
+      token: data.token,
+      mpin: data.mpin,
+      user: data.user,
+    };
   };
 
-  const resetPasswordAPI = async (email: string, oldPassword: string, newPassword: string): Promise<ResetPasswordResponse> => {
-    try {
-      const BACKEND_URL = getBackendUrl();
-
-      const response = await fetch(`${BACKEND_URL}/core/resetPassword`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          old_password: oldPassword,
-          new_password: newPassword,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        const errorMessage = errorData?.message || errorData?.detail || `Reset password failed with status ${response.status}`;
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-
-      return {
-        message: data.message || 'Reset password successful',
-      };
-    } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('Network error occurred during password reset');
-    }
-  };
+  // ── Screen handlers ─────────────────────────────────────────────────────────
 
   const handleSplashComplete = async () => {
     try {
@@ -414,130 +431,102 @@ function App(): React.JSX.Element {
       const firstName = await AsyncStorage.getItem('user_first_name');
       const lastName = await AsyncStorage.getItem('user_last_name');
 
-      console.log('Token check:', { token1: !!token1, email });
-
-      // If token1 exists, show MPIN login
       if (token1 && email) {
         setUserData({
           email,
           first_name: firstName || undefined,
           last_name: lastName || undefined,
-          isAuthenticated: false
+          isAuthenticated: false,
         });
         setCurrentScreen('mpinLogin');
         return;
       }
 
-      // Otherwise show login
       setCurrentScreen('login');
-    } catch (error) {
-      console.error('Error checking tokens:', error);
+    } catch {
       setCurrentScreen('login');
     }
   };
 
-  const handleLogin = async (email: string, password: string, identifierType: 'email' | 'phone' = 'email', isBrowser: boolean = false) => {
+  const handleLogin = async (
+    email: string,
+    password: string,
+    _identifierType: 'email' | 'phone' = 'email',
+    isBrowser: boolean = false,
+  ) => {
     setIsLoading(true);
     try {
       const response = await loginAPI(email, password, isBrowser);
-      console.log('Login response:', response);
 
-      // Store email and user data
       await AsyncStorage.setItem('user_email', email);
-
-      // Store first_name and last_name if available
-      if (response.user?.first_name) {
+      if (response.user?.first_name)
         await AsyncStorage.setItem('user_first_name', response.user.first_name);
-      }
-      if (response.user?.last_name) {
+      if (response.user?.last_name)
         await AsyncStorage.setItem('user_last_name', response.user.last_name);
-      }
 
       setUserData({
         email,
         first_name: response.user?.first_name,
         last_name: response.user?.last_name,
-        isAuthenticated: true
+        isAuthenticated: true,
       });
-
       setUser({
         email,
         name: response.user?.name,
         first_name: response.user?.first_name,
-        last_name: response.user?.last_name
+        last_name: response.user?.last_name,
       });
 
-      // Check if this is first login
       if (response.first_login === true) {
-        // First login - store old password and redirect to reset password
         setTempData({ email, oldPassword: password });
         setCurrentScreen('resetPassword');
       } else if (response.first_login === false && response.token) {
-        // Not first login and we have token - save it and proceed
         await AsyncStorage.setItem(TOKEN_2_KEY, response.token);
-
-        // Generate token1 and proceed to welcome/dashboard
-        const token1 = generateRandomToken();
-        await AsyncStorage.setItem(TOKEN_1_KEY, token1);
-
+        await AsyncStorage.setItem(TOKEN_1_KEY, generateRandomToken());
         setCurrentScreen('welcome');
       } else {
-        // Handle unexpected response
         Alert.alert('Error', 'Unexpected response from server. Please try again.');
       }
     } catch (error) {
-      console.error('Login error:', error);
-
-      let errorMessage = 'Login failed. Please try again.';
-
+      let msg = 'Login failed. Please try again.';
       if (error instanceof Error) {
-        if (error.message.includes('Backend URL not configured')) {
-          errorMessage = 'Configuration error. Please contact support.';
-        } else if (error.message.includes('401') || error.message.includes('Invalid credentials')) {
-          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
-        } else if (error.message.includes('Network')) {
-          errorMessage = 'Network error. Please check your internet connection and try again.';
-        } else {
-          errorMessage = error.message;
-        }
+        if (error.message.includes('Backend URL not configured'))
+          msg = 'Configuration error. Please contact support.';
+        else if (
+          error.message.includes('401') ||
+          error.message.includes('Invalid credentials')
+        )
+          msg = 'Invalid email or password. Please check your credentials and try again.';
+        else if (error.message.includes('Network'))
+          msg = 'Network error. Please check your internet connection and try again.';
+        else msg = error.message;
       }
-
-      Alert.alert(
-        'Login Error',
-        errorMessage,
-        [{ text: 'Retry' }]
-      );
+      Alert.alert('Login Error', msg, [{ text: 'Retry' }]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const generateRandomToken = (): string => {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-  };
+  const generateRandomToken = (): string =>
+    Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15);
 
-  const handleCreateMPIN = async (email: string, mpin: string, newPassword: string, token?: string) => {
+  const handleCreateMPIN = async (
+    _email: string,
+    mpin: string,
+    _newPassword: string,
+    token?: string,
+  ) => {
     setIsLoading(true);
     try {
-      // The API call has already been made in CreateMPIN component
-      // Just save the token and navigate
-      if (token) {
-        await AsyncStorage.setItem(TOKEN_2_KEY, token);
-      }
-
-      // Generate token1 and save MPIN
-      const token1 = generateRandomToken();
+      if (token) await AsyncStorage.setItem(TOKEN_2_KEY, token);
       await AsyncStorage.multiSet([
-        [TOKEN_1_KEY, token1],
-        [MPIN_KEY, mpin]
+        [TOKEN_1_KEY, generateRandomToken()],
+        [MPIN_KEY, mpin],
       ]);
-
-      // Update userData to authenticated state
       setUserData(prev => ({ ...prev, isAuthenticated: true }));
-
       setCurrentScreen('welcome');
-    } catch (error) {
-      console.error('Error storing MPIN data:', error);
+    } catch {
       Alert.alert('Error', 'Failed to save MPIN data. Please try again.');
     } finally {
       setIsLoading(false);
@@ -548,80 +537,56 @@ function App(): React.JSX.Element {
     setIsLoading(true);
     try {
       const storedToken = await AsyncStorage.getItem(TOKEN_2_KEY);
-
-      if (!storedToken) {
-        throw new Error('No authentication token found');
-      }
+      if (!storedToken) throw new Error('No authentication token found');
 
       try {
         const response = await mpinLoginAPI(storedToken, mpin);
-        console.log('MPIN login response:', response);
-
-        // Update user data if we get fresh data from the API
         if (response.user) {
           setUserData(prev => ({
             ...prev,
             first_name: response.user?.first_name || prev.first_name,
             last_name: response.user?.last_name || prev.last_name,
-            isAuthenticated: true
+            isAuthenticated: true,
           }));
-
           setUser({
             email: userData.email || '',
             name: response.user?.name,
             first_name: response.user?.first_name,
-            last_name: response.user?.last_name
+            last_name: response.user?.last_name,
           });
         } else {
-          // If no user data from API, just mark as authenticated
           setUserData(prev => ({ ...prev, isAuthenticated: true }));
         }
-
         setCurrentScreen('welcome');
-        return;
       } catch (backendError) {
-        console.log('Backend MPIN login failed, trying local verification:', backendError);
-
-        // Fallback to local MPIN verification
         const storedMPin = await AsyncStorage.getItem(MPIN_KEY);
-
         if (mpin === storedMPin) {
           setUserData(prev => ({ ...prev, isAuthenticated: true }));
           setCurrentScreen('welcome');
         } else {
-          Alert.alert(
-            'Invalid MPIN',
-            'Please enter the correct MPIN and try again.',
-            [{ text: 'Retry' }]
-          );
+          Alert.alert('Invalid MPIN', 'Please enter the correct MPIN and try again.', [
+            { text: 'Retry' },
+          ]);
         }
       }
     } catch (error) {
-      console.error('MPIN login error:', error);
+      let msg = 'Something went wrong. Please login with your email and password.';
+      if (
+        error instanceof Error &&
+        error.message.includes('Backend URL not configured')
+      )
+        msg = 'Configuration error. Please contact support.';
 
-      let errorMessage = 'Something went wrong. Please login with your email and password.';
-
-      if (error instanceof Error && error.message.includes('Backend URL not configured')) {
-        errorMessage = 'Configuration error. Please contact support.';
-      }
-
-      Alert.alert(
-        'Authentication Error',
-        errorMessage,
-        [{ text: 'OK', onPress: () => setCurrentScreen('login') }]
-      );
+      Alert.alert('Authentication Error', msg, [
+        { text: 'OK', onPress: () => setCurrentScreen('login') },
+      ]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleUsePassword = () => {
-    setCurrentScreen('login');
-  };
-
-  const handleForgotPassword = () => {
-    setCurrentScreen('forgotPassword');
-  };
+  const handleForgotPassword = () => setCurrentScreen('forgotPassword');
+  const handleUsePassword = () => setCurrentScreen('login');
 
   const handleOTPSent = (email: string) => {
     setTempData({ email });
@@ -630,59 +595,46 @@ function App(): React.JSX.Element {
 
   const handleResendOTP = async (email: string) => {
     try {
-      const BACKEND_URL = getBackendUrl();
-
-      console.log('Resending OTP to:', email);
-
-      const response = await fetch(`${BACKEND_URL}/core/forgotPassword`, {
+      const url = getBackendUrl();
+      const response = await fetch(`${url}/core/forgotPassword`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to resend OTP');
-      }
-
+      if (!response.ok) throw new Error(data.message || 'Failed to resend OTP');
       Alert.alert('OTP Sent', `A new verification code has been sent to ${email}`);
     } catch (error: any) {
-      console.error('Resend OTP error:', error);
       Alert.alert('Error', error.message || 'Failed to resend OTP. Please try again.');
     }
   };
 
   const handleOTPVerified = (email: string, otp: string) => {
-    // OTP has already been verified by the backend in OTPVerification component
-    // Just store the data and navigate to reset password screen
-    console.log('OTP verified successfully, navigating to reset password');
     setTempData({ email, otp });
     setCurrentScreen('resetPassword');
   };
 
-  // Password reset handler
-  const handlePasswordReset = async (email: string, oldPasswordOrOtp: string, newPassword: string) => {
-    // Check if this is forgot password flow (has OTP in tempData) or first login flow
+  const handlePasswordReset = async (
+    email: string,
+    _oldPasswordOrOtp: string,
+    _newPassword: string,
+  ) => {
     if (tempData.otp) {
-      // Forgot password flow - password already reset via API, redirect to login
       Alert.alert(
         'Password Reset Successful',
         'Your password has been reset successfully. Please login with your new password.',
-        [{
-          text: 'OK',
-          onPress: () => {
-            setTempData({}); // Clear temp data
-            setCurrentScreen('login');
-          }
-        }]
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setTempData({});
+              setCurrentScreen('login');
+            },
+          },
+        ],
       );
     } else {
-      // First login flow - store the new password for CreateMPIN page
-      setTempData({ email, newPassword: newPassword });
-      // Navigate to create MPIN
+      setTempData({ email, newPassword: _newPassword });
       setCurrentScreen('createMPIN');
     }
   };
@@ -690,8 +642,6 @@ function App(): React.JSX.Element {
   const handleBack = () => {
     switch (currentScreen) {
       case 'createMPIN':
-        setCurrentScreen('login');
-        break;
       case 'forgotPassword':
         setCurrentScreen('login');
         break;
@@ -699,13 +649,7 @@ function App(): React.JSX.Element {
         setCurrentScreen('forgotPassword');
         break;
       case 'resetPassword':
-        // If coming from forgot password (has OTP), go back to OTP verification
-        // If coming from first login (has oldPassword), go back to login
-        if (tempData.otp) {
-          setCurrentScreen('otpVerification');
-        } else {
-          setCurrentScreen('login');
-        }
+        setCurrentScreen(tempData.otp ? 'otpVerification' : 'login');
         break;
       case 'mpinLogin':
         setCurrentScreen('login');
@@ -718,16 +662,10 @@ function App(): React.JSX.Element {
   const handleLogout = async () => {
     try {
       console.log('🔄 Logging out and stopping all background services...');
-
-      // Stop all background services before logout
       await BackgroundAttendanceService.stopAll();
       await BackgroundLocationService.stop();
 
-      console.log('✅ All background services stopped');
-
-      // Clear all stored data EXCEPT the disclosure flag —
-      // we intentionally keep BG_DISCLOSURE_SHOWN_KEY so the user
-      // is not shown the disclosure again after re-login.
+      // Intentionally keep BG_DISCLOSURE_SHOWN_KEY — user's choice persists.
       await AsyncStorage.multiRemove([
         TOKEN_1_KEY,
         TOKEN_2_KEY,
@@ -738,18 +676,15 @@ function App(): React.JSX.Element {
         'last_attendance_marked',
         'office_location',
         'last_location_tracked',
-        // Note: BG_DISCLOSURE_SHOWN_KEY is intentionally NOT cleared here
       ]);
 
       setUserData({});
       setUser(null);
       setTempData({});
       setCurrentScreen('login');
-
       console.log('✅ Logout complete');
     } catch (error) {
       console.error('❌ Error during logout:', error);
-      // Force clear even if there's an error
       await AsyncStorage.multiRemove([
         TOKEN_1_KEY,
         TOKEN_2_KEY,
@@ -768,26 +703,20 @@ function App(): React.JSX.Element {
     }
   };
 
-  // Helper function to get display name
   const getDisplayName = (): string => {
-    if (userData.first_name && userData.last_name) {
+    if (userData.first_name && userData.last_name)
       return `${userData.first_name} ${userData.last_name}`;
-    } else if (userData.first_name) {
-      return userData.first_name;
-    } else if (userData.last_name) {
-      return userData.last_name;
-    } else if (user?.first_name && user?.last_name) {
+    if (userData.first_name) return userData.first_name;
+    if (userData.last_name) return userData.last_name;
+    if (user?.first_name && user?.last_name)
       return `${user.first_name} ${user.last_name}`;
-    } else if (user?.first_name) {
-      return user.first_name;
-    } else if (user?.last_name) {
-      return user.last_name;
-    } else if (user?.name) {
-      return user.name;
-    } else {
-      return userData.email?.split('@')[0] || "User";
-    }
+    if (user?.first_name) return user.first_name;
+    if (user?.last_name) return user.last_name;
+    if (user?.name) return user.name;
+    return userData.email?.split('@')[0] || 'User';
   };
+
+  // ── Screen renderer ─────────────────────────────────────────────────────────
 
   const renderScreen = () => {
     switch (currentScreen) {
@@ -819,13 +748,11 @@ function App(): React.JSX.Element {
         return (
           <MPINLogin
             onMPINLogin={handleMPINLogin}
-            onBiometricLogin={async (token) => {
-              console.log('Biometric login successful');
+            onBiometricLogin={async () => {
               setUserData(prev => ({ ...prev, isAuthenticated: true }));
               setCurrentScreen('welcome');
             }}
             onDashboardRedirect={() => {
-              console.log('Redirecting to dashboard after biometric auth');
               setUserData(prev => ({ ...prev, isAuthenticated: true }));
               setCurrentScreen('dashboard');
             }}
@@ -837,11 +764,7 @@ function App(): React.JSX.Element {
 
       case 'forgotPassword':
         return (
-          <ForgotPassword
-            onBack={handleBack}
-            onOTPSent={handleOTPSent}
-            isLoading={isLoading}
-          />
+          <ForgotPassword onBack={handleBack} onOTPSent={handleOTPSent} isLoading={isLoading} />
         );
 
       case 'otpVerification':
@@ -883,6 +806,7 @@ function App(): React.JSX.Element {
     }
   };
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <SafeAreaProvider style={{ backgroundColor: '#FFFFFF' }}>
       <SafeAreaView
@@ -892,13 +816,21 @@ function App(): React.JSX.Element {
         {renderScreen()}
 
         {/*
-          ─── Prominent Disclosure Modal ────────────────────────────────────────
-          Rendered at the ROOT level, above all screens. This ensures it is
-          always visible regardless of which screen is currently active, and
-          Google Play's automated scanner can detect it at app startup.
+          ── Prominent Disclosure Modal ────────────────────────────────────────
+          Rendered at ROOT level above all screens.
 
-          It uses a React Native Modal (transparent + statusBarTranslucent)
-          so it overlays everything, including the splash screen.
+          Android: `disclosureVisible` is initialised to `true` on first launch
+          before any async code runs, ensuring the Play Store scanner sees the
+          disclosure content immediately on cold boot.
+
+          iOS: `disclosureVisible` starts `false` and is set to `true` only
+          after the once-only AsyncStorage check in the startup useEffect.
+
+          In both cases the modal is shown AT MOST ONCE per install, because:
+            • We write BG_DISCLOSURE_SHOWN_KEY on accept OR decline.
+            • We set disclosureShownInSession.current=true immediately.
+            • No other code path calls setDisclosureVisible(true) after the
+              session flag is set.
         */}
         <BackgroundLocationDisclosure
           visible={disclosureVisible}

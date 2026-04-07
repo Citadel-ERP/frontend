@@ -32,9 +32,6 @@
           "com.citadelnetinc.app.location",
           "com.citadelnetinc.app.processing"
         ],
-        "NSLocationWhenInUseUsageDescription": "Citadel needs your location to verify you are at your assigned office or work site when marking attendance. Without this, attendance cannot be verified.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Citadel uses background location to automatically check you in and out when you enter or leave your assigned work site, so you don't need to open the app to mark attendance.",
-        "NSLocationAlwaysUsageDescription": "Citadel uses your location in the background to detect when you arrive at or leave your work site and mark attendance automatically — even when the app is closed.",
         "NSCameraUsageDescription": "Citadel uses your camera to take profile photos, capture document images, and enable video or photo sharing within team chats.",
         "NSPhotoLibraryUsageDescription": "Citadel accesses your photo library so you can upload profile pictures, share images in chats, and attach documents stored on your device.",
         "NSPhotoLibraryAddUsageDescription": "Citadel saves documents and shared media from your workplace to your photo library when you choose to download them.",
@@ -42,7 +39,7 @@
         "NSFaceIDUsageDescription": "Citadel uses Face ID so you can log in quickly and securely without entering your password every time.",
         "NSContactsUsageDescription": "Citadel accesses your contacts so you can find and message colleagues, and saves contact details shared by teammates in chats directly to your address book.",
         "NSLocationTemporaryUsageDescriptionDictionary": {
-          "attendance": "Citadel temporarily checks your location to confirm you are at your assigned work site when marking attendance."
+          "attendance": "Citadel temporarily checks your precise GPS location to confirm you are within the required distance of your registered work site when marking attendance. For example, tapping 'Mark Attendance' triggers a one-time location check to verify you are physically present at your office before recording your check-in."
         },
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -97,9 +94,9 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Citadel needs your location while using the app to verify you are at your assigned work site when marking attendance.",
-          "locationAlwaysAndWhenInUsePermission": "Citadel uses background location to automatically check you in and out of your work site for attendance, even when the app is not open.",
-          "locationAlwaysPermission": "Citadel uses your location in the background to detect when you arrive at or leave your work site and mark attendance automatically.",
+          "locationWhenInUsePermission": "Citadel uses your location to verify you are physically present at your assigned work site when marking attendance. For example, when you tap 'Mark Attendance', the app checks your GPS coordinates against your registered office location to confirm you are within the required distance before recording your check-in.",
+          "locationAlwaysAndWhenInUsePermission": "Citadel uses your location in the background to automatically log when you arrive at or leave your assigned work site, so attendance is recorded without needing to open the app. For example, walking into your office automatically triggers a check-in based on your GPS location.",
+          "locationAlwaysPermission": "Citadel uses your location in the background — even when the app is closed — to detect when you arrive at or depart from your registered work site and automatically record your attendance. For example, your check-out time is logged the moment your device detects you have left the office perimeter.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
         }

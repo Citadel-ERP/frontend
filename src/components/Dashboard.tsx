@@ -680,12 +680,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // --------------------------------------------------------------------------
   // BACKGROUND SERVICES — Google Play compliant version
   //
-  // The prominent disclosure is now owned by App.tsx and shown at first launch
-  // before any permission API is called. By the time the user reaches the
-  // Dashboard, they have already seen the disclosure. This effect simply checks
-  // the current permission state and starts the appropriate services.
-  //
-  // We do NOT show any disclosure here, and we do NOT request permissions here.
+  // Background services are bootstrapped here ONLY after the user is
+  // authenticated and data is loaded. The prominent disclosure is owned
+  // entirely by App.tsx — Dashboard never shows or triggers it.
   // --------------------------------------------------------------------------
   useEffect(() => {
     if (!token || !userData || isWeb) return;
@@ -697,21 +694,29 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         const backgroundGranted = bgStatus === 'granted';
 
         if (!backgroundGranted) {
-          // Background permission was not granted (user declined in App.tsx flow
-          // or the system dialog hasn't been triggered yet).
-          // Only start foreground-safe services.
-          console.log('ℹ️ Dashboard: background location not granted, starting foreground-only services');
-          await BackgroundAttendanceService.initialize(async () => false);
+          // Background permission was not granted.
+          // The disclosure was already shown (or declined) at startup by
+          // App.tsx — we must not trigger it again here.
+          // Start only the foreground-safe attendance service with a no-op
+          // disclosure callback so it never attempts to show the modal.
+          console.log(
+            'ℹ️ Dashboard: background location not granted, starting foreground-only services',
+          );
+          await BackgroundAttendanceService.initialize(
+            // No-op: resolves immediately with false so the service skips any
+            // code path that would attempt to show the disclosure.
+            () => Promise.resolve(false),
+          );
           return;
         }
 
-        // Full background permission granted — start all services
+        // Background permission is granted — start all services.
         console.log('🚀 Dashboard: background location granted, starting all services');
-        await BackgroundAttendanceService.initialize(async () => true);
+        // Pass a no-op here too; permission is already confirmed above.
+        await BackgroundAttendanceService.initialize(() => Promise.resolve(true));
         await GeofencingService.initialize();
         await BackgroundAttendanceService.initializeAll();
         await BackgroundLocationService.initialize();
-
       } catch (e) {
         console.warn('Dashboard background services failed:', e);
       }
@@ -719,6 +724,8 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
     init();
   }, [token, userData, isWeb]);
+  // ↑ Note: no showBackgroundLocationDisclosure in deps — Dashboard no longer
+  //   has or uses that function.
 
   // Push notifications setup
   useEffect(() => {
@@ -1513,10 +1520,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       )}
 
       {/*
-        NOTE: BackgroundLocationDisclosure has been intentionally removed from here.
-        It is now rendered at the root level in App.tsx so Google Play's automated
-        scanner detects it at app startup, before any permission API is called.
-        This satisfies the Prominent Disclosure and Consent Requirement.
+        BackgroundLocationDisclosure is rendered in App.tsx at the root level.
+        It must NOT be rendered here to avoid duplicate modals and to ensure
+        Google Play's scanner detects it before any permission API is called.
       */}
     </View>
   );
