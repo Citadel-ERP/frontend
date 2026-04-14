@@ -1,11 +1,10 @@
 /**
- * invoice.tsx  (updated)
+ * bdt/invoice.tsx
  *
- * Changes from original:
- *  - Accepts an optional `preloadedInvoice` prop. When provided the component
- *    renders immediately without making an API call (the list already fetched
- *    the data). When absent, existing fetch-on-mount behaviour is preserved.
- *  - All other logic is 100 % identical to the original.
+ * Invoice detail screen.
+ * Accepts an optional `preloadedInvoice` prop — when provided (opened from
+ * InvoiceList) it renders immediately without an API call.
+ * When absent the component fetches by lead_id (legacy fallback).
  */
 
 import React, { useState, useEffect } from 'react';
@@ -25,8 +24,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { BACKEND_URL } from '../../config/config';
 import { ThemeColors } from './types';
-import { InvoiceData } from './invoiceList';   // shared type
+import { InvoiceData } from './invoiceList'; // shared type
 
+// ─── Colour palette ────────────────────────────────────────────────────────
 const C = {
   primary:       '#075E54',
   primaryLight:  '#128C7E',
@@ -45,6 +45,12 @@ const C = {
   chatBg:        '#ECE5DD',
 };
 
+const TYPE_DISPLAY: Record<string, string> = {
+  complete: 'Complete',
+  partial:  'Partial',
+  other:    'Other',
+};
+
 interface InvoiceProps {
   leadId: number;
   leadName: string;
@@ -52,8 +58,8 @@ interface InvoiceProps {
   theme: ThemeColors;
   onBack: () => void;
   /**
-   * When provided (e.g. opened from InvoiceList), the component skips the
-   * network fetch and renders with this data immediately.
+   * When provided (opened from InvoiceList), skip the fetch and render
+   * with this data immediately.
    */
   preloadedInvoice?: InvoiceData;
 }
@@ -66,12 +72,11 @@ const Invoice: React.FC<InvoiceProps> = ({
   onBack,
   preloadedInvoice,
 }) => {
-  const [loading, setLoading]   = useState(!preloadedInvoice);
-  const [invoice, setInvoice]   = useState<InvoiceData | null>(preloadedInvoice ?? null);
+  const [loading, setLoading] = useState(!preloadedInvoice);
+  const [invoice, setInvoice] = useState<InvoiceData | null>(preloadedInvoice ?? null);
 
   useEffect(() => {
-    // Skip fetch if caller already supplied the invoice data
-    if (preloadedInvoice) return;
+    if (preloadedInvoice) return; // already have data
     fetchInvoice();
   }, []);
 
@@ -91,7 +96,10 @@ const Invoice: React.FC<InvoiceProps> = ({
 
       if (!response.ok) {
         let errorMessage = 'Invoice for this lead is yet to be raised';
-        try { const e = await response.json(); errorMessage = e.message || errorMessage; } catch { }
+        try {
+          const e = await response.json();
+          errorMessage = e.message || errorMessage;
+        } catch {}
         onBack();
         setTimeout(() => Alert.alert('Invoice Not Found', errorMessage), 300);
         return;
@@ -130,8 +138,11 @@ const Invoice: React.FC<InvoiceProps> = ({
   const handleDownloadFile = async (fileUrl: string) => {
     try {
       const supported = await Linking.canOpenURL(fileUrl);
-      if (supported) { await Linking.openURL(fileUrl); }
-      else { Alert.alert('Error', 'Unable to open this file'); }
+      if (supported) {
+        await Linking.openURL(fileUrl);
+      } else {
+        Alert.alert('Error', 'Unable to open this file');
+      }
     } catch {
       Alert.alert('Error', 'Failed to open file');
     }
@@ -141,7 +152,9 @@ const Invoice: React.FC<InvoiceProps> = ({
     <View style={s.backIcon}><View style={s.backArrow} /></View>
   );
 
-  const InfoRow: React.FC<{ label: string; value: string; icon?: string }> = ({ label, value, icon }) => (
+  const InfoRow: React.FC<{ label: string; value: string; icon?: string }> = ({
+    label, value, icon,
+  }) => (
     <View style={s.infoRow}>
       {icon && <MaterialIcons name={icon as any} size={20} color={C.primary} style={s.infoIcon} />}
       <View style={s.infoContent}>
@@ -172,6 +185,8 @@ const Invoice: React.FC<InvoiceProps> = ({
 
   if (!invoice) return null;
 
+  const typeLabel = TYPE_DISPLAY[invoice.type] ?? invoice.type ?? '';
+
   return (
     <View style={s.container}>
       <SafeAreaView style={s.headerSafeArea} edges={['top']}>
@@ -183,13 +198,34 @@ const Invoice: React.FC<InvoiceProps> = ({
         </View>
       </SafeAreaView>
 
-      <ScrollView style={s.scrollView} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Lead Info Card */}
+      <ScrollView
+        style={s.scrollView}
+        contentContainerStyle={s.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Lead / Type Info Card */}
         <View style={s.card}>
           <View style={s.cardHeader}>
             <MaterialIcons name="receipt-long" size={24} color={C.primary} />
             <Text style={s.cardTitle}>Invoice for {leadName}</Text>
           </View>
+
+          {!!typeLabel && (
+            <View style={s.metadataRow}>
+              <MaterialIcons name="label" size={16} color={C.textTertiary} />
+              <Text style={s.metadataLabel}>Type:</Text>
+              <Text style={s.metadataValue}>{typeLabel}</Text>
+            </View>
+          )}
+
+          {invoice.type === 'other' && !!invoice.other_type_description && (
+            <View style={s.metadataRow}>
+              <MaterialIcons name="notes" size={16} color={C.textTertiary} />
+              <Text style={s.metadataLabel}>Description:</Text>
+              <Text style={s.metadataValue}>{invoice.other_type_description}</Text>
+            </View>
+          )}
+
           <View style={s.metadataRow}>
             <MaterialIcons name="calendar-today" size={16} color={C.textTertiary} />
             <Text style={s.metadataLabel}>Created:</Text>
@@ -205,23 +241,23 @@ const Invoice: React.FC<InvoiceProps> = ({
         {/* Vendor Information */}
         <View style={s.card}>
           <Text style={s.sectionTitle}>Vendor Information</Text>
-          <InfoRow label="Vendor Name" value={invoice.vendor_name} icon="business" />
-          <InfoRow label="GST/PAN" value={invoice.vendor_gst_or_pan} icon="badge" />
+          <InfoRow label="Vendor Name"   value={invoice.vendor_name}        icon="business" />
+          <InfoRow label="GST / PAN"     value={invoice.vendor_gst_or_pan}  icon="badge" />
           {invoice.vendor_address?.trim() && (
-            <InfoRow label="Address" value={invoice.vendor_address} icon="location-on" />
+            <InfoRow label="Address"     value={invoice.vendor_address}      icon="location-on" />
           )}
         </View>
 
         {/* Property Details */}
         <View style={s.card}>
           <Text style={s.sectionTitle}>Property Details</Text>
-          <InfoRow label="Property Type" value={invoice.property_type} icon="home" />
-          <InfoRow label="Billing Area" value={invoice.billing_area} icon="square-foot" />
+          <InfoRow label="Property Type" value={invoice.property_type}       icon="home" />
+          <InfoRow label="Billing Area"  value={invoice.billing_area}        icon="square-foot" />
           {invoice.car_parking?.trim() && (
-            <InfoRow label="Car Parking" value={invoice.car_parking} icon="local-parking" />
+            <InfoRow label="Car Parking" value={invoice.car_parking}         icon="local-parking" />
           )}
           {invoice.terrace_rent?.trim() && (
-            <InfoRow label="Terrace Rent" value={invoice.terrace_rent} icon="roofing" />
+            <InfoRow label="Terrace Rent" value={invoice.terrace_rent}       icon="roofing" />
           )}
         </View>
 
@@ -251,7 +287,11 @@ const Invoice: React.FC<InvoiceProps> = ({
             {invoice.files.map((file, index) => {
               const fileName = file.file.split('/').pop() || `File ${index + 1}`;
               return (
-                <TouchableOpacity key={file.id} style={s.fileItem} onPress={() => handleDownloadFile(file.file)}>
+                <TouchableOpacity
+                  key={file.id}
+                  style={s.fileItem}
+                  onPress={() => handleDownloadFile(file.file)}
+                >
                   <View style={s.fileIconContainer}>
                     <MaterialIcons name="insert-drive-file" size={24} color={C.primary} />
                   </View>
@@ -270,26 +310,27 @@ const Invoice: React.FC<InvoiceProps> = ({
   );
 };
 
+// ─── Styles ────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  container:      { flex: 1, backgroundColor: C.background },
-  headerSafeArea: { backgroundColor: C.primary },
+  container:        { flex: 1, backgroundColor: C.background },
+  headerSafeArea:   { backgroundColor: C.primary },
   header: {
     backgroundColor: C.primary, height: 56, flexDirection: 'row',
     alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: C.primaryDark,
   },
-  backButton:       { padding: 6 },
-  backIcon:         { height: 24, alignItems: 'center', justifyContent: 'center' },
+  backButton:        { padding: 6 },
+  backIcon:          { height: 24, alignItems: 'center', justifyContent: 'center' },
   backArrow: {
     width: 12, height: 12, borderLeftWidth: 2, borderTopWidth: 2,
     borderColor: '#fff', transform: [{ rotate: '-45deg' }],
   },
-  headerTitle:      { fontSize: 17, fontWeight: '600', color: '#FFF', flex: 1, textAlign: 'center' },
-  headerPlaceholder:{ width: 40 },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText:      { fontSize: 15, color: C.textSecondary },
-  scrollView:       { flex: 1 },
-  scrollContent:    { padding: 12, paddingBottom: 24 },
+  headerTitle:       { fontSize: 17, fontWeight: '600', color: '#FFF', flex: 1, textAlign: 'center' },
+  headerPlaceholder: { width: 40 },
+  loadingContainer:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  loadingText:       { fontSize: 15, color: C.textSecondary },
+  scrollView:        { flex: 1 },
+  scrollContent:     { padding: 12, paddingBottom: 24 },
   card: {
     backgroundColor: C.surface, borderRadius: 8, padding: 16, marginBottom: 12,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
@@ -300,11 +341,11 @@ const s = StyleSheet.create({
     marginBottom: 12, paddingBottom: 12,
     borderBottomWidth: 1, borderBottomColor: C.border,
   },
-  cardTitle:      { fontSize: 16, fontWeight: '600', color: C.primary, marginLeft: 10, flex: 1 },
-  metadataRow:    { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-  metadataLabel:  { fontSize: 13, color: C.textSecondary, marginLeft: 8, marginRight: 4, minWidth: 70 },
-  metadataValue:  { fontSize: 13, color: C.textPrimary, flex: 1 },
-  sectionTitle:   { fontSize: 15, fontWeight: '600', color: C.primary, marginBottom: 12 },
+  cardTitle:     { fontSize: 16, fontWeight: '600', color: C.primary, marginLeft: 10, flex: 1 },
+  metadataRow:   { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+  metadataLabel: { fontSize: 13, color: C.textSecondary, marginLeft: 8, marginRight: 4, minWidth: 80 },
+  metadataValue: { fontSize: 13, color: C.textPrimary, flex: 1 },
+  sectionTitle:  { fontSize: 15, fontWeight: '600', color: C.primary, marginBottom: 12 },
   infoRow: {
     flexDirection: 'row', marginBottom: 12, paddingBottom: 12,
     borderBottomWidth: 1, borderBottomColor: C.border + '40',
@@ -319,7 +360,8 @@ const s = StyleSheet.create({
   },
   fileIconContainer: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: C.primary + '15', alignItems: 'center', justifyContent: 'center', marginRight: 12,
+    backgroundColor: C.primary + '15', alignItems: 'center', justifyContent: 'center',
+    marginRight: 12,
   },
   fileInfo: { flex: 1 },
   fileName: { fontSize: 14, fontWeight: '500', color: C.textPrimary, marginBottom: 2 },

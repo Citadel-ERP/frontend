@@ -47,8 +47,12 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
     const [isCancelModalVisible, setIsCancelModalVisible] = useState(false);
     const [isConfirmationVisible, setIsConfirmationVisible] = useState(false);
 
-    // Booking form — dates default to sensible values
-    const [bookingForm, setBookingForm] = useState<BookingFormData>({
+    /**
+     * Booking form — sharingWith holds the list of passengers that will
+     * ride along. Their employee_ids are sent as the `sharing` array to
+     * the backend's bookVehicle endpoint.
+     */
+    const defaultBookingForm = (): BookingFormData => ({
         fromLocation: '',
         toLocation: '',
         startDate: new Date(),
@@ -58,7 +62,10 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
         purpose: '',
         gracePeriod: '1',
         bookingFor: null,
+        sharingWith: [],      // ← new field for cab sharing
     });
+
+    const [bookingForm, setBookingForm] = useState<BookingFormData>(defaultBookingForm());
 
     const [cancelReason, setCancelReason] = useState('');
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -165,7 +172,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                 return;
             }
 
-            const requestData: any = {
+            const requestData: Record<string, unknown> = {
                 token,
                 vehicle_ids: selectedVehicles.map(sv => sv.vehicle.id),
                 driver_ids: selectedVehicles
@@ -186,6 +193,13 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                 requestData.booked_for_employee_id = bookingForm.bookingFor.employee_id;
             }
 
+            // ── Cab sharing: send array of employee_ids ──────────────────────
+            // Only include the field when at least one passenger is selected,
+            // so we don't send an empty array and trigger unexpected backend behaviour.
+            if (bookingForm.sharingWith.length > 0) {
+                requestData.sharing = bookingForm.sharingWith.map(u => u.employee_id);
+            }
+
             const response = await fetch(`${BACKEND_URL}/core/bookVehicle`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -198,18 +212,8 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                 setIsBookingModalVisible(false);
                 setIsConfirmationVisible(true);
                 setSelectedVehicles([]);
-                // Reset form for next booking
-                setBookingForm({
-                    fromLocation: '',
-                    toLocation: '',
-                    startDate: new Date(),
-                    endDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
-                    startTime: new Date(new Date().setHours(9, 0, 0, 0)),
-                    endTime: new Date(new Date().setHours(18, 0, 0, 0)),
-                    purpose: '',
-                    gracePeriod: '1',
-                    bookingFor: null,
-                });
+                // Reset form for next booking (including sharingWith)
+                setBookingForm(defaultBookingForm());
                 fetchMyBookings();
             } else {
                 // Backend returned an error — typically a conflict
@@ -312,9 +316,7 @@ const Cab: React.FC<CabProps> = ({ onBack }) => {
                 <View style={styles.bottomNav}>
                     <TouchableOpacity
                         style={[styles.navItem, currentScreen === 'booking' && styles.activeNavItem]}
-                        onPress={() => {
-                            setCurrentScreen('booking');
-                        }}
+                        onPress={() => setCurrentScreen('booking')}
                         activeOpacity={0.7}
                     >
                         <View style={[

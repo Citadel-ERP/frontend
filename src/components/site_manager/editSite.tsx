@@ -486,6 +486,8 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
   const [siteType, setSiteType] = useState<'managed' | 'conventional' | 'for_sale' | null>(null);
   const [selectedMetroStation, setSelectedMetroStation] = useState<MetroStation | null>(null);
   const [customMetroStation, setCustomMetroStation] = useState('');
+  const [distanceFromMetro, setDistanceFromMetro] = useState('');
+
 
   // Photos & amenities
   const [buildingPhotos, setBuildingPhotos] = useState<Photo[]>([]);
@@ -495,11 +497,14 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
   const [customFloorCondition, setCustomFloorCondition] = useState('');
   const [customBuildingStatus, setCustomBuildingStatus] = useState('');
 
-  // ── ChipItem state (replaces plain string[] state) ─────────────────────────
+  // ── ChipItem state ─────────────────────────────────────────────────────────
   const [totalAreaChips, setTotalAreaChips] = useState<ChipItem[]>([]);
   const [floorWiseAreaChips, setFloorWiseAreaChips] = useState<ChipItem[]>([]);
   const [numberOfUnitsChips, setNumberOfUnitsChips] = useState<ChipItem[]>([]);
   const [seatsPerUnitChips, setSeatsPerUnitChips] = useState<ChipItem[]>([]);
+  // ── NEW: area per floor and rent per sqft as chip lists ────────────────────
+  const [areaPerFloorChips, setAreaPerFloorChips] = useState<ChipItem[]>([]);
+  const [rentPerSqftChips, setRentPerSqftChips] = useState<ChipItem[]>([]);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const [initialized, setInitialized] = useState(false);
@@ -528,6 +533,7 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
     car_parking_slots: '',
     building_status: 'available',
     rent: '',
+    rent_per_sqft: '',
     cam: '',
     cam_deposit: '',
     oc: false,
@@ -597,6 +603,9 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
         setCustomMetroStation(site.nearest_metro_station);
       }
     }
+    if (site.distance_from_metro_station) {
+      setDistanceFromMetro(String(site.distance_from_metro_station));
+    }
 
     // Rental escalation
     if (site.rental_escalation) {
@@ -645,12 +654,22 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
     setFloorWiseAreaChips(parseToChips(site.floor_wise_area));
     setNumberOfUnitsChips(parseToChips(site.number_of_units));
     setSeatsPerUnitChips(parseToChips(site.number_of_seats_per_unit));
+    // NEW — initialise from site data (falls back to empty array if field absent)
+    setAreaPerFloorChips(parseToChips(site.area_per_floor));
+    setRentPerSqftChips(parseToChips(site.rent_per_sqft));
 
     // Map all remaining scalar fields
     const mappedSite = { ...editedSite };
     Object.keys(editedSite).forEach((key) => {
       // Skip fields now managed by chip state
-      if (['total_area', 'floor_wise_area', 'number_of_units', 'number_of_seats_per_unit'].includes(key)) return;
+      if ([
+        'total_area',
+        'floor_wise_area',
+        'number_of_units',
+        'number_of_seats_per_unit',
+        'area_per_floor',   // now a chip list
+        'rent_per_sqft',    // now a chip list
+      ].includes(key)) return;
 
       if (site[key] !== undefined && site[key] !== null) {
         if (typeof site[key] === 'boolean') {
@@ -899,19 +918,26 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
       if (editedSite.location_link) siteData.location_link = editedSite.location_link;
       if (editedSite.landmark) siteData.landmark = editedSite.landmark;
       if (editedSite.micro_market) siteData.micro_market = editedSite.micro_market;
+      if (distanceFromMetro) siteData.distance_from_metro_station = distanceFromMetro;
+
 
       // Property specs
       if (editedSite.total_floors) siteData.total_floors = editedSite.total_floors;
       if (editedSite.number_of_basements) siteData.number_of_basements = editedSite.number_of_basements;
 
-      if (editedSite.area_per_floor) siteData.area_per_floor = parseCurrency(editedSite.area_per_floor);
+      // ── Area per Floor — chip list → newline-joined string ─────────────────
+      const areaPerFloorStrings = chipsToStrings(areaPerFloorChips);
+      if (areaPerFloorStrings.length > 0) {
+        siteData.area_per_floor = areaPerFloorStrings.join('\n');
+      }
 
-      // ── ChipItem → newline-joined string for submission ─────────────────
+      // ── Floor-wise area — chip list → newline-joined string ────────────────
       const floorWiseStrings = chipsToStrings(floorWiseAreaChips);
       if (floorWiseStrings.length > 0) {
         siteData.floor_wise_area = floorWiseStrings.join('\n');
       }
 
+      // ── Total area — chip list → newline-joined string ─────────────────────
       const totalAreaStrings = chipsToStrings(totalAreaChips);
       if (totalAreaStrings.length > 0) {
         siteData.total_area = totalAreaStrings.join('\n');
@@ -922,6 +948,12 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
       // Financial details
       if (siteType === 'conventional' || siteType === 'for_sale') {
         if (editedSite.rent) siteData.rent = parseCurrency(editedSite.rent);
+
+        // ── Monthly Rent per Sqft — chip list → newline-joined string ─────────
+        const rentPerSqftStrings = chipsToStrings(rentPerSqftChips);
+        if (rentPerSqftStrings.length > 0) {
+          siteData.rent_per_sqft = rentPerSqftStrings.join('\n');
+        }
       } else {
         if (editedSite.rent_per_seat) siteData.rent_per_seat = parseCurrency(editedSite.rent_per_seat);
         if (editedSite.total_seats) siteData.total_seats = parseCurrency(editedSite.total_seats);
@@ -1210,6 +1242,22 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
           <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
+
+      {(selectedMetroStation || customMetroStation) && (
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>
+            Distance from Metro Station{' '}
+            <Text style={styles.optionalText}>(Optional)</Text>
+          </Text>
+          <TextInput
+            style={styles.input}
+            value={distanceFromMetro}
+            onChangeText={setDistanceFromMetro}
+            placeholder="e.g., 500m, 1.2 km, 5 min walk"
+            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+          />
+        </View>
+      )}
     </View>
   );
 
@@ -1292,21 +1340,14 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
             onChange={setTotalAreaChips}
           />
 
-          {/* Area per floor – plain text (single value, no chips needed) */}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>Area Per Floor — Typical Floor Plate (sq ft)</Text>
-            <Text style={styles.fieldHint}>
-              The standard floor plate area of the entire building
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={editedSite.area_per_floor}
-              onChangeText={(v) => setEditedSite({ ...editedSite, area_per_floor: formatCurrency(v) })}
-              placeholder="10,000"
-              keyboardType="numeric"
-              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-            />
-          </View>
+          {/* Area Per Floor – EditableChipList (replaces single TextInput) */}
+          <EditableChipList
+            label="Area Per Floor — Typical Floor Plate (sq ft)"
+            hint="Supports numbers and text. Tap ✏️ to edit any entry inline."
+            placeholder="e.g., 10,000 sq ft or G+1 – 12,000 sq ft"
+            chips={areaPerFloorChips}
+            onChange={setAreaPerFloorChips}
+          />
 
           {/* Floor-wise availability – EditableChipList */}
           <EditableChipList
@@ -1431,29 +1472,40 @@ const EditSite: React.FC<EditSiteProps> = ({ site, token, onBack, onSiteUpdated,
       )}
 
       {siteType === 'conventional' || siteType === 'for_sale' ? (
-        <View style={styles.row}>
-          <View style={styles.halfWidth}>
-            <Text style={styles.formLabel}>Monthly Rent (₹)</Text>
-            <TextInput
-              style={styles.input}
-              value={editedSite.rent}
-              onChangeText={(v) => setEditedSite({ ...editedSite, rent: formatCurrency(v) })}
-              placeholder="5,00,000"
-              keyboardType="numeric"
-              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-            />
+        <>
+          {/* Monthly Rent per Sqft – EditableChipList */}
+          <EditableChipList
+            label="Monthly Rent per Sqft (₹)"
+            hint="Supports numbers and text. Tap ✏️ to edit any entry inline."
+            placeholder="e.g., 85 or G Floor – 90/sqft"
+            chips={rentPerSqftChips}
+            onChange={setRentPerSqftChips}
+          />
+
+          <View style={styles.row}>
+            <View style={styles.halfWidth}>
+              <Text style={styles.formLabel}>Monthly Rent (₹)</Text>
+              <TextInput
+                style={styles.input}
+                value={editedSite.rent}
+                onChangeText={(v) => setEditedSite({ ...editedSite, rent: formatCurrency(v) })}
+                placeholder="5,00,000"
+                keyboardType="numeric"
+                placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+              />
+            </View>
+            <View style={styles.halfWidth}>
+              <Text style={styles.formLabel}>CAM</Text>
+              <TextInput
+                style={styles.input}
+                value={editedSite.cam}
+                onChangeText={(v) => setEditedSite({ ...editedSite, cam: v })}
+                placeholder="e.g., 50,000 or Inclusive"
+                placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+              />
+            </View>
           </View>
-          <View style={styles.halfWidth}>
-            <Text style={styles.formLabel}>CAM</Text>
-            <TextInput
-              style={styles.input}
-              value={editedSite.cam}
-              onChangeText={(v) => setEditedSite({ ...editedSite, cam: v })}
-              placeholder="e.g., 50,000 or Inclusive"
-              placeholderTextColor={WHATSAPP_COLORS.textTertiary}
-            />
-          </View>
-        </View>
+        </>
       ) : (
         <>
           <View style={styles.formGroup}>
