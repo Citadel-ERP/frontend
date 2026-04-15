@@ -108,7 +108,7 @@ const InvoiceList: React.FC<InvoiceListProps> = ({
     if (!token) { onBack(); return; }
     setLoading(true);
     try {
-      const res = await fetch(`${BACKEND_URL}/employee/getInvoice`, {
+      const res = await fetch(`${BACKEND_URL}/manager/getInvoice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, lead_id: leadId }),

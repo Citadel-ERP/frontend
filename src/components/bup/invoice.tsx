@@ -83,7 +83,7 @@ const Invoice: React.FC<InvoiceProps> = ({
     }
     try {
       setLoading(true);
-      const response = await fetch(`${BACKEND_URL}/employee/getInvoice`, {
+      const response = await fetch(`${BACKEND_URL}/manager/getInvoice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, lead_id: leadId }),

@@ -239,7 +239,7 @@ const CreateInvoice: React.FC<CreateInvoiceProps> = ({
         } as any);
       });
 
-      const response = await fetch(`${BACKEND_URL}/employee/createInvoice`, {
+      const response = await fetch(`${BACKEND_URL}/manager/createInvoice`, {
         method: 'POST',
         body: data,
         headers: { 'Content-Type': 'multipart/form-data' },
