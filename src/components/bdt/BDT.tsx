@@ -1,3 +1,24 @@
+/**
+ * bdt/bdt.tsx  (updated)
+ *
+ * Key changes from the original:
+ *  - Multiple invoices and incentives per lead are now fully supported.
+ *  - New view modes:
+ *      'invoice_list'   → InvoiceList  (list of invoices for selectedLead)
+ *      'invoice_detail' → Invoice      (single invoice detail, preloaded)
+ *      'invoice_create' → CreateInvoice (new screen-style create)
+ *      'incentive_list' → IncentiveList (list of incentives for selectedLead)
+ *      'incentive'      → Incentive    (single incentive detail by id)
+ *  - LeadConfig is fetched after a lead is selected; it controls which
+ *    action buttons are visible (show_invoice, can_create_invoice,
+ *    show_incentive, can_create_incentive).
+ *  - The old Modal-based CreateInvoice is removed entirely.
+ *  - Incentive is no longer triggered by subphase === 'payment_received';
+ *    it is driven by the config returned from the backend.
+ *  - LeadDetails receives the config flags so it can render the correct
+ *    action buttons in the header.
+ */
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
@@ -18,31 +39,50 @@ import LeadsList from './list';
 import LeadDetails from './leadDetails';
 import EditLead from './editLead';
 import Incentive from './incentive';
+import IncentiveList from './incentiveList';
+import InvoiceList, { InvoiceData } from './invoiceList';
+import Invoice from './invoice';
 import CreateInvoice from './createInvoice';
 import CreateLead from './createLead';
 
 const TOKEN_KEY = 'token_2';
 
+// ─── Extended ViewMode ─────────────────────────────────────────────────────
+// We extend the base ViewMode type locally to include the new list/detail modes.
+type ExtendedViewMode =
+  | ViewMode
+  | 'invoice_list'
+  | 'invoice_detail'
+  | 'invoice_create'
+  | 'incentive_list'
+  | 'incentive';
+
+// ─── Lead config from backend ──────────────────────────────────────────────
+interface LeadConfig {
+  show_invoice: boolean;
+  can_create_invoice: boolean;
+  show_incentive: boolean;
+  can_create_incentive: boolean;
+}
+
+const DEFAULT_CONFIG: LeadConfig = {
+  show_invoice: false,
+  can_create_invoice: false,
+  show_incentive: false,
+  can_create_incentive: false,
+};
+
+// ─── Component ─────────────────────────────────────────────────────────────
 const BDT: React.FC<BDTProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+
+  // ── Core state ────────────────────────────────────────────────────────────
+  const [viewMode, setViewMode] = useState<ExtendedViewMode>('list');
   const [token, setToken] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
-  const [pendingLeadUpdate, setPendingLeadUpdate] = useState<any>(null);
-  const [incentiveCanCreate, setIncentiveCanCreate] = useState(false);
-  const [pendingPaymentReceivedUpdate, setPendingPaymentReceivedUpdate] = useState<{
-    leadData: Lead;
-    editingEmails: string[];
-    editingPhones: string[];
-  } | null>(null);
-  const [totalLeads, setTotalLeads] = useState<number>(0);
-  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
 
-  // State for list view
+  // ── Lead list state ───────────────────────────────────────────────────────
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,47 +93,52 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   const [filterValue, setFilterValue] = useState('');
   const [allPhases, setAllPhases] = useState<FilterOption[]>([]);
   const [allSubphases, setAllSubphases] = useState<FilterOption[]>([]);
+  const [totalLeads, setTotalLeads] = useState<number>(0);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
 
-  // Memoize theme
+  // ── Selected lead state ───────────────────────────────────────────────────
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [leadConfig, setLeadConfig] = useState<LeadConfig>(DEFAULT_CONFIG);
+  const [loadingConfig, setLoadingConfig] = useState(false);
+
+  // ── Invoice state ─────────────────────────────────────────────────────────
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceData | null>(null);
+
+  // ── Incentive state ───────────────────────────────────────────────────────
+  const [selectedIncentiveId, setSelectedIncentiveId] = useState<number | null>(null);
+
+  // ── Memoised theme ────────────────────────────────────────────────────────
   const theme: ThemeColors = useMemo(() => isDarkMode ? darkTheme : lightTheme, [isDarkMode]);
 
+  // ── Boot ──────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const checkDarkMode = async () => {
+    const init = async () => {
       try {
-        const darkMode = await AsyncStorage.getItem('dark_mode');
+        const [darkMode, apiToken] = await Promise.all([
+          AsyncStorage.getItem('dark_mode'),
+          AsyncStorage.getItem(TOKEN_KEY),
+        ]);
         setIsDarkMode(darkMode === 'true');
+        setToken(apiToken);
       } catch (error) {
-        console.error('Error checking dark mode:', error);
+        console.error('Error initialising BDT:', error);
       }
     };
-    checkDarkMode();
+    init();
   }, []);
 
-  useEffect(() => {
-    const getToken = async () => {
-      try {
-        const API_TOKEN = await AsyncStorage.getItem(TOKEN_KEY);
-        setToken(API_TOKEN);
-      } catch (error) {
-        console.error('Error getting token:', error);
-      }
-    };
-    getToken();
-  }, []);
+  // ── Fetch helpers ──────────────────────────────────────────────────────────
 
   const fetchStatusCounts = useCallback(async (): Promise<void> => {
+    if (!token) return;
     try {
-      if (!token) return;
       const response = await fetch(`${BACKEND_URL}/employee/getLeadStatusCounts`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
       });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       setStatusCounts(data.status_counts || {});
     } catch (error) {
@@ -103,37 +148,30 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
   }, [token]);
 
   const fetchLeads = useCallback(async (page: number = 1, append: boolean = false): Promise<void> => {
+    if (!token) return;
+    if (!append) setLoading(true);
+    else setLoadingMore(true);
+
     try {
-      if (!token) return;
-      if (!append) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
-      }
       const response = await fetch(`${BACKEND_URL}/employee/getLeads`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          page: page
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, page }),
       });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      const transformedLeads = data.leads.map((lead: any) => ({
+
+      const transformed = data.leads.map((lead: any) => ({
         ...lead,
         createdAt: lead.created_at,
         collaborators: [],
-        comments: []
+        comments: [],
       }));
+
       if (append) {
-        setLeads(prevLeads => [...prevLeads, ...transformedLeads]);
+        setLeads(prev => [...prev, ...transformed]);
       } else {
-        setLeads(transformedLeads);
+        setLeads(transformed);
       }
       setPagination(data.pagination || null);
       setTotalLeads(data.total_leads || 0);
@@ -152,21 +190,13 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     try {
       const response = await fetch(`${BACKEND_URL}/employee/getAllPhases`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Content-Type': 'application/json' },
       });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      const beautifyName = (name: string): string => {
-        return name
-          .split('_')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-          .join(' ');
-      };
-      setAllPhases(data.phases.map((phase: string) => ({ value: phase, label: beautifyName(phase) })));
+      const beautify = (name: string) =>
+        name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      setAllPhases(data.phases.map((p: string) => ({ value: p, label: beautify(p) })));
     } catch (error) {
       console.error('Error fetching phases:', error);
       setAllPhases([]);
@@ -175,28 +205,53 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
   const fetchSubphases = useCallback(async (phase: string): Promise<void> => {
     try {
-      const response = await fetch(`${BACKEND_URL}/employee/getAllSubphases?phase=${encodeURIComponent(phase)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      const response = await fetch(
+        `${BACKEND_URL}/employee/getAllSubphases?phase=${encodeURIComponent(phase)}`,
+        { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      const beautifyName = (name: string): string => {
-        return name
-          .split('_')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-          .join(' ');
-      };
-      setAllSubphases(data.subphases.map((subphase: string) => ({ value: subphase, label: beautifyName(subphase) })));
+      const beautify = (name: string) =>
+        name.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      setAllSubphases(data.subphases.map((sp: string) => ({ value: sp, label: beautify(sp) })));
     } catch (error) {
       console.error('Error fetching subphases:', error);
       setAllSubphases([]);
     }
   }, []);
+
+  /**
+   * Fetch the lead-level config that tells us which buttons to show.
+   * Called every time a lead is opened.
+   */
+  const fetchLeadConfig = useCallback(async (leadId: number): Promise<void> => {
+    if (!token) return;
+    setLoadingConfig(true);
+    try {
+      const response = await fetch(`${BACKEND_URL}/employee/getLeadConfig`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, lead_id: leadId }),
+      });
+      if (!response.ok) {
+        // Config endpoint not available or lead has no special config — use defaults
+        setLeadConfig(DEFAULT_CONFIG);
+        return;
+      }
+      const data = await response.json();
+      setLeadConfig({
+        show_invoice: data.show_invoice ?? false,
+        can_create_invoice: data.can_create_invoice ?? false,
+        show_incentive: data.show_incentive ?? false,
+        can_create_incentive: data.can_create_incentive ?? false,
+      });
+    } catch (error) {
+      console.error('Error fetching lead config:', error);
+      setLeadConfig(DEFAULT_CONFIG);
+    } finally {
+      setLoadingConfig(false);
+    }
+  }, [token]);
 
   const searchLeads = useCallback(async (query: string): Promise<void> => {
     if (!query.trim()) {
@@ -209,25 +264,18 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       setIsSearchMode(true);
       const response = await fetch(`${BACKEND_URL}/employee/searchLeads`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          query: query
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, query }),
       });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
-      const transformedLeads = data.leads.map((lead: any) => ({
+      const transformed = data.leads.map((lead: any) => ({
         ...lead,
         createdAt: lead.created_at,
         collaborators: [],
-        comments: []
+        comments: [],
       }));
-      setLeads(transformedLeads);
+      setLeads(transformed);
       setPagination(null);
     } catch (error) {
       console.error('Error searching leads:', error);
@@ -235,8 +283,9 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     } finally {
       setLoading(false);
     }
-  }, [fetchLeads]);
+  }, [token, fetchLeads]);
 
+  // ── On-token boot ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (token) {
       fetchLeads(1);
@@ -245,144 +294,45 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     }
   }, [token, fetchLeads, fetchPhases, fetchStatusCounts]);
 
-  const toggleDarkMode = useCallback(async () => {
-    const newDarkMode = !isDarkMode;
-    setIsDarkMode(newDarkMode);
-    await AsyncStorage.setItem('dark_mode', newDarkMode.toString());
-  }, [isDarkMode]);
-
-  const handleSearch = useCallback((query: string) => {
-    setSearchQuery(query);
-    searchLeads(query);
-  }, [searchLeads]);
-
-  const handleFilter = useCallback((filterBy: string, filterValue: string) => {
-    setFilterBy(filterBy);
-    setFilterValue(filterValue);
-  }, []);
-
-  const handleLoadMore = useCallback(() => {
-    if (pagination && pagination.has_next && !loadingMore && !isSearchMode) {
-      fetchLeads(pagination.current_page + 1, true);
-    }
-  }, [pagination, loadingMore, isSearchMode, fetchLeads]);
-
-  const handleRefresh = useCallback(() => {
-    setRefreshing(true);
-    if (isSearchMode) {
-      searchLeads(searchQuery);
-    } else {
-      fetchLeads(1);
-    }
-  }, [isSearchMode, searchQuery, searchLeads, fetchLeads]);
-
-  const handleLeadPress = useCallback((lead: Lead) => {
-    setSelectedLead({ ...lead });
-    setViewMode('detail');
-    setIsEditMode(false);
-  }, []);
-
-  const handleIncentivePress = useCallback(() => {
-    if (selectedLead) {
-      setViewMode('incentive');
-    }
-  }, [selectedLead]);
-
-  const filteredLeads = useMemo(() => {
-    return leads.filter(lead => {
-      let matchesFilter = true;
-      if (filterBy && filterValue) {
-        if (filterBy === 'status') {
-          matchesFilter = lead.status === filterValue;
-        } else if (filterBy === 'phase') {
-          matchesFilter = lead.phase === filterValue;
-        } else if (filterBy === 'subphase') {
-          matchesFilter = lead.subphase === filterValue;
-        }
-      }
-      return matchesFilter;
-    });
-  }, [leads, filterBy, filterValue]);
-
-  const handleCreateLead = useCallback(() => {
-    setViewMode('create');
-  }, []);
-
-  const handleBackPress = useCallback(() => {
-    if (viewMode === 'incentive') {
-      setViewMode(pendingPaymentReceivedUpdate ? 'detail' : 'detail');
-      setIsEditMode(!!pendingPaymentReceivedUpdate);
-      setPendingPaymentReceivedUpdate(null);
-      setIncentiveCanCreate(false);
-    } else if (viewMode === 'detail' && isEditMode) {
-      setIsEditMode(false);
-    } else if (viewMode === 'detail' && !isEditMode) {
-      setViewMode('list');
-      setSelectedLead(null);
-      fetchLeads(1);
-    } else if (viewMode === 'create') {
-      setViewMode('list');
-    } else if (viewMode === 'list') {
-      onBack();
-    }
-  }, [viewMode, isEditMode, pendingPaymentReceivedUpdate, fetchLeads, onBack]);
-
-  // Handle Android back button
-  useEffect(() => {
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      handleBackPress();
-      return true;
-    });
-
-    return () => backHandler.remove();
-  }, [handleBackPress]);
-
-  const handleEditPress = useCallback(() => {
-    setIsEditMode(true);
-  }, []);
-
-  const updateLead = useCallback(async (leadData: Partial<Lead>, emails: string[], phones: string[]): Promise<boolean> => {
+  // ── Lead update helper ────────────────────────────────────────────────────
+  const updateLead = useCallback(async (
+    leadData: Partial<Lead>,
+    emails: string[],
+    phones: string[]
+  ): Promise<boolean> => {
+    if (!token || !selectedLead) return false;
     try {
-      if (!token || !selectedLead) return false;
       setLoading(true);
-      const updatePayload: any = {
-        token: token,
-        lead_id: selectedLead.id
-      };
-      if (emails.length > 0) updatePayload.emails = emails;
-      if (phones.length > 0) updatePayload.phone_numbers = phones;
-      if (leadData.status !== undefined) updatePayload.status = leadData.status;
-      if (leadData.phase !== undefined) updatePayload.phase = leadData.phase;
-      if (leadData.subphase !== undefined) updatePayload.subphase = leadData.subphase;
-
-      if (leadData.meta !== undefined && leadData.meta !== null) {
-        updatePayload.meta = leadData.meta;
-      }
+      const payload: any = { token, lead_id: selectedLead.id };
+      if (emails.length > 0) payload.emails = emails;
+      if (phones.length > 0) payload.phone_numbers = phones;
+      if (leadData.status !== undefined) payload.status = leadData.status;
+      if (leadData.phase !== undefined) payload.phase = leadData.phase;
+      if (leadData.subphase !== undefined) payload.subphase = leadData.subphase;
+      if (leadData.meta !== undefined && leadData.meta !== null) payload.meta = leadData.meta;
 
       const response = await fetch(`${BACKEND_URL}/employee/updateLead`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updatePayload)
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
+
       const updatedLead = {
         ...data.lead,
         createdAt: data.lead.created_at,
         collaborators: selectedLead.collaborators || [],
-        comments: selectedLead.comments || []
+        comments: selectedLead.comments || [],
       };
+
       setSelectedLead(updatedLead);
-      setLeads(prevLeads =>
-        prevLeads.map(lead =>
-          lead.id === selectedLead.id ? updatedLead : lead
-        )
-      );
+      setLeads(prev => prev.map(l => l.id === selectedLead.id ? updatedLead : l));
       await fetchStatusCounts();
+
+      // Refresh config as subphase may have changed
+      await fetchLeadConfig(selectedLead.id);
+
       Alert.alert('Success', 'Lead updated successfully!');
       return true;
     } catch (error) {
@@ -392,93 +342,105 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     } finally {
       setLoading(false);
     }
-  }, [token, selectedLead, fetchStatusCounts]);
+  }, [token, selectedLead, fetchStatusCounts, fetchLeadConfig]);
 
-  const checkExistingInvoice = useCallback(async (leadId: number): Promise<boolean> => {
-    try {
-      if (!token) return false;
+  // ── Event handlers ────────────────────────────────────────────────────────
 
-      const response = await fetch(`${BACKEND_URL}/employee/getInvoice`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          token: token,
-          lead_id: leadId
-        })
-      });
+  const toggleDarkMode = useCallback(async () => {
+    const next = !isDarkMode;
+    setIsDarkMode(next);
+    await AsyncStorage.setItem('dark_mode', next.toString());
+  }, [isDarkMode]);
 
-      if (response.ok) {
-        const data = await response.json();
-        Alert.alert(
-          'Invoice Already Exists',
-          'An invoice has already been created for this lead. You cannot create another invoice.',
-          [{ text: 'OK' }]
-        );
-        return true;
-      }
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    searchLeads(query);
+  }, [searchLeads]);
 
-      return false;
-    } catch (error) {
-      console.error('Error checking invoice:', error);
-      return false;
+  const handleFilter = useCallback((by: string, value: string) => {
+    setFilterBy(by);
+    setFilterValue(value);
+  }, []);
+
+  const handleLoadMore = useCallback(() => {
+    if (pagination?.has_next && !loadingMore && !isSearchMode) {
+      fetchLeads(pagination.current_page + 1, true);
     }
-  }, [token]);
+  }, [pagination, loadingMore, isSearchMode, fetchLeads]);
 
-  const handleIncentiveCreatedFromEdit = useCallback(async () => {
-    if (!pendingPaymentReceivedUpdate) return;
-    const { leadData, editingEmails, editingPhones } = pendingPaymentReceivedUpdate;
-    const success = await updateLead(leadData, editingEmails, editingPhones);
-    if (success) {
-      setIsEditMode(false);
-      setPendingPaymentReceivedUpdate(null);
-      setIncentiveCanCreate(false);
-      setViewMode('detail');
-    }
-  }, [pendingPaymentReceivedUpdate, updateLead]);
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    if (isSearchMode) searchLeads(searchQuery);
+    else fetchLeads(1);
+  }, [isSearchMode, searchQuery, searchLeads, fetchLeads]);
 
-  const handleSaveLead = useCallback(async (updatedLead: Lead, editingEmails: string[], editingPhones: string[]) => {
-    if (updatedLead.phase === 'post_property_finalization' && updatedLead.subphase === 'raise_invoice') {
-      const invoiceExists = await checkExistingInvoice(updatedLead.id);
-      if (invoiceExists) {
-        const success = await updateLead(updatedLead, editingEmails, editingPhones);
-        if (success) setIsEditMode(false);
-        return;
-      }
-      setPendingLeadUpdate({ leadData: updatedLead, editingEmails, editingPhones });
-      setShowInvoiceForm(true);
+  const handleLeadPress = useCallback((lead: Lead) => {
+    setSelectedLead({ ...lead });
+    setIsEditMode(false);
+    setSelectedInvoice(null);
+    setSelectedIncentiveId(null);
+    setLeadConfig(DEFAULT_CONFIG);
+    setViewMode('detail');
+    // Fetch config in background — LeadDetails will reactively update
+    fetchLeadConfig(lead.id);
+  }, [fetchLeadConfig]);
 
-    } else if (updatedLead.subphase === 'payment_received') {
-      setPendingPaymentReceivedUpdate({
-        leadData: updatedLead,
-        editingEmails,
-        editingPhones,
-      });
-      setIncentiveCanCreate(true);
-      setViewMode('incentive');
+  const handleCreateLead = useCallback(() => {
+    setViewMode('create');
+  }, []);
 
-    } else {
-      const success = await updateLead(updatedLead, editingEmails, editingPhones);
-      if (success) setIsEditMode(false);
-    }
-  }, [updateLead, checkExistingInvoice]);
+  // ── Navigation: Invoice ───────────────────────────────────────────────────
+
+  const handleInvoiceListPress = useCallback(() => {
+    setViewMode('invoice_list');
+  }, []);
+
+  const handleSelectInvoice = useCallback((invoice: InvoiceData) => {
+    setSelectedInvoice(invoice);
+    setViewMode('invoice_detail');
+  }, []);
+
+  const handleCreateInvoice = useCallback(() => {
+    setViewMode('invoice_create');
+  }, []);
 
   const handleInvoiceCreated = useCallback(async () => {
-    if (pendingLeadUpdate && selectedLead) {
-      const success = await updateLead(pendingLeadUpdate.leadData, pendingLeadUpdate.editingEmails, pendingLeadUpdate.editingPhones);
-      if (success) {
-        setIsEditMode(false);
-        setPendingLeadUpdate(null);
-        setShowInvoiceForm(false);
-      }
-    }
-  }, [pendingLeadUpdate, selectedLead, updateLead]);
+    // Refresh config (can_create_invoice may toggle)
+    if (selectedLead) await fetchLeadConfig(selectedLead.id);
+    setViewMode('invoice_list');
+  }, [selectedLead, fetchLeadConfig]);
 
-  const handleInvoiceCancel = useCallback(() => {
-    setPendingLeadUpdate(null);
-    setShowInvoiceForm(false);
+  // ── Navigation: Incentive ─────────────────────────────────────────────────
+
+  const handleIncentiveListPress = useCallback(() => {
+    setViewMode('incentive_list');
   }, []);
+
+  const handleSelectIncentive = useCallback((incentiveId: number) => {
+    setSelectedIncentiveId(incentiveId);
+    setViewMode('incentive');
+  }, []);
+
+  const handleCreateIncentive = useCallback(() => {
+    // canCreate=true, no incentiveId → blank create form
+    setSelectedIncentiveId(null);
+    setViewMode('incentive');
+  }, []);
+
+  const handleIncentiveCreated = useCallback(async () => {
+    if (selectedLead) await fetchLeadConfig(selectedLead.id);
+    setViewMode('incentive_list');
+  }, [selectedLead, fetchLeadConfig]);
+
+  // ── Save lead (from EditLead) ─────────────────────────────────────────────
+  const handleSaveLead = useCallback(async (
+    updatedLead: Lead,
+    editingEmails: string[],
+    editingPhones: string[]
+  ) => {
+    const success = await updateLead(updatedLead, editingEmails, editingPhones);
+    if (success) setIsEditMode(false);
+  }, [updateLead]);
 
   const handleLeadCreated = useCallback(async () => {
     setViewMode('list');
@@ -486,14 +448,97 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     await fetchStatusCounts();
   }, [fetchLeads, fetchStatusCounts]);
 
+  // ── Back navigation ───────────────────────────────────────────────────────
+  const handleBackPress = useCallback(() => {
+    switch (viewMode) {
+      case 'incentive':
+        // Back to incentive list
+        setSelectedIncentiveId(null);
+        setViewMode('incentive_list');
+        break;
+
+      case 'incentive_list':
+        // Back to lead detail
+        setViewMode('detail');
+        break;
+
+      case 'invoice_detail':
+        // Back to invoice list
+        setSelectedInvoice(null);
+        setViewMode('invoice_list');
+        break;
+
+      case 'invoice_create':
+        // Back to invoice list (cancel handled inside CreateInvoice)
+        setViewMode('invoice_list');
+        break;
+
+      case 'invoice_list':
+        // Back to lead detail
+        setViewMode('detail');
+        break;
+
+      case 'detail':
+        if (isEditMode) {
+          setIsEditMode(false);
+        } else {
+          setViewMode('list');
+          setSelectedLead(null);
+          setLeadConfig(DEFAULT_CONFIG);
+          fetchLeads(1);
+        }
+        break;
+
+      case 'create':
+        setViewMode('list');
+        break;
+
+      case 'list':
+      default:
+        onBack();
+        break;
+    }
+  }, [viewMode, isEditMode, fetchLeads, onBack]);
+
+  // Android hardware back
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleBackPress();
+      return true;
+    });
+    return () => sub.remove();
+  }, [handleBackPress]);
+
+  // ── Derived: filtered leads ───────────────────────────────────────────────
+  const filteredLeads = useMemo(() => {
+    return leads.filter(lead => {
+      if (!filterBy || !filterValue) return true;
+      if (filterBy === 'status') return lead.status === filterValue;
+      if (filterBy === 'phase') return lead.phase === filterValue;
+      if (filterBy === 'subphase') return lead.subphase === filterValue;
+      return true;
+    });
+  }, [leads, filterBy, filterValue]);
+
+  // ── Header title ──────────────────────────────────────────────────────────
   const getHeaderTitle = () => {
-    if (viewMode === 'incentive') return 'Incentive Checklist';
-    if (viewMode === 'detail') return 'Lead Details';
-    if (viewMode === 'create') return 'Create New Lead';
-    return 'BDT';
+    switch (viewMode) {
+      case 'incentive': return 'Incentive';
+      case 'incentive_list': return 'Incentives';
+      case 'invoice_detail': return 'Invoice Details';
+      case 'invoice_list': return 'Invoices';
+      case 'invoice_create': return 'Create Invoice';
+      case 'detail': return 'Lead Details';
+      case 'create': return 'Create New Lead';
+      default: return 'BDT';
+    }
   };
 
+  // ── Render content ────────────────────────────────────────────────────────
   const renderContent = () => {
+
+    // ── Incentive single view ───────────────────────────────────────────────
+    // In renderContent(), find the 'incentive' view mode block and update:
     if (viewMode === 'incentive' && selectedLead) {
       return (
         <Incentive
@@ -501,16 +546,76 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
           leadId={selectedLead.id}
           leadName={selectedLead.company}
           hideHeader={false}
-          canCreate={incentiveCanCreate}
+          incentiveId={selectedIncentiveId ?? undefined}  // ← ADD THIS
+          canCreate={selectedIncentiveId == null && leadConfig.can_create_incentive}
           onIncentiveCreated={
-            pendingPaymentReceivedUpdate 
-              ? handleIncentiveCreatedFromEdit 
-              : undefined
+            selectedIncentiveId == null ? handleIncentiveCreated : undefined
           }
         />
       );
     }
 
+    // ── Incentive list ──────────────────────────────────────────────────────
+    if (viewMode === 'incentive_list' && selectedLead) {
+      return (
+        <IncentiveList
+          leadId={selectedLead.id}
+          leadName={selectedLead.company}
+          token={token}
+          theme={theme}
+          onBack={handleBackPress}
+          onSelectIncentive={handleSelectIncentive}
+          onCreateIncentive={handleCreateIncentive}
+          canCreate={leadConfig.can_create_incentive}
+        />
+      );
+    }
+
+    // ── Invoice detail ──────────────────────────────────────────────────────
+    if (viewMode === 'invoice_detail' && selectedLead) {
+      return (
+        <Invoice
+          leadId={selectedLead.id}
+          leadName={selectedLead.company}
+          token={token}
+          theme={theme}
+          onBack={handleBackPress}
+          preloadedInvoice={selectedInvoice ?? undefined}
+        />
+      );
+    }
+
+    // ── Invoice create ──────────────────────────────────────────────────────
+    if (viewMode === 'invoice_create' && selectedLead) {
+      return (
+        <CreateInvoice
+          leadId={selectedLead.id}
+          leadName={selectedLead.company}
+          token={token}
+          theme={theme}
+          onBack={handleBackPress}
+          onCreated={handleInvoiceCreated}
+        />
+      );
+    }
+
+    // ── Invoice list ────────────────────────────────────────────────────────
+    if (viewMode === 'invoice_list' && selectedLead) {
+      return (
+        <InvoiceList
+          leadId={selectedLead.id}
+          leadName={selectedLead.company}
+          token={token}
+          theme={theme}
+          onBack={handleBackPress}
+          onSelectInvoice={handleSelectInvoice}
+          onCreateInvoice={handleCreateInvoice}
+          canCreate={leadConfig.can_create_invoice}
+        />
+      );
+    }
+
+    // ── Lead detail ─────────────────────────────────────────────────────────
     if (viewMode === 'detail' && selectedLead) {
       if (isEditMode) {
         return (
@@ -528,14 +633,16 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         <LeadDetails
           lead={selectedLead}
           onBack={handleBackPress}
-          onEdit={handleEditPress}
-          onIncentivePress={handleIncentivePress}
+          onEdit={() => setIsEditMode(true)}
+          onInvoicePress={leadConfig.show_invoice ? handleInvoiceListPress : undefined}
+          onIncentivePress={leadConfig.show_incentive ? handleIncentiveListPress : undefined}
           token={token}
           theme={theme}
         />
       );
     }
 
+    // ── Create lead ─────────────────────────────────────────────────────────
     if (viewMode === 'create') {
       return (
         <CreateLead
@@ -548,6 +655,7 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       );
     }
 
+    // ── Default: leads list ─────────────────────────────────────────────────
     return (
       <View style={styles.listContainer}>
         <SearchAndFilter
@@ -577,7 +685,15 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
     );
   };
 
+  // ── Header actions ────────────────────────────────────────────────────────
   const getHeaderActions = () => {
+    // Sub-screens that own their own header — we hide the parent header for them
+    const SELF_HEADED: ExtendedViewMode[] = [
+      'invoice_list', 'invoice_detail', 'invoice_create',
+      'incentive_list', 'incentive',
+    ];
+    if (SELF_HEADED.includes(viewMode)) return null;
+
     if (viewMode === 'list') {
       return {
         showBackButton: true,
@@ -595,7 +711,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         return {
           showBackButton: true,
           onBack: () => setIsEditMode(false),
-          showSaveButton: false,
           showThemeToggle: true,
           onThemeToggle: toggleDarkMode,
         };
@@ -604,22 +719,13 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
         showBackButton: true,
         onBack: handleBackPress,
         showEditButton: true,
-        onEdit: handleEditPress,
+        onEdit: () => setIsEditMode(true),
         showThemeToggle: true,
         onThemeToggle: toggleDarkMode,
       };
     }
 
     if (viewMode === 'create') {
-      return {
-        showBackButton: true,
-        onBack: handleBackPress,
-        showThemeToggle: true,
-        onThemeToggle: toggleDarkMode,
-      };
-    }
-
-    if (viewMode === 'incentive') {
       return {
         showBackButton: true,
         onBack: handleBackPress,
@@ -638,15 +744,23 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
 
   const headerActions = getHeaderActions();
 
+  // Sub-screens that own their own full-screen header — skip the parent Header
+  const SELF_HEADED: ExtendedViewMode[] = [
+    'invoice_list', 'invoice_detail', 'invoice_create',
+    'incentive_list', 'incentive',
+    'detail', 'create',
+  ];
+  const showParentHeader = !SELF_HEADED.includes(viewMode);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar
-        barStyle={isDarkMode ? "light-content" : "dark-content"}
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
         backgroundColor="transparent"
         translucent
       />
 
-      {viewMode !== 'detail' && viewMode !== 'create' && viewMode !== 'incentive' && (
+      {showParentHeader && headerActions && (
         <Header
           title={getHeaderTitle()}
           {...headerActions}
@@ -659,19 +773,6 @@ const BDT: React.FC<BDTProps> = ({ onBack }) => {
       <View style={[styles.contentContainer, { paddingBottom: insets.bottom }]}>
         {renderContent()}
       </View>
-
-      {selectedLead && (
-        <CreateInvoice
-          visible={showInvoiceForm}
-          onClose={() => setShowInvoiceForm(false)}
-          leadId={selectedLead.id}
-          leadName={selectedLead.company}
-          onInvoiceCreated={handleInvoiceCreated}
-          onCancel={handleInvoiceCancel}
-          theme={theme}
-          token={token}
-        />
-      )}
     </View>
   );
 };

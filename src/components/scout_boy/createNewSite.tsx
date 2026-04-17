@@ -91,6 +91,8 @@ const CreateNewSite: React.FC<CreateNewSiteProps> = ({
   const [showBuildingStatusDropdown, setShowBuildingStatusDropdown] = useState(false);
   const [showFloorConditionDropdown, setShowFloorConditionDropdown] = useState(false);
   const [showImageSourceModal, setShowImageSourceModal] = useState(false);
+  const [distanceFromMetro, setDistanceFromMetro] = useState('');
+
 
   // ── CHANGE 1: Floor-wise area chips ─────────────────────────────────────────
   const [floorWiseAreaEntries, setFloorWiseAreaEntries] = useState<string[]>([]);
@@ -442,7 +444,7 @@ const CreateNewSite: React.FC<CreateNewSiteProps> = ({
       if (rentalEscalationPercentage && rentalEscalationValue) {
         siteData.rental_escalation = `${rentalEscalationPercentage}% / ${rentalEscalationValue} / ${rentalEscalationPeriod}`;
       }
-
+      if (distanceFromMetro) siteData.distance_from_metro_station = distanceFromMetro;
       // Common fields
       if (newSite.location) siteData.location = newSite.location;
       if (newSite.landmark) siteData.landmark = newSite.landmark;
@@ -748,6 +750,20 @@ const CreateNewSite: React.FC<CreateNewSiteProps> = ({
           <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
+      {(selectedMetroStation || customMetroStation) && (
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>
+            Distance from Metro Station <Text style={styles.optionalText}>(Optional)</Text>
+          </Text>
+          <TextInput
+            style={styles.input}
+            value={distanceFromMetro}
+            onChangeText={setDistanceFromMetro}
+            placeholder="e.g., 500m, 1.2 km, 5 min walk"
+            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+          />
+        </View>
+      )}
     </View>
   );
 

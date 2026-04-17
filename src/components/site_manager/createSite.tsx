@@ -12,6 +12,8 @@
  *     no stale data lingers after creation.
  *  5. All original UI / business logic is preserved verbatim; only the
  *     persistence layer is new.
+ *  6. "Monthly Rent Per Sqft" and "Area Per Floor" now support chip-style
+ *     multiline input, consistent with "Total Available Area".
  */
 
 import React, { useState, useRef, useCallback, useMemo } from 'react';
@@ -289,10 +291,17 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
   const [seatsPerUnitEntries, setSeatsPerUnitEntries] = useState<string[]>([]);
   const [currentSeatsPerUnitInput, setCurrentSeatsPerUnitInput] = useState('');
 
+  // ── NEW: Chip-list fields for Rent and Area Per Floor ────────────────────────
+  const [rentEntries, setRentEntries] = useState<string[]>([]);
+  const [currentRentInput, setCurrentRentInput] = useState('');
+  const [areaPerFloorEntries, setAreaPerFloorEntries] = useState<string[]>([]);
+  const [currentAreaPerFloorInput, setCurrentAreaPerFloorInput] = useState('');
+
   // Site type & metro
   const [siteType, setSiteType] = useState<'managed' | 'conventional' | 'for_sale' | null>(null);
   const [selectedMetroStation, setSelectedMetroStation] = useState<MetroStation | null>(null);
   const [customMetroStation, setCustomMetroStation] = useState('');
+  const [distanceFromMetro, setDistanceFromMetro] = useState('');
   const [showMetroSelector, setShowMetroSelector] = useState(false);
 
   // Photos & amenities (photos deliberately excluded from draft — URIs are ephemeral)
@@ -328,21 +337,26 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     totalAreaEntries,
     numberOfUnitsEntries,
     seatsPerUnitEntries,
+    // NEW: persist rent and area-per-floor chip entries
+    rentEntries,
+    areaPerFloorEntries,
     customFloorCondition,
     customBuildingStatus,
     rentalEscalationPercentage,
     rentalEscalationValue,
     rentalEscalationPeriod,
     selectedMetroStation,
+    distanceFromMetro,
     customMetroStation,
     otherAmenities,
     currentStep,
   }), [
     siteType, newSite,
     floorWiseAreaEntries, totalAreaEntries, numberOfUnitsEntries, seatsPerUnitEntries,
+    rentEntries, areaPerFloorEntries,
     customFloorCondition, customBuildingStatus,
     rentalEscalationPercentage, rentalEscalationValue, rentalEscalationPeriod,
-    selectedMetroStation, customMetroStation,
+    selectedMetroStation, distanceFromMetro, customMetroStation,
     otherAmenities, currentStep,
   ]);
 
@@ -369,12 +383,15 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     if (draft.totalAreaEntries) setTotalAreaEntries(draft.totalAreaEntries);
     if (draft.numberOfUnitsEntries) setNumberOfUnitsEntries(draft.numberOfUnitsEntries);
     if (draft.seatsPerUnitEntries) setSeatsPerUnitEntries(draft.seatsPerUnitEntries);
+    if (draft.rentEntries) setRentEntries(draft.rentEntries);
+    if (draft.areaPerFloorEntries) setAreaPerFloorEntries(draft.areaPerFloorEntries);
     if (draft.customFloorCondition !== undefined) setCustomFloorCondition(draft.customFloorCondition);
     if (draft.customBuildingStatus !== undefined) setCustomBuildingStatus(draft.customBuildingStatus);
     if (draft.rentalEscalationPercentage !== undefined) setRentalEscalationPercentage(draft.rentalEscalationPercentage);
     if (draft.rentalEscalationValue !== undefined) setRentalEscalationValue(draft.rentalEscalationValue);
     if (draft.rentalEscalationPeriod !== undefined) setRentalEscalationPeriod(draft.rentalEscalationPeriod);
     if (draft.selectedMetroStation !== undefined) setSelectedMetroStation(draft.selectedMetroStation);
+    if (draft.distanceFromMetro !== undefined) setDistanceFromMetro(draft.distanceFromMetro);
     if (draft.customMetroStation !== undefined) setCustomMetroStation(draft.customMetroStation);
     if (draft.otherAmenities) setOtherAmenities(draft.otherAmenities);
     // Restore step so the user lands exactly where they left off.
@@ -438,6 +455,22 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     if (currentSeatsPerUnitInput.trim()) {
       setSeatsPerUnitEntries((p) => [...p, currentSeatsPerUnitInput.trim()]);
       setCurrentSeatsPerUnitInput('');
+    }
+  };
+
+  // ── NEW: Chip handlers for Rent and Area Per Floor ───────────────────────────
+
+  const addRentEntry = () => {
+    if (currentRentInput.trim()) {
+      setRentEntries((p) => [...p, currentRentInput.trim()]);
+      setCurrentRentInput('');
+    }
+  };
+
+  const addAreaPerFloorEntry = () => {
+    if (currentAreaPerFloorInput.trim()) {
+      setAreaPerFloorEntries((p) => [...p, currentAreaPerFloorInput.trim()]);
+      setCurrentAreaPerFloorInput('');
     }
   };
 
@@ -557,7 +590,15 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       if (newSite.micro_market) siteData.micro_market = newSite.micro_market;
       if (newSite.total_floors) siteData.total_floors = newSite.total_floors;
       if (newSite.number_of_basements) siteData.number_of_basements = newSite.number_of_basements;
-      if (newSite.area_per_floor) siteData.area_per_floor = parseCurrency(newSite.area_per_floor);
+      if (distanceFromMetro) siteData.distance_from_metro_station = distanceFromMetro;
+
+
+      // ── NEW: area_per_floor now supports multiple chip entries ────────────────
+      if (areaPerFloorEntries.length > 0) {
+        siteData.area_per_floor = areaPerFloorEntries.join('\n');
+      } else if (newSite.area_per_floor) {
+        siteData.area_per_floor = parseCurrency(newSite.area_per_floor);
+      }
 
       if (floorWiseAreaEntries.length > 0) siteData.floor_wise_area = floorWiseAreaEntries.join('\n');
       else if (newSite.floor_wise_area) siteData.floor_wise_area = newSite.floor_wise_area;
@@ -568,7 +609,12 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       if (newSite.availble_floors) siteData.availble_floors = newSite.availble_floors;
 
       if (siteType === 'conventional' || siteType === 'for_sale') {
-        if (newSite.rent) siteData.rent = parseCurrency(newSite.rent);
+        // ── NEW: rent now supports multiple chip entries ───────────────────────
+        if (rentEntries.length > 0) {
+          siteData.rent = rentEntries.join('\n');
+        } else if (newSite.rent) {
+          siteData.rent = parseCurrency(newSite.rent);
+        }
       } else {
         if (newSite.rent_per_seat) siteData.rent_per_seat = parseCurrency(newSite.rent_per_seat);
         if (newSite.total_seats) siteData.total_seats = parseCurrency(newSite.total_seats);
@@ -712,7 +758,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     </View>
   );
 
-  // ─── Step renders (unchanged from original) ───────────────────────────────────
+  // ─── Step renders ─────────────────────────────────────────────────────────────
 
   const renderStep0 = () => (
     <View style={styles.stepContent}>
@@ -792,6 +838,20 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
           <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
+      {(selectedMetroStation || customMetroStation) && (
+        <View style={styles.formGroup}>
+          <Text style={styles.formLabel}>
+            Distance from Metro Station <Text style={styles.optionalText}>(Optional)</Text>
+          </Text>
+          <TextInput
+            style={styles.input}
+            value={distanceFromMetro}
+            onChangeText={setDistanceFromMetro}
+            placeholder="e.g., 500m, 1.2 km, 5 min walk"
+            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+          />
+        </View>
+      )}
     </View>
   );
 
@@ -835,15 +895,42 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       )}
       {(siteType === 'conventional' || siteType === 'for_sale') ? (
         <>
-          {renderChipInput({ label: 'Total Available Area', hint: 'Enter available area per entry (supports text and numbers)', placeholder: 'e.g., 50,000 sq ft  (press Enter to add)', currentValue: currentTotalAreaInput, onChangeText: setCurrentTotalAreaInput, onSubmit: addTotalAreaEntry, onKeyPress: (e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault(); addTotalAreaEntry(); } }, entries: totalAreaEntries, onRemove: (i) => setTotalAreaEntries((p) => p.filter((_, idx) => idx !== i)) })}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>Area Per Floor — Typical Floor Plate (sq ft)</Text>
-            <Text style={styles.fieldHint}>The standard floor plate area of the entire building</Text>
-            <TextInput style={styles.input} value={newSite.area_per_floor}
-              onChangeText={(v) => setNewSite({ ...newSite, area_per_floor: formatCurrency(v) })}
-              placeholder="10,000" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
-          </View>
-          {renderChipInput({ label: 'Floor-wise Availability', hint: 'How much area is available on each specific floor', placeholder: 'e.g., G- 10000 sq/ft  (press Enter to add)', currentValue: currentFloorInput, onChangeText: setCurrentFloorInput, onSubmit: addFloorWiseArea, onKeyPress: (e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault(); addFloorWiseArea(); } }, entries: floorWiseAreaEntries, onRemove: (i) => setFloorWiseAreaEntries((p) => p.filter((_, idx) => idx !== i)) })}
+          {renderChipInput({
+            label: 'Total Available Area',
+            hint: 'Enter available area per entry (supports text and numbers)',
+            placeholder: 'e.g., 50,000 sq ft  (press Enter to add)',
+            currentValue: currentTotalAreaInput,
+            onChangeText: setCurrentTotalAreaInput,
+            onSubmit: addTotalAreaEntry,
+            onKeyPress: (e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault(); addTotalAreaEntry(); } },
+            entries: totalAreaEntries,
+            onRemove: (i) => setTotalAreaEntries((p) => p.filter((_, idx) => idx !== i)),
+          })}
+
+          {/* ── NEW: Area Per Floor as chip input ── */}
+          {renderChipInput({
+            label: 'Area Per Floor — Typical Floor Plate (sq ft)',
+            hint: 'The standard floor plate area of the entire building',
+            placeholder: 'e.g., 10,000 sq ft  (press Enter to add)',
+            currentValue: currentAreaPerFloorInput,
+            onChangeText: setCurrentAreaPerFloorInput,
+            onSubmit: addAreaPerFloorEntry,
+            onKeyPress: (e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault(); addAreaPerFloorEntry(); } },
+            entries: areaPerFloorEntries,
+            onRemove: (i) => setAreaPerFloorEntries((p) => p.filter((_, idx) => idx !== i)),
+          })}
+
+          {renderChipInput({
+            label: 'Floor-wise Availability',
+            hint: 'How much area is available on each specific floor',
+            placeholder: 'e.g., G- 10000 sq/ft  (press Enter to add)',
+            currentValue: currentFloorInput,
+            onChangeText: setCurrentFloorInput,
+            onSubmit: addFloorWiseArea,
+            onKeyPress: (e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault(); addFloorWiseArea(); } },
+            entries: floorWiseAreaEntries,
+            onRemove: (i) => setFloorWiseAreaEntries((p) => p.filter((_, idx) => idx !== i)),
+          })}
         </>
       ) : (
         <>
@@ -861,8 +948,28 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
                 placeholder="200" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
             </View>
           </View>
-          {renderChipInput({ label: 'Number of Units', hint: 'Enter units per floor (supports text and numbers)', placeholder: 'e.g., Ground Floor – 10 units  (press Enter to add)', currentValue: currentNumberOfUnitsInput, onChangeText: setCurrentNumberOfUnitsInput, onSubmit: addNumberOfUnitsEntry, onKeyPress: (e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault(); addNumberOfUnitsEntry(); } }, entries: numberOfUnitsEntries, onRemove: (i) => setNumberOfUnitsEntries((p) => p.filter((_, idx) => idx !== i)) })}
-          {renderChipInput({ label: 'Seats Per Unit', hint: 'Enter seats per unit per floor (supports text and numbers)', placeholder: 'e.g., 1st Floor – 8 seats  (press Enter to add)', currentValue: currentSeatsPerUnitInput, onChangeText: setCurrentSeatsPerUnitInput, onSubmit: addSeatsPerUnitEntry, onKeyPress: (e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault(); addSeatsPerUnitEntry(); } }, entries: seatsPerUnitEntries, onRemove: (i) => setSeatsPerUnitEntries((p) => p.filter((_, idx) => idx !== i)) })}
+          {renderChipInput({
+            label: 'Number of Units',
+            hint: 'Enter units per floor (supports text and numbers)',
+            placeholder: 'e.g., Ground Floor – 10 units  (press Enter to add)',
+            currentValue: currentNumberOfUnitsInput,
+            onChangeText: setCurrentNumberOfUnitsInput,
+            onSubmit: addNumberOfUnitsEntry,
+            onKeyPress: (e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault(); addNumberOfUnitsEntry(); } },
+            entries: numberOfUnitsEntries,
+            onRemove: (i) => setNumberOfUnitsEntries((p) => p.filter((_, idx) => idx !== i)),
+          })}
+          {renderChipInput({
+            label: 'Seats Per Unit',
+            hint: 'Enter seats per unit per floor (supports text and numbers)',
+            placeholder: 'e.g., 1st Floor – 8 seats  (press Enter to add)',
+            currentValue: currentSeatsPerUnitInput,
+            onChangeText: setCurrentSeatsPerUnitInput,
+            onSubmit: addSeatsPerUnitEntry,
+            onKeyPress: (e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault(); addSeatsPerUnitEntry(); } },
+            entries: seatsPerUnitEntries,
+            onRemove: (i) => setSeatsPerUnitEntries((p) => p.filter((_, idx) => idx !== i)),
+          })}
         </>
       )}
       <View style={styles.formGroup}>
@@ -897,20 +1004,26 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
         </View>
       )}
       {siteType === 'conventional' || siteType === 'for_sale' ? (
-        <View style={styles.row}>
-          <View style={styles.halfWidth}>
-            <Text style={styles.formLabel}>Monthly Rent Per sqft (₹)</Text>
-            <TextInput style={styles.input} value={newSite.rent}
-              onChangeText={(v) => setNewSite({ ...newSite, rent: formatCurrency(v) })}
-              placeholder="5,00,000" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
-          </View>
-          <View style={styles.halfWidth}>
+        <>
+          {/* ── NEW: Monthly Rent Per Sqft as chip input, full width ── */}
+          {renderChipInput({
+            label: 'Monthly Rent Per sqft (₹)',
+            hint: 'Enter rent per entry — supports text and numbers',
+            placeholder: 'e.g., 120/sqft  (press Enter to add)',
+            currentValue: currentRentInput,
+            onChangeText: setCurrentRentInput,
+            onSubmit: addRentEntry,
+            onKeyPress: (e) => { if (e.nativeEvent.key === 'Enter') { e.preventDefault(); addRentEntry(); } },
+            entries: rentEntries,
+            onRemove: (i) => setRentEntries((p) => p.filter((_, idx) => idx !== i)),
+          })}
+          <View style={styles.formGroup}>
             <Text style={styles.formLabel}>CAM</Text>
             <TextInput style={styles.input} value={newSite.cam}
               onChangeText={(v) => setNewSite({ ...newSite, cam: v })}
               placeholder="e.g., 50,000 or Included" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
           </View>
-        </View>
+        </>
       ) : (
         <>
           <View style={styles.formGroup}>

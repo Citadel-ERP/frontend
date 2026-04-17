@@ -1,4 +1,11 @@
 // Dashboard.tsx - FIXED VERSION: disclosure owned by App.tsx, compliant background services
+// COLD-LAUNCH NOTIFICATION FIX:
+//   When the app is opened from a tapped notification (cold launch), the old code called
+//   handleNavigateFromNotification inside getLastNotificationResponseAsync before the
+//   dashboard had finished loading — the navigation ran but was immediately wiped when
+//   `loading` flipped to false and re-rendered the dashboard.
+//   Fix: store the pending target in a ref (immune to re-renders), then consume it in a
+//   dedicated useEffect that fires only after `loading=false` AND `userData` is populated.
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -279,6 +286,17 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   // Profile deep-link modal
   const [profileModalToOpen, setProfileModalToOpen] = useState<string | null>(null);
 
+  // ── FIX: Cold-launch notification ref ──────────────────────────────────────
+  // Stores the notification navigation target from getLastNotificationResponseAsync.
+  // We must NOT call handleNavigateFromNotification immediately because the
+  // dashboard is still loading — the nav call would be wiped when loading→false
+  // triggers a re-render. Instead we store it here and consume it below once
+  // loading is done and userData is ready.
+  const pendingNotificationNav = useRef<{
+    module: string;
+    extraData?: { openModal?: string };
+  } | null>(null);
+
   // Animations
   const circleScale = useRef(new Animated.Value(0)).current;
   const switchToggle = useRef(new Animated.Value(0)).current;
@@ -512,6 +530,29 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
   }, [isWeb]);
 
   // --------------------------------------------------------------------------
+  // FIX: Consume pending cold-launch notification once dashboard is ready
+  // --------------------------------------------------------------------------
+  // This effect fires whenever `loading` or `userData` changes. Once both
+  // conditions are satisfied (loading=false AND userData is set) and there is
+  // a pending navigation target stored by the cold-launch path below, we
+  // execute the navigation. The 100 ms timeout gives React one tick to fully
+  // commit the dashboard render before we start flipping show* flags.
+  useEffect(() => {
+    if (loading) return;
+    if (!userData) return;
+    if (!pendingNotificationNav.current) return;
+
+    const { module, extraData } = pendingNotificationNav.current;
+    pendingNotificationNav.current = null; // clear immediately — prevent double-fire
+
+    const timer = setTimeout(() => {
+      handleNavigateFromNotification(module, extraData);
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [loading, userData, handleNavigateFromNotification]);
+
+  // --------------------------------------------------------------------------
   // REFRESH USER DATA
   // --------------------------------------------------------------------------
   const refreshUserData = useCallback(async () => {
@@ -679,13 +720,6 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
 
   // --------------------------------------------------------------------------
   // BACKGROUND SERVICES — Google Play compliant version
-  //
-  // The prominent disclosure is now owned by App.tsx and shown at first launch
-  // before any permission API is called. By the time the user reaches the
-  // Dashboard, they have already seen the disclosure. This effect simply checks
-  // the current permission state and starts the appropriate services.
-  //
-  // We do NOT show any disclosure here, and we do NOT request permissions here.
   // --------------------------------------------------------------------------
   useEffect(() => {
     if (!token || !userData || isWeb) return;
@@ -697,21 +731,20 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         const backgroundGranted = bgStatus === 'granted';
 
         if (!backgroundGranted) {
-          // Background permission was not granted (user declined in App.tsx flow
-          // or the system dialog hasn't been triggered yet).
-          // Only start foreground-safe services.
-          console.log('ℹ️ Dashboard: background location not granted, starting foreground-only services');
-          await BackgroundAttendanceService.initialize(async () => false);
+          console.log(
+            'ℹ️ Dashboard: background location not granted, starting foreground-only services',
+          );
+          await BackgroundAttendanceService.initialize(
+            () => Promise.resolve(false),
+          );
           return;
         }
 
-        // Full background permission granted — start all services
         console.log('🚀 Dashboard: background location granted, starting all services');
-        await BackgroundAttendanceService.initialize(async () => true);
+        await BackgroundAttendanceService.initialize(() => Promise.resolve(true));
         await GeofencingService.initialize();
         await BackgroundAttendanceService.initializeAll();
         await BackgroundLocationService.initialize();
-
       } catch (e) {
         console.warn('Dashboard background services failed:', e);
       }
@@ -720,7 +753,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     init();
   }, [token, userData, isWeb]);
 
-  // Push notifications setup
+  // --------------------------------------------------------------------------
+  // PUSH NOTIFICATIONS SETUP
+  // --------------------------------------------------------------------------
   useEffect(() => {
     if (isWeb) return;
     let isMounted = true;
@@ -741,18 +776,34 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
         });
 
         responseListener.current = NotificationsExpo.addNotificationResponseReceivedListener(r => {
+          // This fires when the user taps a notification while the app is
+          // foreground or background (already mounted). Navigation is safe
+          // to call directly here.
           const data = r.notification.request.content.data;
           if (data?.page === 'autoMarkAttendance') AttendanceUtils.executeAttendanceFlow('manual', true);
           else if (data?.go_to) handleNavigateFromNotification(data.go_to as string);
           else if (data?.page) handleNavigateFromNotification(data.page as string);
         });
 
+        // ── FIX: Cold-launch path ─────────────────────────────────────────────
+        // getLastNotificationResponseAsync fires when the app was CLOSED and
+        // the user tapped a notification to open it. At this point the
+        // dashboard is still loading — do NOT call handleNavigateFromNotification
+        // directly. Instead, store the target in the ref; the dedicated
+        // useEffect above will execute it once loading=false + userData ready.
         const lastResp = await NotificationsExpo.getLastNotificationResponseAsync();
         if (lastResp) {
           const data = lastResp.notification.request.content.data;
-          if (data?.page === 'autoMarkAttendance') setTimeout(() => AttendanceUtils.executeAttendanceFlow('manual', true), 1000);
-          else if (data?.go_to) setTimeout(() => handleNavigateFromNotification(data.go_to as string), 500);
-          else if (data?.page) setTimeout(() => handleNavigateFromNotification(data.page as string), 500);
+          if (data?.page === 'autoMarkAttendance') {
+            // Auto-attendance doesn't need UI to be ready, keep the old path.
+            setTimeout(() => AttendanceUtils.executeAttendanceFlow('manual', true), 1000);
+          } else if (data?.go_to) {
+            // Defer — dashboard not ready yet.
+            pendingNotificationNav.current = { module: data.go_to as string };
+          } else if (data?.page) {
+            // Defer — dashboard not ready yet.
+            pendingNotificationNav.current = { module: data.page as string };
+          }
         }
       } catch (err: any) {
         await logPushTokenError('Unhandled error in setupNotifications', { error: err.message });
@@ -833,7 +884,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     }
   }, [logPushTokenError]);
 
-  // Fetch user data on mount
+  // --------------------------------------------------------------------------
+  // FETCH USER DATA ON MOUNT
+  // --------------------------------------------------------------------------
   useEffect(() => {
     let isMounted = true;
 
@@ -920,7 +973,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     return () => { isMounted = false; };
   }, []);
 
-  // Android hardware back button
+  // --------------------------------------------------------------------------
+  // ANDROID HARDWARE BACK BUTTON
+  // --------------------------------------------------------------------------
   useEffect(() => {
     if (isWeb || Platform.OS !== 'android') return;
 
@@ -1513,10 +1568,9 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       )}
 
       {/*
-        NOTE: BackgroundLocationDisclosure has been intentionally removed from here.
-        It is now rendered at the root level in App.tsx so Google Play's automated
-        scanner detects it at app startup, before any permission API is called.
-        This satisfies the Prominent Disclosure and Consent Requirement.
+        BackgroundLocationDisclosure is rendered in App.tsx at the root level.
+        It must NOT be rendered here to avoid duplicate modals and to ensure
+        Google Play's scanner detects it before any permission API is called.
       */}
     </View>
   );

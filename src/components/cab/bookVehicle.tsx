@@ -1,5 +1,5 @@
 // bookVehicle.tsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView,
     TextInput, ActivityIndicator, Modal, KeyboardAvoidingView,
@@ -67,8 +67,6 @@ const IOSPickerSheet: React.FC<IOSPickerSheetProps> = ({
 }) => {
     const [tempDate, setTempDate] = useState<Date>(value);
 
-
-    // Sync tempDate whenever the picker opens or the incoming value changes
     useEffect(() => {
         setTempDate(value);
     }, [value, visible]);
@@ -76,13 +74,9 @@ const IOSPickerSheet: React.FC<IOSPickerSheetProps> = ({
     if (!visible) return null;
 
     return (
-        // Full-screen overlay rendered inside the parent modal
         <Pressable style={sheetStyles.overlay} onPress={onCancel}>
             <Pressable style={sheetStyles.sheet} onPress={() => { /* absorb tap */ }}>
-                {/* Drag handle */}
                 <View style={sheetStyles.handle} />
-
-                {/* Header */}
                 <View style={sheetStyles.header}>
                     <TouchableOpacity onPress={onCancel} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                         <Text style={sheetStyles.cancelBtn}>Cancel</Text>
@@ -95,27 +89,19 @@ const IOSPickerSheet: React.FC<IOSPickerSheetProps> = ({
                         <Text style={[sheetStyles.doneBtn, { color: accentColor }]}>Done</Text>
                     </TouchableOpacity>
                 </View>
-
-                {/* Divider */}
                 <View style={sheetStyles.divider} />
-
-                {/* Picker */}
                 <DateTimePicker
                     value={tempDate}
                     mode={mode}
                     display="spinner"
                     minimumDate={minimumDate}
                     onChange={(_event, selectedDate) => {
-                        if (selectedDate) {
-                            setTempDate(selectedDate);
-                        }
+                        if (selectedDate) setTempDate(selectedDate);
                     }}
                     style={sheetStyles.picker}
                     textColor="#1a1a1a"
                     locale="en-US"
                 />
-
-                {/* Quick presets for date mode */}
                 {mode === 'date' && (
                     <View style={sheetStyles.presetRow}>
                         {['Today', 'Tomorrow', 'Next Week'].map((label, i) => {
@@ -134,8 +120,6 @@ const IOSPickerSheet: React.FC<IOSPickerSheetProps> = ({
                         })}
                     </View>
                 )}
-
-                {/* Confirm button */}
                 <TouchableOpacity
                     style={[sheetStyles.confirmButton, { backgroundColor: accentColor }]}
                     onPress={() => onConfirm(tempDate)}
@@ -150,7 +134,6 @@ const IOSPickerSheet: React.FC<IOSPickerSheetProps> = ({
                         Confirm {mode === 'date' ? 'Date' : 'Time'}
                     </Text>
                 </TouchableOpacity>
-
                 <View style={sheetStyles.safeAreaBottom} />
             </Pressable>
         </Pressable>
@@ -187,62 +170,378 @@ const sheetStyles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 8,
     },
-    title: {
-        fontSize: 17,
-        fontWeight: '700',
-        color: '#1a1a1a',
-        letterSpacing: -0.3,
-    },
-    cancelBtn: {
-        fontSize: 16,
-        color: '#999',
-        fontWeight: '500',
-    },
-    doneBtn: {
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    divider: {
-        height: 1,
-        backgroundColor: '#f0f0f0',
-        marginBottom: 4,
-    },
-    picker: {
-        height: 200,
-        width: '100%',
-    },
-    presetRow: {
-        flexDirection: 'row',
-        gap: 8,
-        marginTop: 4,
-        marginBottom: 8,
-    },
+    title: { fontSize: 17, fontWeight: '700', color: '#1a1a1a', letterSpacing: -0.3 },
+    cancelBtn: { fontSize: 16, color: '#999', fontWeight: '500' },
+    doneBtn: { fontSize: 16, fontWeight: '700' },
+    divider: { height: 1, backgroundColor: '#f0f0f0', marginBottom: 4 },
+    picker: { height: 200, width: '100%' },
+    presetRow: { flexDirection: 'row', gap: 8, marginTop: 4, marginBottom: 8 },
     presetChip: {
-        flex: 1,
-        paddingVertical: 8,
-        borderRadius: 20,
-        borderWidth: 1.5,
-        alignItems: 'center',
+        flex: 1, paddingVertical: 8, borderRadius: 20,
+        borderWidth: 1.5, alignItems: 'center',
     },
-    presetText: {
-        fontSize: 12,
-        fontWeight: '600',
-    },
+    presetText: { fontSize: 12, fontWeight: '600' },
     confirmButton: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        gap: 8, paddingVertical: 15, borderRadius: 14, marginTop: 8,
+    },
+    confirmButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+    safeAreaBottom: { height: 24 },
+});
+
+// ─── Cab Sharing Section ──────────────────────────────────────────────────────
+interface CabSharingSectionProps {
+    sharingWith: AssignedEmployee[];
+    onAdd: (user: AssignedEmployee) => void;
+    onRemove: (employeeId: string) => void;
+    excludeEmployeeIds?: string[];
+}
+
+const CabSharingSection: React.FC<CabSharingSectionProps> = ({
+    sharingWith,
+    onAdd,
+    onRemove,
+    excludeEmployeeIds = [],
+}) => {
+    const [query, setQuery] = useState('');
+    const [results, setResults] = useState<AssignedEmployee[]>([]);
+    const [searching, setSearching] = useState(false);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    }, []);
+
+    const searchUsers = useCallback(async (text: string) => {
+        if (text.length < 2) {
+            setResults([]);
+            setShowDropdown(false);
+            return;
+        }
+        setSearching(true);
+        try {
+            const response = await fetch(
+                `${BACKEND_URL}/core/getPeople?query=${encodeURIComponent(text)}`,
+                { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+            );
+            if (response.ok) {
+                const data = await response.json();
+                const allUsers: AssignedEmployee[] = data.users || [];
+                const alreadySelectedIds = new Set(sharingWith.map(u => u.employee_id));
+                const excludeSet = new Set(excludeEmployeeIds);
+                const filtered = allUsers.filter(
+                    u => !alreadySelectedIds.has(u.employee_id) && !excludeSet.has(u.employee_id)
+                );
+                setResults(filtered);
+                setShowDropdown(true);
+            } else {
+                setResults([]);
+            }
+        } catch {
+            setResults([]);
+        } finally {
+            setSearching(false);
+        }
+    }, [sharingWith, excludeEmployeeIds]);
+
+    const handleQueryChange = (text: string) => {
+        setQuery(text);
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        if (text.length >= 2) {
+            debounceRef.current = setTimeout(() => searchUsers(text), 400);
+        } else {
+            setResults([]);
+            setShowDropdown(false);
+        }
+    };
+
+    const handleSelect = (user: AssignedEmployee) => {
+        onAdd(user);
+        setQuery('');
+        setResults([]);
+        setShowDropdown(false);
+    };
+
+    const getInitials = (name: string) =>
+        name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+    return (
+        <View style={sharingStyles.container}>
+            {/* Section header — matches other sectionTitle style */}
+            <View style={sharingStyles.headerRow}>
+                <MaterialCommunityIcons name="account-multiple-plus" size={16} color="#008069" />
+                <Text style={sharingStyles.label}>Share Cab With</Text>
+                {sharingWith.length > 0 && (
+                    <View style={sharingStyles.countBadge}>
+                        <Text style={sharingStyles.countBadgeText}>{sharingWith.length}</Text>
+                    </View>
+                )}
+            </View>
+
+            {/* Selected user chips */}
+            {sharingWith.length > 0 && (
+                <View style={sharingStyles.chipsContainer}>
+                    {sharingWith.map(user => (
+                        <View key={user.employee_id} style={sharingStyles.chip}>
+                            <View style={sharingStyles.chipAvatar}>
+                                <Text style={sharingStyles.chipAvatarText}>
+                                    {getInitials(user.full_name)}
+                                </Text>
+                            </View>
+                            <Text style={sharingStyles.chipName} numberOfLines={1}>
+                                {user.full_name.split(' ')[0]}
+                            </Text>
+                            <TouchableOpacity
+                                onPress={() => onRemove(user.employee_id)}
+                                hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}
+                                accessibilityLabel={`Remove ${user.full_name}`}
+                            >
+                                <MaterialCommunityIcons name="close-circle" size={16} color="#008069" />
+                            </TouchableOpacity>
+                        </View>
+                    ))}
+                </View>
+            )}
+
+            {/* Search input — matches formInput style */}
+            <View style={sharingStyles.inputWrapper}>
+                <MaterialCommunityIcons name="magnify" size={18} color="#aaa" style={sharingStyles.searchIcon} />
+                <TextInput
+                    style={sharingStyles.searchInput}
+                    placeholder={
+                        sharingWith.length === 0
+                            ? 'Search by name, email or employee ID'
+                            : 'Add another person…'
+                    }
+                    placeholderTextColor="#bbb"
+                    value={query}
+                    onChangeText={handleQueryChange}
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                    returnKeyType="search"
+                    accessibilityLabel="Search users to share cab with"
+                />
+                {searching && (
+                    <ActivityIndicator size="small" color="#008069" style={sharingStyles.inputLoader} />
+                )}
+                {query.length > 0 && !searching && (
+                    <TouchableOpacity
+                        onPress={() => { setQuery(''); setResults([]); setShowDropdown(false); }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <MaterialCommunityIcons name="close-circle-outline" size={18} color="#bbb" />
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            {/* Autocomplete dropdown */}
+            {showDropdown && (
+                <View style={sharingStyles.dropdown}>
+                    {results.length > 0 ? (
+                        <ScrollView
+                            style={sharingStyles.dropdownScroll}
+                            keyboardShouldPersistTaps="handled"
+                            nestedScrollEnabled
+                            showsVerticalScrollIndicator={false}
+                        >
+                            {results.map((user, index) => (
+                                <TouchableOpacity
+                                    key={user.employee_id}
+                                    style={[
+                                        sharingStyles.dropdownItem,
+                                        index === results.length - 1 && sharingStyles.dropdownItemLast,
+                                    ]}
+                                    onPress={() => handleSelect(user)}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={sharingStyles.dropdownAvatar}>
+                                        <Text style={sharingStyles.dropdownAvatarText}>
+                                            {getInitials(user.full_name)}
+                                        </Text>
+                                    </View>
+                                    <View style={sharingStyles.dropdownUserInfo}>
+                                        <Text style={sharingStyles.dropdownUserName}>{user.full_name}</Text>
+                                        <Text style={sharingStyles.dropdownUserMeta} numberOfLines={1}>
+                                            {user.employee_id} · {user.email}
+                                        </Text>
+                                    </View>
+                                    <MaterialCommunityIcons name="plus-circle-outline" size={20} color="#008069" />
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    ) : !searching && query.length >= 2 ? (
+                        <View style={sharingStyles.emptyState}>
+                            <MaterialCommunityIcons name="account-search-outline" size={28} color="#ddd" />
+                            <Text style={sharingStyles.emptyStateText}>No users found</Text>
+                        </View>
+                    ) : null}
+                </View>
+            )}
+
+            {/* Helper text */}
+            <Text style={sharingStyles.helperText}>
+                Selected passengers will receive a booking notification
+            </Text>
+        </View>
+    );
+};
+
+const sharingStyles = StyleSheet.create({
+    // Matches scheduleCard / routeCard — white bg, same shadow, same radius
+    container: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        elevation: 1,
+    },
+    // Matches sectionTitle inside the card
+    headerRow: {
         flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 12,
+    },
+    label: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: '#555',
+        flex: 1,
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+    },
+    countBadge: {
+        backgroundColor: '#008069',
+        borderRadius: 10,
+        minWidth: 20,
+        height: 20,
+        paddingHorizontal: 6,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
-        paddingVertical: 15,
-        borderRadius: 14,
-        marginTop: 8,
     },
-    confirmButtonText: {
+    countBadgeText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: 11,
         fontWeight: '700',
     },
-    safeAreaBottom: { height: 24 },
+
+    // ── Chips — green tint to match bookingFor selected person ──
+    chipsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 12,
+    },
+    chip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,128,105,0.07)',
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(0,128,105,0.22)',
+        paddingVertical: 5,
+        paddingLeft: 6,
+        paddingRight: 8,
+        gap: 6,
+        maxWidth: 160,
+    },
+    chipAvatar: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: '#008069',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    chipAvatarText: {
+        color: '#fff',
+        fontSize: 9,
+        fontWeight: '700',
+    },
+    chipName: {
+        fontSize: 13,
+        color: '#008069',
+        fontWeight: '600',
+        flex: 1,
+    },
+
+    // ── Search input — matches formInput exactly ──
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f9f9f9',
+        borderWidth: 1.5,
+        borderColor: '#e8e8e8',
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        paddingVertical: Platform.OS === 'ios' ? 11 : 4,
+        gap: 8,
+    },
+    searchIcon: { flexShrink: 0 },
+    searchInput: {
+        flex: 1,
+        fontSize: 15,
+        color: '#333',
+        paddingVertical: 0,
+    },
+    inputLoader: { flexShrink: 0 },
+
+    // ── Dropdown — matches autocompleteList style ──
+    dropdown: {
+        marginTop: 6,
+        backgroundColor: '#fff',
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+        overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 6,
+        elevation: 3,
+    },
+    dropdownScroll: { maxHeight: 200 },
+    dropdownItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0',
+        gap: 12,
+    },
+    dropdownItemLast: { borderBottomWidth: 0 },
+    dropdownAvatar: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#008069',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+    },
+    dropdownAvatarText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+    dropdownUserInfo: { flex: 1 },
+    dropdownUserName: { fontSize: 14, fontWeight: '600', color: '#333' },
+    dropdownUserMeta: { fontSize: 12, color: '#888', marginTop: 2 },
+    emptyState: {
+        alignItems: 'center',
+        paddingVertical: 20,
+        gap: 6,
+    },
+    emptyStateText: { fontSize: 13, color: '#aaa' },
+
+    // ── Helper ──
+    helperText: {
+        fontSize: 11,
+        color: '#aaa',
+        marginTop: 10,
+        lineHeight: 15,
+    },
 });
 
 // ─── Main Modal ──────────────────────────────────────────────────────────────
@@ -265,9 +564,7 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
     const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-    // Refs for scroll-to-field behaviour
     const scrollViewRef = useRef<ScrollView>(null);
-    // const purposeSectionRef = useRef<View>(null);
     const purposeYRef = useRef<number>(0);
 
     useEffect(() => {
@@ -278,10 +575,7 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
         const hideSub = Keyboard.addListener('keyboardDidHide', () => {
             setKeyboardHeight(0);
         });
-        return () => {
-            showSub.remove();
-            hideSub.remove();
-        };
+        return () => { showSub.remove(); hideSub.remove(); };
     }, []);
 
     useEffect(() => {
@@ -294,28 +588,9 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
             setLocalSearchQuery('');
             setLocalUserResults([]);
             setShowUserSearch(false);
-            setKeyboardHeight(0);                                   // ← ADD reset
+            setKeyboardHeight(0);
         }
     }, [visible]);
-
-    // Scroll the Purpose field into view when the keyboard opens
-    // const handlePurposeFocus = () => {
-    //     setTimeout(() => {
-    //         purposeSectionRef.current?.measure((_x, _y, _width, _height, _pageX, pageY) => {
-    //             // pageY is absolute; get scroll offset by measuring relative to scrollView
-    //             purposeSectionRef.current?.measureLayout(
-    //                 // @ts-ignore
-    //                 scrollViewRef.current,
-    //                 (_relX: number, relY: number) => {
-    //                     scrollViewRef.current?.scrollTo({ y: relY - 16, animated: true });
-    //                 },
-    //                 () => {
-    //                     scrollViewRef.current?.scrollToEnd({ animated: true });
-    //                 }
-    //             );
-    //         });
-    //     }, 150);
-    // };
 
     const handlePurposeFocus = () => {
         setTimeout(() => {
@@ -326,6 +601,7 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
         }, 150);
     };
 
+    // ── "Booking for someone else" search ──
     const searchPeople = async (query: string) => {
         if (query.length < 2) { setLocalUserResults([]); return; }
         setSearchLoading(true);
@@ -379,7 +655,25 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
         }
     };
 
-    // Picker helpers
+    // ── Cab sharing handlers ──
+    const handleAddSharingUser = (user: AssignedEmployee) => {
+        const alreadyAdded = bookingForm.sharingWith.some(u => u.employee_id === user.employee_id);
+        if (alreadyAdded) return;
+        setBookingForm({ ...bookingForm, sharingWith: [...bookingForm.sharingWith, user] });
+    };
+
+    const handleRemoveSharingUser = (employeeId: string) => {
+        setBookingForm({
+            ...bookingForm,
+            sharingWith: bookingForm.sharingWith.filter(u => u.employee_id !== employeeId),
+        });
+    };
+
+    const sharingExcludeIds: string[] = [
+        ...(bookingForm.bookingFor ? [bookingForm.bookingFor.employee_id] : []),
+    ];
+
+    // ── Picker helpers ──
     const getPickerValue = (): Date => {
         switch (activePicker) {
             case 'startDate': return bookingForm.startDate;
@@ -422,13 +716,6 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
         setActivePicker(null);
     };
 
-    const handleAndroidPickerChange = (_: any, selectedDate?: Date) => {
-        if (selectedDate && activePicker) {
-            setBookingForm({ ...bookingForm, [activePicker]: selectedDate });
-        }
-        setActivePicker(null);
-    };
-
     const vehiclesWithoutDrivers = selectedVehicles.filter(sv => !sv.driver);
     const canProceed =
         bookingForm.purpose.trim().length > 0 &&
@@ -445,8 +732,8 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
             >
                 <View style={styles.modalOverlay}>
                     <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}   // ← was 'height' on Android
-                        enabled={Platform.OS === 'ios'}                            // ← ADD: disable on Android
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                        enabled={Platform.OS === 'ios'}
                         style={styles.keyboardAvoidingView}
                         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
                     >
@@ -469,7 +756,7 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                                 style={styles.modalScroll}
                                 showsVerticalScrollIndicator={false}
                                 keyboardShouldPersistTaps="handled"
-                                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'none'}  // ← was 'interactive' always
+                                keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'none'}
                                 contentContainerStyle={{ paddingBottom: keyboardHeight }}
                             >
                                 {/* ── Vehicle Summary ── */}
@@ -506,12 +793,19 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
 
                                 {/* ── Trip Route ── */}
                                 <View style={styles.section}>
-                                    <Text style={styles.sectionTitle}>Trip Route</Text>
+                                    {/* Section title with required marker */}
+                                    <View style={styles.sectionTitleRow}>
+                                        <Text style={styles.sectionTitle}>Trip Route</Text>
+                                        <Text style={styles.requiredStar}>*</Text>
+                                    </View>
                                     <View style={styles.routeCard}>
                                         <View style={styles.routeRow}>
                                             <View style={[styles.routeDot, { backgroundColor: '#00d285' }]} />
                                             <View style={styles.routeInputWrapper}>
-                                                <Text style={styles.routeLabel}>Pickup Location</Text>
+                                                <View style={styles.routeLabelRow}>
+                                                    <Text style={styles.routeLabel}>PICKUP LOCATION</Text>
+                                                    <Text style={styles.fieldStar}>*</Text>
+                                                </View>
                                                 <TextInput
                                                     style={styles.routeInput}
                                                     value={bookingForm.fromLocation}
@@ -525,7 +819,10 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                                         <View style={styles.routeRow}>
                                             <View style={[styles.routeDot, { backgroundColor: '#ff5e7a' }]} />
                                             <View style={styles.routeInputWrapper}>
-                                                <Text style={styles.routeLabel}>Drop-off Location</Text>
+                                                <View style={styles.routeLabelRow}>
+                                                    <Text style={styles.routeLabel}>DROP-OFF LOCATION</Text>
+                                                    <Text style={styles.fieldStar}>*</Text>
+                                                </View>
                                                 <TextInput
                                                     style={styles.routeInput}
                                                     value={bookingForm.toLocation}
@@ -547,30 +844,16 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                                             accentColor="#00d285"
                                             date={bookingForm.startDate}
                                             time={bookingForm.startTime}
-                                            onPressDate={() => {
-                                                Keyboard.dismiss();
-                                                setActivePicker('startDate');
-                                            }}
-
-                                            onPressTime={() => {
-                                                Keyboard.dismiss();
-                                                setActivePicker('startTime');
-                                            }}
+                                            onPressDate={() => { Keyboard.dismiss(); setActivePicker('startDate'); }}
+                                            onPressTime={() => { Keyboard.dismiss(); setActivePicker('startTime'); }}
                                         />
                                         <DateTimeRow
                                             label="🔴  Drop-off Date & Time"
                                             accentColor="#ff5e7a"
                                             date={bookingForm.endDate}
                                             time={bookingForm.endTime}
-                                            onPressDate={() => {
-                                                Keyboard.dismiss();
-                                                setActivePicker('endDate');
-                                            }}
-
-                                            onPressTime={() => {
-                                                Keyboard.dismiss();
-                                                setActivePicker('endTime');
-                                            }}
+                                            onPressDate={() => { Keyboard.dismiss(); setActivePicker('endDate'); }}
+                                            onPressTime={() => { Keyboard.dismiss(); setActivePicker('endTime'); }}
                                         />
                                         <View style={styles.formGroup}>
                                             <Text style={styles.formLabel}>Grace Period (hours)</Text>
@@ -589,11 +872,13 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
 
                                 {/* ── Purpose ── */}
                                 <View
-                                    // ref={purposeSectionRef}
                                     style={styles.section}
                                     onLayout={(e) => { purposeYRef.current = e.nativeEvent.layout.y; }}
                                 >
-                                    <Text style={styles.sectionTitle}>Purpose</Text>
+                                    <View style={styles.sectionTitleRow}>
+                                        <Text style={styles.sectionTitle}>Purpose</Text>
+                                        <Text style={styles.requiredStar}>*</Text>
+                                    </View>
                                     <TextInput
                                         style={[styles.formInput, styles.textArea]}
                                         value={bookingForm.purpose}
@@ -605,11 +890,11 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                                         onFocus={handlePurposeFocus}
                                         scrollEnabled={false}
                                     />
-                                    <Text style={styles.requiredNote}>* Required</Text>
+                                    <Text style={styles.requiredNote}>* Required field</Text>
                                 </View>
 
                                 {/* ── Booking For Someone Else ── */}
-                                <View style={[styles.section, { marginBottom: 8 }]}>
+                                <View style={[styles.section, { marginBottom: 12 }]}>
                                     <TouchableOpacity
                                         style={styles.checkboxWrapper}
                                         onPress={handleCheckboxPress}
@@ -695,6 +980,20 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                                     )}
                                 </View>
 
+                                {/* ── Cab Sharing ── */}
+                                <View style={[styles.section, { marginBottom: 8 }]}>
+                                    <Text style={styles.sectionTitle}>Cab Sharing</Text>
+                                    <CabSharingSection
+                                        sharingWith={bookingForm.sharingWith}
+                                        onAdd={handleAddSharingUser}
+                                        onRemove={handleRemoveSharingUser}
+                                        excludeEmployeeIds={sharingExcludeIds}
+                                    />
+                                </View>
+
+                                {/* ── Required fields note ── */}
+                                <Text style={styles.globalRequiredNote}>* Indicates required fields</Text>
+
                                 {/* ── Confirm Button ── */}
                                 <TouchableOpacity
                                     style={[styles.confirmBtn, (!canProceed || loading) && styles.disabledBtn]}
@@ -722,7 +1021,7 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                         </View>
                     </KeyboardAvoidingView>
 
-                    {/* ── iOS Picker Sheet (inside the Modal so it stacks correctly) ── */}
+                    {/* ── iOS Picker Sheet ── */}
                     {Platform.OS === 'ios' && (
                         <IOSPickerSheet
                             visible={activePicker !== null}
@@ -810,6 +1109,33 @@ const styles = StyleSheet.create({
         fontSize: 14, fontWeight: '700', color: '#333',
         marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5,
     },
+    // Row to place * next to a section title
+    sectionTitleRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+        gap: 3,
+    },
+    requiredStar: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#ff5e7a',
+        lineHeight: 20,
+        marginBottom: 2,
+    },
+    // Inline * next to a field label
+    routeLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+        marginBottom: 4,
+    },
+    fieldStar: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#ff5e7a',
+        lineHeight: 16,
+    },
 
     vehicleItem: {
         flexDirection: 'row', backgroundColor: '#fff', padding: 14,
@@ -846,7 +1172,7 @@ const styles = StyleSheet.create({
         marginLeft: 5, marginVertical: 4,
     },
     routeInputWrapper: { flex: 1 },
-    routeLabel: { fontSize: 11, color: '#999', fontWeight: '600', marginBottom: 4, textTransform: 'uppercase' },
+    routeLabel: { fontSize: 11, color: '#999', fontWeight: '600', textTransform: 'uppercase' },
     routeInput: {
         borderBottomWidth: 1.5, borderBottomColor: '#e0e0e0',
         paddingBottom: 8, fontSize: 15, color: '#333', paddingTop: 2,
@@ -868,6 +1194,13 @@ const styles = StyleSheet.create({
     textArea: { minHeight: 80, textAlignVertical: 'top' },
     helperText: { fontSize: 11, color: '#aaa', marginTop: 6 },
     requiredNote: { fontSize: 11, color: '#aaa', marginTop: 4 },
+    globalRequiredNote: {
+        fontSize: 11,
+        color: '#aaa',
+        marginTop: 2,
+        marginBottom: 12,
+        textAlign: 'right',
+    },
 
     checkboxWrapper: {
         flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -882,8 +1215,8 @@ const styles = StyleSheet.create({
         borderWidth: 1, borderColor: '#e8e8e8',
     },
     searchInput: {
-        backgroundColor: '#f9f9f9', borderWidth: 1, borderColor: '#e0e0e0',
-        borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11,
+        backgroundColor: '#f9f9f9', borderWidth: 1.5, borderColor: '#e8e8e8',
+        borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11,
         fontSize: 15, color: '#333',
     },
     selectedPerson: {

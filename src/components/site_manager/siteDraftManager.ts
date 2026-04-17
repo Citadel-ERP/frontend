@@ -20,6 +20,7 @@ export type ChipEntries = string[];
 export interface SiteDraftData {
   // Step 0
   siteType: 'managed' | 'conventional' | 'for_sale' | null;
+  distanceFromMetro?: string;
 
   // Step 1 – Basic information
   newSite: Record<string, any>;
@@ -46,6 +47,7 @@ export interface SiteDraftData {
 
   // Navigation state (restore to correct step)
   currentStep: number;
+  
 
   /**
    * Photos are intentionally excluded from the draft.

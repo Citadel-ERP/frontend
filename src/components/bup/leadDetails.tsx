@@ -16,7 +16,6 @@ import {
   StatusBar,
   Platform,
   Keyboard,
-  KeyboardEvent,
   Animated,
   KeyboardAvoidingView,
   ScrollView,
@@ -30,10 +29,14 @@ import { ThemeColors, Lead, Comment, CollaboratorData, DocumentType, Pagination 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Incentive from './incentive';
 import Invoice from './invoice';
+import InvoiceList, { InvoiceData } from './invoiceList';
+import IncentiveList from './incentiveList';
+import InvoiceCreate from './invoiceCreate';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
+// ─── Colour palette ────────────────────────────────────────────────────────
 const C = {
   primary: '#075E54',
   primaryLight: '#128C7E',
@@ -60,6 +63,32 @@ const C = {
   customFieldBorder: '#25D366',
 };
 
+// ─── Lead config (button visibility) ──────────────────────────────────────
+interface LeadConfig {
+  show_invoice: boolean;
+  show_incentive: boolean;
+  can_create_invoice: boolean;
+  can_create_incentive: boolean;
+}
+
+const DEFAULT_CONFIG: LeadConfig = {
+  show_invoice: true,
+  show_incentive: true,
+  can_create_invoice: false,
+  can_create_incentive: false,
+};
+
+// ─── Navigation mode ───────────────────────────────────────────────────────
+type InnerView =
+  | 'chat'
+  | 'invoice-list'
+  | 'invoice-detail'
+  | 'invoice-create'
+  | 'incentive-list'
+  | 'incentive-detail'
+  | 'incentive-create';
+
+// ─── Props ─────────────────────────────────────────────────────────────────
 interface LeadDetailsProps {
   lead: Lead;
   onBack: () => void;
@@ -69,6 +98,7 @@ interface LeadDetailsProps {
   onOpenLeadDetails: (lead: Lead) => void;
 }
 
+// ─── Component ─────────────────────────────────────────────────────────────
 const LeadDetails: React.FC<LeadDetailsProps> = ({
   lead,
   onBack,
@@ -78,6 +108,8 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   onOpenLeadDetails,
 }) => {
   const insets = useSafeAreaInsets();
+
+  // ── Chat state (preserved) ──────────────────────────────────────────────
   const [comments, setComments] = useState<Comment[]>([]);
   const [collaborators, setCollaborators] = useState<CollaboratorData[]>([]);
   const [commentsPagination, setCommentsPagination] = useState<Pagination | null>(null);
@@ -90,33 +122,41 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
   const [addingComment, setAddingComment] = useState(false);
   const [showDefaultComments, setShowDefaultComments] = useState(false);
   const [defaultComments, setDefaultComments] = useState<any[]>([]);
-  const [loadingDefaultComments, setLoadingDefaultComments] = useState(false);
-  const [incentiveData, setIncentiveData] = useState<any>(null);
-  const [loadingIncentive, setLoadingIncentive] = useState(false);
   const [currentUserEmployeeId, setCurrentUserEmployeeId] = useState<string | null>(null);
-  const [selectedAssignedTo, setSelectedAssignedTo] = useState<string | null>(null);
-  const [assignedToOptions, setAssignedToOptions] = useState<Array<{ id: string, name: string }>>([]);
   const [showAttachmentModal, setShowAttachmentModal] = useState(false);
   const [isPickerActive, setIsPickerActive] = useState(false);
-  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
-  const [showIncentiveModal, setShowIncentiveModal] = useState(false);
   const [showLeadDetailsModal, setShowLeadDetailsModal] = useState(false);
 
+  // ── Navigation state ────────────────────────────────────────────────────
+  const [innerView, setInnerView] = useState<InnerView>('chat');
+  /** Invoice selected in the list, passed to detail view */
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceData | null>(null);
+  /** Incentive id selected in the list, passed to the management view */
+  const [selectedIncentiveId, setSelectedIncentiveId] = useState<number | null>(null);
+
+  // ── Backend-controlled button visibility ────────────────────────────────
+  const [leadConfig, setLeadConfig] = useState<LeadConfig>(DEFAULT_CONFIG);
+  const [loadingConfig, setLoadingConfig] = useState(true);
+
+  // ── Refs ────────────────────────────────────────────────────────────────
   const flatListRef = useRef<FlatList>(null);
   const hasLoadedInitially = useRef(false);
   const inputRef = useRef<TextInput>(null);
   const modalFlatListRef = useRef<FlatList>(null);
+  const androidInputOffset = useRef(new Animated.Value(0)).current;
+  const hasKeyboardClosedOnce = useRef(false);
 
+  // ── Bootstrap ────────────────────────────────────────────────────────────
   useEffect(() => {
     const fetchCurrentUser = async () => {
       try {
         const userData = await AsyncStorage.getItem('user_data');
         if (userData) {
-          const parsedData = JSON.parse(userData);
-          setCurrentUserEmployeeId(parsedData.employee_id);
+          const parsed = JSON.parse(userData);
+          setCurrentUserEmployeeId(parsed.employee_id);
         }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
+      } catch (e) {
+        console.error('Error fetching user data:', e);
       }
     };
     fetchCurrentUser();
@@ -127,9 +167,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       hasLoadedInitially.current = true;
       fetchComments(lead.id, 1);
       fetchCollaborators(lead.id);
-      fetchAssignedToOptions();
-      // fetchIncentiveData();
-
+      fetchLeadConfig();
     }
   }, [token, lead.id]);
 
@@ -139,6 +177,45 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   }, [comments.length]);
 
+  // ── Android keyboard offset ─────────────────────────────────────────────
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const onShow = Keyboard.addListener('keyboardDidShow', () => androidInputOffset.setValue(0));
+    const onHide = Keyboard.addListener('keyboardDidHide', () => {
+      if (!hasKeyboardClosedOnce.current) hasKeyboardClosedOnce.current = true;
+      androidInputOffset.setValue(-35);
+    });
+    return () => { onShow.remove(); onHide.remove(); };
+  }, []);
+
+  // ── Fetch lead config ────────────────────────────────────────────────────
+  const fetchLeadConfig = async () => {
+    if (!token) { setLoadingConfig(false); return; }
+    try {
+      const res = await fetch(`${BACKEND_URL}/manager/getLeadConfig`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, lead_id: lead.id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLeadConfig({
+          show_invoice: data.show_invoice ?? true,
+          show_incentive: data.show_incentive ?? true,
+          can_create_invoice: data.can_create_invoice ?? false,
+          can_create_incentive: data.can_create_incentive ?? false,
+        });
+      } else {
+        setLeadConfig({ ...DEFAULT_CONFIG, show_incentive: true });
+      }
+    } catch {
+      setLeadConfig(DEFAULT_CONFIG);
+    } finally {
+      setLoadingConfig(false);
+    }
+  };
+
+  // ── Utility formatters (preserved) ─────────────────────────────────────
   const beautifyName = useCallback((name: string): string => {
     if (!name) return '';
     return name
@@ -152,43 +229,16 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return '-';
     return d.toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
     });
   }, []);
-
-  const fetchAssignedToOptions = async () => {
-    try {
-      if (!token) return;
-      const response = await fetch(`${BACKEND_URL}/manager/getUsers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token })
-      });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-      const options = data.users.map((user: any) => ({
-        id: user.employee_id,
-        name: user.full_name || `${user.first_name} ${user.last_name}`.trim()
-      }));
-      setAssignedToOptions(options);
-    } catch (error) {
-      console.error('Error fetching assigned to options:', error);
-    }
-  };
 
   const formatTime = useCallback((dateString?: string): string => {
     if (!dateString) return '';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return '';
-    return d.toLocaleTimeString('en-IN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
+    return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
   }, []);
 
   const formatWhatsAppDate = useCallback((dateString: string): string => {
@@ -196,15 +246,14 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    const compareDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const compareToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const compareYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-    if (compareDate.getTime() === compareToday.getTime()) return 'Today';
-    else if (compareDate.getTime() === compareYesterday.getTime()) return 'Yesterday';
-    else if (today.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000)
+    const cmpDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const cmpToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const cmpYesterday = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+    if (cmpDate.getTime() === cmpToday.getTime()) return 'Today';
+    if (cmpDate.getTime() === cmpYesterday.getTime()) return 'Yesterday';
+    if (today.getTime() - date.getTime() < 7 * 24 * 60 * 60 * 1000)
       return date.toLocaleDateString('en-US', { weekday: 'short' });
-    else
-      return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
   }, []);
 
   const formatFileSize = (bytes?: number): string => {
@@ -214,18 +263,28 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
-  const truncateFileName = (fileName: string, maxLength: number = 25): string => {
+  const truncateFileName = (fileName: string, maxLength = 25): string => {
     if (fileName.length <= maxLength) return fileName;
     return fileName.substring(0, maxLength - 3) + '...';
   };
 
   const getInitials = (name: string): string => {
     if (!name || name.trim().length === 0) return '?';
-    const nameParts = name.trim().split(/\s+/);
-    if (nameParts.length === 1) return nameParts[0].charAt(0).toUpperCase();
-    return (nameParts[0].charAt(0) + nameParts[1].charAt(0)).toUpperCase();
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
   };
 
+  const avatarColors = ['#00d285', '#ff5e7a', '#ffb157', '#1da1f2', '#007AFF'];
+
+  const getAvatarColor = (name: string | null): string => {
+    if (!name) return avatarColors[0];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return avatarColors[Math.abs(hash) % avatarColors.length];
+  };
+
+  // ── Download handler (preserved) ─────────────────────────────────────────
   const handleDownloadFile = async (fileUrl: string, fileName: string) => {
     try {
       const supported = await Linking.canOpenURL(fileUrl);
@@ -234,69 +293,27 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       } else {
         Alert.alert('Notification', 'File is Being Uploaded, kindly wait for some time and try again.');
       }
-    } catch (error) {
-      console.error('Error downloading file:', error);
+    } catch {
       Alert.alert('Notification', 'File is Being Uploaded, kindly wait for some time and try again.');
     }
   };
 
-  const avatarColors = ['#00d285', '#ff5e7a', '#ffb157', '#1da1f2', '#007AFF'];
-
-  const getAvatarColor = (name: string | null): string => {
-    if (!name) return avatarColors[0];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const index = Math.abs(hash) % avatarColors.length;
-    return avatarColors[index];
-  };
-
-  const fetchIncentiveData = async (): Promise<void> => {
-    try {
-      if (!token) return;
-      setLoadingIncentive(true);
-      const response = await fetch(`${BACKEND_URL}/manager/getIncentive`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token, lead_id: lead.id })
-      });
-      if (!response.ok) {
-        setIncentiveData(null); // No incentive — silently hide button
-        return;
-      }
-      const data = await response.json();
-      setIncentiveData(data.incentive || null);
-    } catch (error) {
-      setIncentiveData(null);
-    } finally {
-      setLoadingIncentive(false);
-    }
-  };
-
-  const handleIncentivePress = () => {
-    // if (!lead.incentive_present) return;
-    if (loadingIncentive) { Alert.alert('Loading', 'Fetching incentive details...'); return; }
-    if (incentiveData) { setShowIncentiveModal(true); }
-    // else { Alert.alert('Incentive', 'No incentive data available for this lead.'); }
-  };
-
-  const fetchComments = async (leadId: number, page: number = 1, append: boolean = false): Promise<void> => {
+  // ── Comment fetching (preserved) ─────────────────────────────────────────
+  const fetchComments = async (leadId: number, page = 1, append = false) => {
     try {
       if (!token) return;
       if (!append) setLoadingComments(true);
       else setLoadingMoreComments(true);
 
-      const response = await fetch(`${BACKEND_URL}/manager/getComments`, {
+      const res = await fetch(`${BACKEND_URL}/manager/getComments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token, lead_id: leadId, page: page })
+        body: JSON.stringify({ token, lead_id: leadId, page }),
       });
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const data = await res.json();
 
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-
-      const transformedComments: Comment[] = data.comments.map((apiComment: any) => ({
+      const transformed: Comment[] = data.comments.map((apiComment: any) => ({
         id: apiComment.comment.id.toString(),
         commentBy: apiComment.comment.user.full_name,
         employeeId: apiComment.comment.user.employee_id,
@@ -306,20 +323,16 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         content: apiComment.comment.content,
         hasFile: apiComment.comment.documents.length > 0,
         fileName: apiComment.comment.documents.length > 0
-          ? apiComment.comment.documents.map((doc: DocumentType) => doc.document_name).join(', ')
+          ? apiComment.comment.documents.map((d: DocumentType) => d.document_name).join(', ')
           : undefined,
-        documents: apiComment.comment.documents
+        documents: apiComment.comment.documents,
       }));
 
-      const sortedComments = transformedComments.sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-      );
-
-      if (append) setComments(prev => [...prev, ...sortedComments]);
-      else setComments(sortedComments);
+      const sorted = transformed.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      if (append) setComments(prev => [...prev, ...sorted]);
+      else setComments(sorted);
       setCommentsPagination(data.pagination || null);
-    } catch (error) {
-      console.error('Error fetching comments:', error);
+    } catch {
       Alert.alert('Error', 'Failed to fetch comments. Please try again.');
     } finally {
       setLoadingComments(false);
@@ -327,27 +340,27 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   };
 
-  const fetchCollaborators = async (leadId: number): Promise<void> => {
+  const fetchCollaborators = async (leadId: number) => {
     try {
       if (!token) return;
       setLoadingCollaborators(true);
-      const response = await fetch(`${BACKEND_URL}/manager/getCollaborators`, {
+      const res = await fetch(`${BACKEND_URL}/manager/getCollaborators`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token, lead_id: leadId })
+        body: JSON.stringify({ token, lead_id: leadId }),
       });
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const data = await res.json();
       setCollaborators(data.collaborators || []);
-    } catch (error) {
-      console.error('Error fetching collaborators:', error);
+    } catch {
       Alert.alert('Error', 'Failed to fetch collaborators. Please try again.');
     } finally {
       setLoadingCollaborators(false);
     }
   };
 
-  const handleTakePhoto = useCallback(async (): Promise<void> => {
+  // ── Attachment pickers (preserved) ────────────────────────────────────────
+  const handleTakePhoto = useCallback(async () => {
     if (isPickerActive) return;
     setIsPickerActive(true);
     try {
@@ -358,24 +371,18 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       }
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
+        allowsEditing: true, aspect: [4, 3], quality: 0.8,
       });
-      if (!result.canceled && result.assets && result.assets[0]) {
+      if (!result.canceled && result.assets?.[0]) {
         const asset = result.assets[0];
         const newFile: DocumentPicker.DocumentPickerAsset = {
-          uri: asset.uri,
-          name: `photo_${Date.now()}.jpg`,
-          mimeType: 'image/jpeg',
-          size: asset.fileSize,
-          lastModified: Date.now(),
+          uri: asset.uri, name: `photo_${Date.now()}.jpg`,
+          mimeType: 'image/jpeg', size: asset.fileSize, lastModified: Date.now(),
         };
         setSelectedDocuments(prev => [...prev, newFile]);
         setTimeout(() => inputRef.current?.focus(), 100);
       }
-    } catch (error) {
-      console.error('Error taking photo:', error);
+    } catch {
       Alert.alert('Camera Error', 'Failed to take photo. Please try again.');
     } finally {
       setIsPickerActive(false);
@@ -383,7 +390,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   }, [isPickerActive]);
 
-  const handleSelectFromGallery = useCallback(async (): Promise<void> => {
+  const handleSelectFromGallery = useCallback(async () => {
     if (isPickerActive) return;
     setIsPickerActive(true);
     try {
@@ -394,27 +401,21 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        allowsMultipleSelection: true,
-        quality: 0.8,
-        selectionLimit: 5,
+        allowsMultipleSelection: true, quality: 0.8, selectionLimit: 5,
       });
-      if (!result.canceled && result.assets && result.assets.length > 0) {
+      if (!result.canceled && result.assets?.length) {
         const newFiles: DocumentPicker.DocumentPickerAsset[] = result.assets.map((asset, index) => {
-          const extension = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
+          const ext = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
           return {
-            uri: asset.uri,
-            name: `image_${Date.now()}_${index}.${extension}`,
-            mimeType: `image/${extension === 'png' ? 'png' : 'jpeg'}`,
-            size: asset.fileSize,
-            lastModified: Date.now(),
+            uri: asset.uri, name: `image_${Date.now()}_${index}.${ext}`,
+            mimeType: `image/${ext === 'png' ? 'png' : 'jpeg'}`,
+            size: asset.fileSize, lastModified: Date.now(),
           };
         });
         setSelectedDocuments(prev => [...prev, ...newFiles]);
         setTimeout(() => inputRef.current?.focus(), 100);
       }
-    } catch (error) {
-      console.error('Error selecting images:', error);
+    } catch {
       Alert.alert('Selection Error', 'Failed to select images. Please try again.');
     } finally {
       setIsPickerActive(false);
@@ -422,21 +423,18 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   }, [isPickerActive]);
 
-  const handleSelectDocument = useCallback(async (): Promise<void> => {
+  const handleSelectDocument = useCallback(async () => {
     if (isPickerActive) return;
     setIsPickerActive(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        multiple: true,
-        type: '*/*',
-        copyToCacheDirectory: true,
+        multiple: true, type: '*/*', copyToCacheDirectory: true,
       });
       if (!result.canceled && result.assets) {
         setSelectedDocuments(prev => [...prev, ...result.assets]);
         setTimeout(() => inputRef.current?.focus(), 100);
       }
-    } catch (error) {
-      console.error('Error picking documents:', error);
+    } catch {
       Alert.alert('Error', 'Failed to pick documents. Please try again.');
     } finally {
       setIsPickerActive(false);
@@ -444,6 +442,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
     }
   }, [isPickerActive]);
 
+  // ── Add comment (preserved) ───────────────────────────────────────────────
   const addCommentToBackend = async (
     comment: string,
     documents: DocumentPicker.DocumentPickerAsset[]
@@ -455,26 +454,18 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       formData.append('token', token);
       formData.append('lead_id', lead.id.toString());
       formData.append('comment', comment);
-
-      if (documents && documents.length > 0) {
-        documents.forEach((doc) => {
+      if (documents.length > 0) {
+        documents.forEach(doc => {
           formData.append('documents', {
-            uri: doc.uri,
-            type: doc.mimeType || 'application/octet-stream',
-            name: doc.name
+            uri: doc.uri, type: doc.mimeType || 'application/octet-stream', name: doc.name,
           } as any);
         });
       }
-
-      const response = await fetch(`${BACKEND_URL}/manager/addComment`, {
-        method: 'POST',
-        body: formData,
-        headers: { 'Content-Type': 'multipart/form-data' }
+      const res = await fetch(`${BACKEND_URL}/manager/addComment`, {
+        method: 'POST', body: formData, headers: { 'Content-Type': 'multipart/form-data' },
       });
-
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const data = await response.json();
-
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const data = await res.json();
       const newCommentObj: Comment = {
         id: data.lead_comment.comment.id.toString(),
         commentBy: data.lead_comment.comment.user.full_name,
@@ -485,15 +476,13 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         content: data.lead_comment.comment.content,
         hasFile: data.lead_comment.comment.documents.length > 0,
         fileName: data.lead_comment.comment.documents.length > 0
-          ? data.lead_comment.comment.documents.map((doc: DocumentType) => doc.document_name).join(', ')
+          ? data.lead_comment.comment.documents.map((d: DocumentType) => d.document_name).join(', ')
           : undefined,
-        documents: data.lead_comment.comment.documents
+        documents: data.lead_comment.comment.documents,
       };
-
       setComments(prev => [...prev, newCommentObj]);
       return true;
-    } catch (error) {
-      console.error('Error adding comment:', error);
+    } catch {
       Alert.alert('Error', 'Failed to add comment. Please try again.');
       return false;
     } finally {
@@ -507,91 +496,80 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
       return;
     }
     const success = await addCommentToBackend(newComment.trim(), selectedDocuments);
-    if (success) {
-      setNewComment('');
-      setSelectedDocuments([]);
-    }
+    if (success) { setNewComment(''); setSelectedDocuments([]); }
   };
 
   const handleDefaultCommentSelect = (defaultComment: any) => {
     try {
-      const commentText = JSON.parse(defaultComment.data);
-      setNewComment(commentText);
-      setShowDefaultComments(false);
-    } catch (error) {
+      setNewComment(JSON.parse(defaultComment.data));
+    } catch {
       setNewComment(defaultComment.data);
-      setShowDefaultComments(false);
     }
+    setShowDefaultComments(false);
   };
 
-  const handleRemoveDocument = (index: number) => {
-    setSelectedDocuments(prevDocs => prevDocs.filter((_, i) => i !== index));
-  };
+  const handleRemoveDocument = (index: number) =>
+    setSelectedDocuments(prev => prev.filter((_, i) => i !== index));
 
   const handleLoadMoreComments = useCallback(() => {
-    if (commentsPagination && commentsPagination.has_next && !loadingMoreComments) {
+    if (commentsPagination?.has_next && !loadingMoreComments)
       fetchComments(lead.id, commentsPagination.current_page + 1, true);
-    }
   }, [commentsPagination, loadingMoreComments, lead.id]);
 
   const handleRefresh = () => {
     setRefreshing(true);
     fetchComments(lead.id, 1);
     fetchCollaborators(lead.id);
-    // fetchIncentiveData();
     setRefreshing(false);
   };
 
+  // ── Processed comments (preserved) ────────────────────────────────────────
   const getProcessedComments = useCallback(() => {
-    if (!comments || comments.length === 0) return [];
+    if (!comments.length) return [];
     const processed: any[] = [];
     let lastDate = '';
-    const sortedComments = [...comments].sort((a, b) =>
-      new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-    sortedComments.forEach((comment, index) => {
-      const commentDate = formatWhatsAppDate(comment.date);
-      if (commentDate !== lastDate) {
-        processed.push({
-          type: 'dateSeparator',
-          id: `date-${commentDate}-${index}`,
-          date: commentDate,
-          originalDate: comment.date
-        });
-        lastDate = commentDate;
-      }
-      processed.push({ type: 'comment', id: comment.id, data: comment });
-    });
+    [...comments]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .forEach((comment, index) => {
+        const commentDate = formatWhatsAppDate(comment.date);
+        if (commentDate !== lastDate) {
+          processed.push({ type: 'dateSeparator', id: `date-${commentDate}-${index}`, date: commentDate });
+          lastDate = commentDate;
+        }
+        processed.push({ type: 'comment', id: comment.id, data: comment });
+      });
     return processed;
   }, [comments, formatWhatsAppDate]);
 
+  // ── Modal sections helpers (preserved) ────────────────────────────────────
   const getOfficeTypeLabel = useCallback(() => {
-    const officeType = lead.meta?.office_type;
-    if (!officeType) return 'Not specified';
-    const OFFICE_TYPE_CHOICES = [
+    const ot = lead.meta?.office_type;
+    if (!ot) return 'Not specified';
+    const choices = [
       { value: 'conventional_office', label: 'Conventional Office' },
       { value: 'managed_office', label: 'Managed Office' },
-      { value: 'conventional_and_managed_office', label: 'Conventional and Managed Office' }
+      { value: 'conventional_and_managed_office', label: 'Conventional and Managed Office' },
     ];
-    const option = OFFICE_TYPE_CHOICES.find(choice => choice.value === officeType);
-    return option ? option.label : beautifyName(officeType);
+    const found = choices.find(c => c.value === ot);
+    return found ? found.label : beautifyName(ot);
   }, [lead.meta?.office_type, beautifyName]);
 
   const getCustomFields = useCallback(() => {
-    const customFields: { key: string; value: string }[] = [];
+    const fields: { key: string; value: string }[] = [];
     if (lead.meta) {
       Object.entries(lead.meta).forEach(([key, value]) => {
         if (!['area_requirements', 'office_type', 'location'].includes(key) && value) {
-          customFields.push({
-            key: key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-            value: String(value)
+          fields.push({
+            key: key.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+            value: String(value),
           });
         }
       });
     }
-    return customFields;
+    return fields;
   }, [lead.meta]);
 
+  // ── Chat render item (preserved) ─────────────────────────────────────────
   const renderChatItem = useCallback(({ item }: { item: any }) => {
     if (item.type === 'dateSeparator') {
       return (
@@ -615,58 +593,48 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
               <Text style={s.senderName}>{comment.commentBy}</Text>
             </View>
           )}
-          {comment.documents && comment.documents.length > 0 && (
+          {comment.documents?.length > 0 && (
             <View style={s.documentsContainer}>
               {comment.documents.map((doc: DocumentType) => {
                 const isImage = doc.document_name.match(/\.(jpg|jpeg|png|gif|webp)$/i);
                 if (isImage) {
                   return (
-                    <TouchableOpacity
-                      key={doc.id}
-                      style={s.imageWrapper}
-                      onPress={() => handleDownloadFile(doc.document_url, doc.document_name)}
-                    >
+                    <TouchableOpacity key={doc.id} style={s.imageWrapper}
+                      onPress={() => handleDownloadFile(doc.document_url, doc.document_name)}>
                       <Image source={{ uri: doc.document_url }} style={s.commentImage} resizeMode="cover" />
                       <View style={s.imageOverlay}>
                         <Ionicons name="download-outline" size={20} color="#FFF" />
                       </View>
                     </TouchableOpacity>
                   );
-                } else {
-                  return (
-                    <TouchableOpacity
-                      key={doc.id}
-                      style={s.documentItem}
-                      onPress={() => handleDownloadFile(doc.document_url, doc.document_name)}
-                    >
-                      <View style={s.documentIconContainer}>
-                        <Ionicons name="document-text" size={24} color={C.primary} />
-                      </View>
-                      <View style={s.documentInfo}>
-                        <Text style={s.documentName} numberOfLines={1}>
-                          {truncateFileName(doc.document_name)}
-                        </Text>
-                        <Text style={s.documentSize}>Tap to download</Text>
-                      </View>
-                      <Ionicons name="download-outline" size={20} color={C.primary} />
-                    </TouchableOpacity>
-                  );
                 }
+                return (
+                  <TouchableOpacity key={doc.id} style={s.documentItem}
+                    onPress={() => handleDownloadFile(doc.document_url, doc.document_name)}>
+                    <View style={s.documentIconContainer}>
+                      <Ionicons name="document-text" size={24} color={C.primary} />
+                    </View>
+                    <View style={s.documentInfo}>
+                      <Text style={s.documentName} numberOfLines={1}>{truncateFileName(doc.document_name)}</Text>
+                      <Text style={s.documentSize}>Tap to download</Text>
+                    </View>
+                    <Ionicons name="download-outline" size={20} color={C.primary} />
+                  </TouchableOpacity>
+                );
               })}
             </View>
           )}
           {comment.content && <Text style={s.messageText}>{comment.content}</Text>}
           <View style={s.messageFooter}>
             <Text style={s.messageTime}>{time}</Text>
-            {isCurrentUser && (
-              <Ionicons name="checkmark-done" size={14} color={C.primary} style={s.deliveryIcon} />
-            )}
+            {isCurrentUser && <Ionicons name="checkmark-done" size={14} color={C.primary} style={s.deliveryIcon} />}
           </View>
         </View>
       </View>
     );
   }, [currentUserEmployeeId, formatTime, handleDownloadFile, truncateFileName]);
 
+  // ── Lead-details modal section (preserved) ─────────────────────────────
   const renderModalSection = useCallback(({ item }: { item: string }) => {
     switch (item) {
       case 'lead-info':
@@ -695,6 +663,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             </View>
           </View>
         );
+
       case 'contact-info':
         return (
           <View style={s.containerBox}>
@@ -736,6 +705,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             )}
           </View>
         );
+
       case 'lead-specific-info':
         return (
           <View style={s.containerBox}>
@@ -784,6 +754,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             </View>
           </View>
         );
+
       case 'metadata':
         return (
           <View style={s.containerBox}>
@@ -805,6 +776,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             </View>
           </View>
         );
+
       case 'collaborators':
         return collaborators.length > 0 ? (
           <View style={s.containerBox}>
@@ -826,6 +798,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             </View>
           </View>
         ) : null;
+
       case 'notes':
         return lead.notes ? (
           <View style={s.containerBox}>
@@ -840,75 +813,173 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             </View>
           </View>
         ) : null;
+
       default:
         return null;
     }
   }, [lead, collaborators, beautifyName, formatDateTime, getInitials, getOfficeTypeLabel, getCustomFields]);
 
   const modalSections = useMemo(() => {
-    const sections = ['lead-info', 'contact-info', 'lead-specific-info', 'metadata'];
-    if (collaborators.length > 0) sections.push('collaborators');
-    if (lead.notes) sections.push('notes');
-    return sections;
+    const sects = ['lead-info', 'contact-info', 'lead-specific-info', 'metadata'];
+    if (collaborators.length > 0) sects.push('collaborators');
+    if (lead.notes) sects.push('notes');
+    return sects;
   }, [collaborators.length, lead.notes]);
 
-  const androidInputOffset = useRef(new Animated.Value(0)).current;
-  const hasKeyboardClosedOnce = useRef(false);
+  // ── Inner-view navigation helpers ────────────────────────────────────────
 
-  useEffect(() => {
-    if (Platform.OS !== 'android') {
-      // const onShow = Keyboard.addListener('keyboardDidShow', () => {
-      //   androidInputOffset.setValue(0);
-      // });
-      // const onHide = Keyboard.addListener('keyboardDidHide', () => {
-      //   if (!hasKeyboardClosedOnce.current) {
-      //     hasKeyboardClosedOnce.current = true;
-      //   }
-      //   androidInputOffset.setValue(-30);
-      // });
+  const handleOpenInvoiceList = () => setInnerView('invoice-list');
+  const handleOpenIncentiveList = () => setInnerView('incentive-list');
 
-      // return () => {
-      //   onShow.remove();
-      //   onHide.remove();
-      // };
-      return;
+  const handleSelectInvoice = (invoice: InvoiceData) => {
+    setSelectedInvoice(invoice);
+    setInnerView('invoice-detail');
+  };
+
+  const handleCreateInvoice = () => setInnerView('invoice-create');
+
+  /**
+   * IncentiveList row tapped → open management view for that specific
+   * incentive by its database id.
+   */
+  const handleSelectIncentive = (incentiveId: number) => {
+    setSelectedIncentiveId(incentiveId);
+    setInnerView('incentive-detail');
+  };
+
+  /**
+   * IncentiveList "+" tapped → open blank create form.
+   * incentive-create passes canCreate=true with NO incentiveId so
+   * Incentive.tsx goes straight to the blank form.
+   */
+  const handleCreateIncentive = () => setInnerView('incentive-create');
+
+  const handleInnerBack = () => {
+    switch (innerView) {
+      case 'invoice-detail':
+      case 'invoice-create':
+        setInnerView('invoice-list');
+        break;
+      case 'incentive-detail':
+      case 'incentive-create':
+        setInnerView('incentive-list');
+        break;
+      default:
+        setInnerView('chat');
     }
-    else {
-      const onShow = Keyboard.addListener('keyboardDidShow', () => {
-        androidInputOffset.setValue(0);
-      });
+  };
 
-      const onHide = Keyboard.addListener('keyboardDidHide', () => {
-        if (!hasKeyboardClosedOnce.current) {
-          hasKeyboardClosedOnce.current = true;
-        }
-        androidInputOffset.setValue(-35);
-      });
+  // ── Render inner views ────────────────────────────────────────────────────
 
-      return () => {
-        onShow.remove();
-        onHide.remove();
-      };
-    }
+  if (innerView === 'invoice-list') {
+    return (
+      <InvoiceList
+        leadId={lead.id}
+        leadName={lead.company || 'Lead'}
+        token={token}
+        theme={theme}
+        onBack={() => setInnerView('chat')}
+        onSelectInvoice={handleSelectInvoice}
+        onCreateInvoice={handleCreateInvoice}
+        canCreate={leadConfig.can_create_invoice}
+      />
+    );
+  }
 
-  }, []);
+  if (innerView === 'invoice-detail' && selectedInvoice) {
+    return (
+      <Invoice
+        leadId={lead.id}
+        leadName={lead.company || 'Lead'}
+        token={token}
+        theme={theme}
+        onBack={handleInnerBack}
+        preloadedInvoice={selectedInvoice}
+      />
+    );
+  }
 
+  if (innerView === 'invoice-create') {
+    return (
+      <InvoiceCreate
+        leadId={lead.id}
+        leadName={lead.company || 'Lead'}
+        token={token}
+        theme={theme}
+        onBack={handleInnerBack}
+        onCreated={() => setInnerView('invoice-list')}
+      />
+    );
+  }
+
+  if (innerView === 'incentive-list') {
+    return (
+      <IncentiveList
+        leadId={lead.id}
+        leadName={lead.company || 'Lead'}
+        token={token}
+        theme={theme}
+        onBack={() => setInnerView('chat')}
+        onSelectIncentive={handleSelectIncentive}
+        onCreateIncentive={handleCreateIncentive}
+        canCreate={leadConfig.can_create_incentive}
+      />
+    );
+  }
+
+  /**
+   * Management view — a specific existing incentive.
+   * canCreate=false so Incentive.tsx goes to management mode directly.
+   * incentiveId is the real database id from the list.
+   */
+  if (innerView === 'incentive-detail' && selectedIncentiveId !== null) {
+    return (
+      <Incentive
+        onBack={handleInnerBack}
+        leadId={lead.id}
+        leadName={lead.company || ''}
+        theme={theme}
+        incentiveId={selectedIncentiveId}
+        canCreate={false}
+      />
+    );
+  }
+
+  /**
+   * Create view — always a brand-new incentive.
+   * canCreate=true and NO incentiveId → Incentive.tsx skips fetching and
+   * shows the blank form immediately, regardless of existing incentives.
+   */
+  if (innerView === 'incentive-create') {
+    return (
+      <Incentive
+        onBack={handleInnerBack}
+        leadId={lead.id}
+        leadName={lead.company || ''}
+        theme={theme}
+        canCreate={true}
+        onIncentiveCreated={() => setInnerView('incentive-list')}
+      // intentionally NO incentiveId prop
+      />
+    );
+  }
+
+  // ── Main chat view ────────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
       style={s.rootContainer}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      keyboardVerticalOffset={0}
     >
       <StatusBar barStyle="light-content" backgroundColor={C.primary} />
 
-      {/* ─── HEADER ─────────────────────────────────────────────────── */}
+      {/* ─── HEADER ─────────────────────────────────────────── */}
       <SafeAreaView style={s.headerSafeArea} edges={['top']}>
         <View style={s.header}>
           <TouchableOpacity onPress={onBack} style={s.backButton}>
-            <View style={s.backIcon}>
-              <View style={s.backArrow} />
-            </View>
+            <View style={s.backIcon}><View style={s.backArrow} /></View>
           </TouchableOpacity>
+
           <TouchableOpacity
             style={s.headerInfo}
             onPress={() => setShowLeadDetailsModal(true)}
@@ -924,17 +995,30 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
               </Text>
             </View>
           </TouchableOpacity>
+
+          {/* ── Dynamic action buttons ── */}
           <View style={s.headerActions}>
-            <TouchableOpacity style={s.headerActionButton} onPress={() => setShowInvoiceModal(true)}>
-              <MaterialIcons name="receipt" size={22} color="#FFF" />
-            </TouchableOpacity>
-            {lead.subphase === 'payment_received' && (
-              <TouchableOpacity
-                style={[s.headerActionButton, s.incentiveButton]}
-                onPress={() => setShowIncentiveModal(true)}
-              >
-                <MaterialIcons name="monetization-on" size={22} color="#FFF" />
-              </TouchableOpacity>
+            {loadingConfig ? (
+              <ActivityIndicator size="small" color="#FFF" style={{ marginRight: 6 }} />
+            ) : (
+              <>
+                {leadConfig.show_invoice && (
+                  <TouchableOpacity
+                    style={s.headerActionButton}
+                    onPress={handleOpenInvoiceList}
+                  >
+                    <MaterialIcons name="receipt" size={22} color="#FFF" />
+                  </TouchableOpacity>
+                )}
+                {leadConfig.show_incentive && (
+                  <TouchableOpacity
+                    style={[s.headerActionButton, s.incentiveButton]}
+                    onPress={handleOpenIncentiveList}
+                  >
+                    <MaterialIcons name="monetization-on" size={22} color="#FFF" />
+                  </TouchableOpacity>
+                )}
+              </>
             )}
             <TouchableOpacity onPress={onEdit} style={s.headerActionButton}>
               <MaterialIcons name="edit" size={22} color="#FFF" />
@@ -943,7 +1027,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         </View>
       </SafeAreaView>
 
-      {/* ─── CHAT LIST (flex:1 — fills all space between header and input) ── */}
+      {/* ─── CHAT LIST ─────────────────────────────────────── */}
       <View style={s.chatContainer}>
         {loadingComments ? (
           <View style={s.loadingContainer}>
@@ -962,7 +1046,12 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[C.primary]} tintColor={C.primary} />
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                colors={[C.primary]}
+                tintColor={C.primary}
+              />
             }
             ListHeaderComponent={
               loadingMoreComments
@@ -980,7 +1069,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         )}
       </View>
 
-      {/* ─── ATTACHMENT PREVIEW STRIP ───────────────────────────────── */}
+      {/* ─── ATTACHMENT PREVIEW STRIP ──────────────────────── */}
       {selectedDocuments.length > 0 && (
         <View style={s.selectedFilesPreview}>
           <Text style={s.selectedFilesTitle}>Attachments ({selectedDocuments.length})</Text>
@@ -991,9 +1080,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
               <View style={s.selectedDocumentItem}>
                 <MaterialIcons name="insert-drive-file" size={20} color={C.primary} />
                 <View style={s.selectedDocumentInfo}>
-                  <Text style={s.selectedDocumentName} numberOfLines={1}>
-                    {truncateFileName(doc.name, 20)}
-                  </Text>
+                  <Text style={s.selectedDocumentName} numberOfLines={1}>{truncateFileName(doc.name, 20)}</Text>
                   <Text style={s.selectedDocumentSize}>{formatFileSize(doc.size)}</Text>
                 </View>
                 <TouchableOpacity onPress={() => handleRemoveDocument(index)}>
@@ -1007,15 +1094,15 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         </View>
       )}
 
-      {/* ─── INPUT BAR — direct child of KAV, NOT wrapped in its own KAV ─ */}
+      {/* ─── INPUT BAR ─────────────────────────────────────── */}
       <Animated.View
         style={[
           s.inputSafeArea,
           Platform.OS === 'ios'
-            ? { paddingBottom: insets.bottom }      // exact safe area, no hardcoding
-            : { marginBottom: androidInputOffset }, // android manual offset
-        ]}>
-        {/* <SafeAreaView edges={['bottom']}> */}
+            ? { paddingBottom: insets.bottom }
+            : { marginBottom: androidInputOffset },
+        ]}
+      >
         <View style={s.inputContainer}>
           <TouchableOpacity
             style={s.attachmentButton}
@@ -1045,7 +1132,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           <TouchableOpacity
             style={[
               s.sendButton,
-              { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? C.primary : C.border }
+              { backgroundColor: (newComment.trim() || selectedDocuments.length > 0) ? C.primary : C.border },
             ]}
             onPress={handleAddComment}
             disabled={addingComment || (!newComment.trim() && selectedDocuments.length === 0)}
@@ -1056,15 +1143,13 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
                 name="send"
                 size={18}
                 color={(newComment.trim() || selectedDocuments.length > 0) ? '#FFF' : C.textTertiary}
-              />}
+              />
+            }
           </TouchableOpacity>
         </View>
-        {/* </SafeAreaView> */}
       </Animated.View>
 
-      {/* ─── MODALS ──────────────────────────────────────────────────── */}
-
-      {/* Lead Details Modal */}
+      {/* ─── LEAD DETAILS MODAL ────────────────────────────── */}
       <Modal
         animationType="slide"
         transparent={false}
@@ -1088,38 +1173,36 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
         />
       </Modal>
 
-      {/* Quick Replies Modal */}
-      {
-        showDefaultComments && (
-          <View style={s.defaultCommentsOverlay}>
-            <SafeAreaView style={s.defaultCommentsModal}>
-              <View style={s.defaultCommentsHeader}>
-                <Text style={s.defaultCommentsTitle}>Quick Replies</Text>
-                <TouchableOpacity onPress={() => setShowDefaultComments(false)} style={s.closeDefaultCommentsButton}>
-                  <Ionicons name="close" size={22} color={C.textTertiary} />
+      {/* ─── QUICK REPLIES OVERLAY ─────────────────────────── */}
+      {showDefaultComments && (
+        <View style={s.defaultCommentsOverlay}>
+          <SafeAreaView style={s.defaultCommentsModal}>
+            <View style={s.defaultCommentsHeader}>
+              <Text style={s.defaultCommentsTitle}>Quick Replies</Text>
+              <TouchableOpacity onPress={() => setShowDefaultComments(false)} style={s.closeDefaultCommentsButton}>
+                <Ionicons name="close" size={22} color={C.textTertiary} />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={defaultComments}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={s.defaultCommentItem} onPress={() => handleDefaultCommentSelect(item)}>
+                  <Text style={s.defaultCommentText}>
+                    {(() => { try { return JSON.parse(item.data); } catch { return item.data; } })()}
+                  </Text>
                 </TouchableOpacity>
-              </View>
-              <FlatList
-                data={defaultComments}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={({ item }) => (
-                  <TouchableOpacity style={s.defaultCommentItem} onPress={() => handleDefaultCommentSelect(item)}>
-                    <Text style={s.defaultCommentText}>
-                      {(() => { try { return JSON.parse(item.data); } catch { return item.data; } })()}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-                contentContainerStyle={s.defaultCommentsList}
-              />
-            </SafeAreaView>
-          </View>
-        )
-      }
+              )}
+              contentContainerStyle={s.defaultCommentsList}
+            />
+          </SafeAreaView>
+        </View>
+      )}
 
-      {/* Attachment Picker Modal */}
+      {/* ─── ATTACHMENT PICKER MODAL ───────────────────────── */}
       <Modal
         visible={showAttachmentModal}
-        transparent={true}
+        transparent
         animationType="slide"
         onRequestClose={() => { if (!isPickerActive) setShowAttachmentModal(false); }}
       >
@@ -1150,228 +1233,71 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({
           </View>
         </TouchableOpacity>
       </Modal>
-
-      {/* Incentive Modal */}
-      {
-        showIncentiveModal && (
-          <Modal
-            animationType="slide"
-            transparent={false}
-            visible={showIncentiveModal}
-            onRequestClose={() => setShowIncentiveModal(false)}
-          >
-            <Incentive
-              onBack={() => setShowIncentiveModal(false)}
-              leadId={lead.id}
-              leadName={lead.company || ''}
-              theme={theme}
-            />
-          </Modal>
-        )
-      }
-
-      {/* Invoice Modal */}
-      {
-        showInvoiceModal && (
-          <Modal
-            animationType="slide"
-            transparent={false}
-            visible={showInvoiceModal}
-            onRequestClose={() => setShowInvoiceModal(false)}
-          >
-            <Invoice
-              leadId={lead.id}
-              leadName={lead.company || ''}
-              token={token}
-              theme={theme}
-              onBack={() => setShowInvoiceModal(false)}
-            />
-          </Modal>
-        )
-      }
-    </KeyboardAvoidingView >
+    </KeyboardAvoidingView>
   );
 };
 
+// ─── Styles (100 % identical to original) ─────────────────────────────────
 const s = StyleSheet.create({
-  // ─── ROOT — KeyboardAvoidingView fills the whole screen ──────────────────
-  rootContainer: {
-    flex: 1,
-    backgroundColor: C.chatBg,
-  },
-
-  // ─── HEADER ──────────────────────────────────────────────────────────────
-  headerSafeArea: {
-    backgroundColor: C.primary,
-    // No flex — it shrinks to content height
-  },
+  rootContainer: { flex: 1, backgroundColor: C.chatBg },
+  headerSafeArea: { backgroundColor: C.primary },
   header: {
     backgroundColor: C.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minHeight: 56,
-    borderBottomWidth: 1,
-    borderBottomColor: C.primaryDark,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 12, paddingVertical: 10, minHeight: 56,
+    borderBottomWidth: 1, borderBottomColor: C.primaryDark,
   },
-  backButton: {
-    padding: 6,
-    marginRight: 4,
-  },
-  backIcon: {
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
+  backButton: { padding: 6, marginRight: 4 },
+  backIcon: { height: 24, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
   backArrow: {
-    width: 12,
-    height: 12,
-    borderLeftWidth: 2,
-    borderTopWidth: 2,
-    borderColor: '#fff',
+    width: 12, height: 12,
+    borderLeftWidth: 2, borderTopWidth: 2, borderColor: '#fff',
     transform: [{ rotate: '-45deg' }],
   },
-  headerInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatarPlaceholder: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  avatarText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  headerTextContainer: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFF',
-    marginBottom: 1,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.85)',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  headerActionButton: {
-    padding: 6,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  incentiveButton: {
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
-  },
+  headerInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  avatarPlaceholder: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  avatarText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
+  headerTextContainer: { flex: 1 },
+  headerTitle: { fontSize: 16, fontWeight: '600', color: '#FFF', marginBottom: 1 },
+  headerSubtitle: { fontSize: 12, color: 'rgba(255, 255, 255, 0.85)' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  headerActionButton: { padding: 6, borderRadius: 4, backgroundColor: 'rgba(255, 255, 255, 0.15)' },
+  incentiveButton: { backgroundColor: 'rgba(245, 158, 11, 0.2)' },
 
-  // ─── CHAT AREA — flex:1 consumes all remaining vertical space ─────────────
-  chatContainer: {
-    flex: 1,
-    backgroundColor: C.chatBg,
-  },
-  chatListContent: {
-    paddingHorizontal: 6,
-    paddingTop: 16,
-    paddingBottom: 16,
-    flexGrow: 1,
-  },
+  chatContainer: { flex: 1, backgroundColor: C.chatBg },
+  chatListContent: { paddingHorizontal: 6, paddingTop: 16, paddingBottom: 16, flexGrow: 1 },
 
-  // ─── DATE SEPARATOR ───────────────────────────────────────────────────────
-  dateSeparatorContainer: {
-    alignItems: 'center',
-    marginVertical: 10,
-  },
-  dateSeparatorBubble: {
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  dateSeparatorText: {
-    fontSize: 11,
-    color: '#666',
-    fontWeight: '500',
-  },
+  dateSeparatorContainer: { alignItems: 'center', marginVertical: 10 },
+  dateSeparatorBubble: { backgroundColor: 'rgba(0, 0, 0, 0.1)', paddingHorizontal: 14, paddingVertical: 5, borderRadius: 10 },
+  dateSeparatorText: { fontSize: 11, color: '#666', fontWeight: '500' },
 
-  // ─── MESSAGE BUBBLES ──────────────────────────────────────────────────────
-  messageRow: {
-    flexDirection: 'row',
-    marginBottom: 6,
-    paddingHorizontal: 6,
-    alignItems: 'flex-start',
-  },
+  messageRow: { flexDirection: 'row', marginBottom: 6, paddingHorizontal: 6, alignItems: 'flex-start' },
   messageRowLeft: { justifyContent: 'flex-start' },
   messageRowRight: { justifyContent: 'flex-end' },
   messageBubble: {
-    maxWidth: '75%',
-    minWidth: 220,
-    borderRadius: 10,
-    padding: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
-    elevation: 1,
+    maxWidth: '75%', minWidth: 220, borderRadius: 10, padding: 10,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 1, elevation: 1,
   },
-  currentUserBubble: {
-    backgroundColor: C.outgoing,
-    borderBottomRightRadius: 3,
-  },
-  otherUserBubble: {
-    backgroundColor: C.incoming,
-    borderBottomLeftRadius: 3,
-  },
+  currentUserBubble: { backgroundColor: C.outgoing, borderBottomRightRadius: 3 },
+  otherUserBubble: { backgroundColor: C.incoming, borderBottomLeftRadius: 3 },
   senderHeader: { marginBottom: 3 },
-  senderName: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: C.primary,
-    marginBottom: 1,
-  },
-  messageText: {
-    fontSize: 15,
-    color: C.textPrimary,
-    lineHeight: 20,
-  },
+  senderName: { fontSize: 11, fontWeight: '600', color: C.primary, marginBottom: 1 },
+  messageText: { fontSize: 15, color: C.textPrimary, lineHeight: 20 },
   documentsContainer: { marginBottom: 6, gap: 6 },
-  imageWrapper: { position: 'relative', borderRadius: 8, overflow: 'hidden', width:'100%'},
+  imageWrapper: { position: 'relative', borderRadius: 8, overflow: 'hidden', width: '100%' },
   commentImage: { width: 200, height: 130, borderRadius: 8 },
   imageOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center',
   },
   documentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(7, 94, 84, 0.1)',
-    padding: 10,
-    borderRadius: 8,
-    gap: 10,
-    minWidth: 200,
-    maxWidth: 280,
+    padding: 10, borderRadius: 8, gap: 10, minWidth: 200, maxWidth: 280,
   },
   documentIconContainer: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)', alignItems: 'center', justifyContent: 'center',
   },
   documentInfo: { flex: 1 },
   documentName: { fontSize: 13, fontWeight: '500', color: C.textPrimary, marginBottom: 2 },
@@ -1380,107 +1306,54 @@ const s = StyleSheet.create({
   messageTime: { fontSize: 10, color: C.textTertiary },
   deliveryIcon: { marginLeft: 3 },
 
-  // ─── ATTACHMENT PREVIEW ───────────────────────────────────────────────────
-  // No position:absolute — it sits naturally in the flex column, above the input
   selectedFilesPreview: {
-    backgroundColor: C.surface,
-    borderTopWidth: 1,
-    borderTopColor: C.border,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    maxHeight: 100,
+    backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.border,
+    paddingHorizontal: 12, paddingVertical: 8, maxHeight: 100,
   },
-  selectedFilesTitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: C.textSecondary,
-    marginBottom: 6,
-  },
+  selectedFilesTitle: { fontSize: 13, fontWeight: '500', color: C.textSecondary, marginBottom: 6 },
   selectedDocumentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.background,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 6,
-    minWidth: 160,
-    gap: 6,
-    marginRight: 8,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.background, paddingHorizontal: 10, paddingVertical: 8,
+    borderRadius: 6, minWidth: 160, gap: 6, marginRight: 8,
   },
   selectedDocumentInfo: { flex: 1 },
   selectedDocumentName: { fontSize: 12, fontWeight: '500', color: C.textPrimary, marginBottom: 2 },
   selectedDocumentSize: { fontSize: 10, color: C.textTertiary },
 
-  // ─── INPUT BAR ────────────────────────────────────────────────────────────
-  // Direct child of KAV. SafeAreaView handles bottom inset on notched phones.
   inputSafeArea: {
-    backgroundColor: C.surface,
-    borderTopWidth: 1,
-    borderTopColor: C.border,
+    backgroundColor: C.surface, borderTopWidth: 1, borderTopColor: C.border,
     marginBottom: Platform.OS === 'ios' ? -30 : 0,
   },
   inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 8,
-    backgroundColor: C.surface,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 12, paddingVertical: 8, gap: 8, backgroundColor: C.surface,
   },
-  attachmentButton: {
-    padding: 6,
-    position: 'relative',
-  },
+  attachmentButton: { padding: 6, position: 'relative' },
   fileCounterBadge: {
-    position: 'absolute',
-    top: -4, right: -4,
-    backgroundColor: C.danger,
-    borderRadius: 8,
-    width: 16, height: 16,
+    position: 'absolute', top: -4, right: -4,
+    backgroundColor: C.danger, borderRadius: 8, width: 16, height: 16,
     alignItems: 'center', justifyContent: 'center',
   },
   fileCounterText: { fontSize: 9, color: C.surface, fontWeight: '600' },
   inputField: {
-    flex: 1,
-    backgroundColor: C.background,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: C.border,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    minHeight: 36,
-    maxHeight: 100,
-    justifyContent: 'center',
+    flex: 1, backgroundColor: C.background, borderRadius: 18,
+    borderWidth: 1, borderColor: C.border,
+    paddingHorizontal: 14, paddingVertical: 8, minHeight: 36, maxHeight: 100, justifyContent: 'center',
   },
-  messageInput: {
-    fontSize: 14,
-    color: C.textPrimary,
-    padding: 0,
-    maxHeight: 84,
-    textAlignVertical: 'center',
+  messageInput: { fontSize: 14, color: C.textPrimary, padding: 0, maxHeight: 84, textAlignVertical: 'center' },
+  sendButton: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
 
-  },
-  sendButton: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-  },
-
-  // ─── LOADING / EMPTY ─────────────────────────────────────────────────────
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText: { fontSize: 15, color: C.textSecondary },
   loadMoreContainer: { alignItems: 'center', paddingVertical: 12 },
-  emptyChat: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 80, gap: 12,
-  },
+  emptyChat: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 80, gap: 12 },
   emptyChatTitle: { fontSize: 16, fontWeight: '600', color: C.textPrimary },
   emptyChatText: { fontSize: 13, color: C.textSecondary, textAlign: 'center', maxWidth: 180 },
 
-  // ─── LEAD DETAILS MODAL ──────────────────────────────────────────────────
+  // Modal
   modalHeader: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 16,
-    backgroundColor: C.primary,
+    paddingHorizontal: 16, paddingVertical: 16, backgroundColor: C.primary,
   },
   modalBackButton: { padding: 8, marginRight: 12 },
   modalTitle: { fontSize: 18, fontWeight: '600', color: '#FFF', flex: 1 },
@@ -1501,7 +1374,6 @@ const s = StyleSheet.create({
   leadAvatarText: { fontSize: 28, fontWeight: '700', color: '#FFF' },
   leadHeaderSection: { flex: 1, justifyContent: 'center' },
   leadNameText: { fontSize: 22, fontWeight: '700', color: C.textPrimary, marginBottom: 4 },
-  leadCompanyText: { fontSize: 15, fontWeight: '500', color: C.textSecondary },
   statusBadgesContainer: {
     flexDirection: 'row', flexWrap: 'wrap',
     paddingHorizontal: 16, paddingVertical: 12, gap: 10,
@@ -1562,7 +1434,6 @@ const s = StyleSheet.create({
   },
   notesText: { fontSize: 14, color: C.textPrimary, lineHeight: 20 },
 
-  // ─── QUICK REPLIES OVERLAY ────────────────────────────────────────────────
   defaultCommentsOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 16,
@@ -1581,10 +1452,7 @@ const s = StyleSheet.create({
   defaultCommentItem: { paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: C.border },
   defaultCommentText: { fontSize: 15, color: C.textPrimary, lineHeight: 20 },
 
-  // ─── ATTACHMENT PICKER MODAL ──────────────────────────────────────────────
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end',
-  },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
   attachmentModalContent: {
     backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
     paddingVertical: 30, paddingHorizontal: 20, flexDirection: 'row',

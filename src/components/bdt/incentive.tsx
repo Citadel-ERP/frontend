@@ -10,6 +10,7 @@
 //  - Accept incentive shown when user_status is 'pending' (share set) OR 'correction'
 //  - Accept payment shown only when user_status === 'payment_confirmation'
 //  - Referral removed from create form; always sends referral_amt: 0 to backend
+//  - incentiveId prop added; fetchIncentive handles both { incentive: {} } and { incentives: [] }
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -31,6 +32,7 @@ interface IncentiveProps {
   leadName: string;
   hideHeader?: boolean;
   canCreate?: boolean;
+  incentiveId?: number;           // ← NEW: used to pick the correct incentive from a list response
   onIncentiveCreated?: () => void;
 }
 
@@ -120,6 +122,7 @@ const Incentive: React.FC<IncentiveProps> = ({
   leadName,
   hideHeader,
   canCreate = false,
+  incentiveId,                    // ← NEW
   onIncentiveCreated,
 }) => {
   const [token, setToken]                     = useState<string | null>(null);
@@ -167,6 +170,9 @@ const Incentive: React.FC<IncentiveProps> = ({
   const parse = (value: string) => value.replace(/,/g, '');
 
   // ── Fetch incentive ────────────────────────────────────────────────────────
+  // Handles both response shapes:
+  //   { incentive: {} }      — legacy single-incentive endpoint
+  //   { incentives: [...] }  — new list endpoint (picks by incentiveId if provided)
   const fetchIncentive = async () => {
     if (!token) return;
     try {
@@ -183,10 +189,30 @@ const Incentive: React.FC<IncentiveProps> = ({
       }
       const data = await res.json();
       if (res.ok) {
-        const inc: IncentiveData = data.incentive;
+        // Resolve the correct incentive regardless of which shape the backend returns
+        let inc: IncentiveData | null = null;
+
+        if (data.incentives && Array.isArray(data.incentives)) {
+          // New multi-incentive endpoint — pick by id if provided, else take first
+          inc = incentiveId != null
+            ? data.incentives.find((i: IncentiveData) => i.id === incentiveId) ?? null
+            : data.incentives[0] ?? null;
+        } else if (data.incentive) {
+          // Legacy single-incentive endpoint
+          inc = data.incentive;
+        }
+
+        if (!inc) {
+          // incentiveId was provided but not found in the list
+          Alert.alert('Error', 'Could not load the selected incentive.');
+          onBack();
+          return;
+        }
+
         setIncentiveData(inc);
         setIsCreateMode(false);
-        // Pre-fill form
+
+        // Pre-fill form fields from the loaded incentive
         setGrossIncome(fmt(inc.gross_income_recieved.toString()));
         if (inc.bdt_expenses > 0) {
           setHasBdExpenses(true);
@@ -382,7 +408,7 @@ const Incentive: React.FC<IncentiveProps> = ({
   };
 
   // ── Derived — per-user status drives all conditional rendering ─────────────
-  const myStatus  = incentiveData?.my_share?.user_status ?? null;
+  const myStatus   = incentiveData?.my_share?.user_status ?? null;
   const myShareSet = shareIsSet(incentiveData?.my_share);
 
   // ── Formatters ─────────────────────────────────────────────────────────────

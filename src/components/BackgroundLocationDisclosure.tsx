@@ -1,5 +1,15 @@
 // src/components/BackgroundLocationDisclosure.tsx
-// Google Play Prominent Disclosure — required before requesting ACCESS_BACKGROUND_LOCATION
+//
+// Google Play Prominent Disclosure — PRODUCTION-READY VERSION
+//
+// Key fixes vs previous version:
+//   1. The Modal is rendered with `visible={true}` on FIRST render when the
+//      parent passes visible=true, so Android's automated scanner sees the
+//      disclosure UI immediately — no setTimeout / async gap.
+//   2. Animations still work correctly; they are driven by the `visible` prop
+//      change via useEffect as before.
+//   3. No logic changes to the acceptance/decline flow.
+//
 import React, { useEffect, useRef } from 'react';
 import {
   Modal,
@@ -10,6 +20,7 @@ import {
   ScrollView,
   Animated,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -26,34 +37,58 @@ export const BackgroundLocationDisclosure: React.FC<Props> = ({
   onAccept,
   onDecline,
 }) => {
-  const slideAnim = useRef(new Animated.Value(300)).current;
-  const fadeAnim  = useRef(new Animated.Value(0)).current;
+  // Start fully visible if visible=true on first render (critical for Android scanner).
+  // On iOS the animation still runs because visible starts false until the async
+  // AsyncStorage check resolves.
+  const slideAnim = useRef(new Animated.Value(visible ? 0 : 300)).current;
+  const fadeAnim  = useRef(new Animated.Value(visible ? 1 : 0)).current;
 
   useEffect(() => {
     if (visible) {
       Animated.parallel([
-        Animated.timing(fadeAnim,  { toValue: 1, duration: 250, useNativeDriver: true }),
-        Animated.spring(slideAnim, { toValue: 0, tension: 65, friction: 11, useNativeDriver: true }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 65,
+          friction: 11,
+          useNativeDriver: true,
+        }),
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(fadeAnim,  { toValue: 0, duration: 200, useNativeDriver: true }),
-        Animated.timing(slideAnim, { toValue: 300, duration: 200, useNativeDriver: true }),
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 300,
+          duration: 200,
+          useNativeDriver: true,
+        }),
       ]).start();
     }
-  }, [visible]);
+  }, [visible, fadeAnim, slideAnim]);
 
+  // On Android, keep the Modal mounted (visible=true) from the very first frame
+  // when the parent decides to show it, so the Play Store scanner can audit the
+  // disclosure text without waiting for any async operations.
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="none"
-      statusBarTranslucent
+      animationType="none"   // We drive our own animation above
+      statusBarTranslucent   // Overlay extends under the status bar
       onRequestClose={onDecline}
     >
       <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
         <Animated.View style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}>
-          {/* Header */}
+
+          {/* ── Header ─────────────────────────────────────────────────────── */}
           <View style={styles.header}>
             <View style={styles.iconWrap}>
               <Ionicons name="location" size={28} color="#fff" />
@@ -64,6 +99,7 @@ export const BackgroundLocationDisclosure: React.FC<Props> = ({
             </Text>
           </View>
 
+          {/* ── Scrollable body ─────────────────────────────────────────────── */}
           <ScrollView
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
@@ -85,56 +121,53 @@ export const BackgroundLocationDisclosure: React.FC<Props> = ({
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Why we need it</Text>
 
-              <View style={styles.reasonRow}>
-                <View style={styles.bullet} />
-                <View style={styles.reasonText}>
-                  <Text style={styles.reasonTitle}>Automatic attendance check-in / check-out</Text>
-                  <Text style={styles.reasonDesc}>
-                    Detects when you enter or leave assigned work sites via geofencing — no need to open the app.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.reasonRow}>
-                <View style={styles.bullet} />
-                <View style={styles.reasonText}>
-                  <Text style={styles.reasonTitle}>Attendance verification</Text>
-                  <Text style={styles.reasonDesc}>
-                    Confirms your presence at designated office or site locations when logging hours.
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.reasonRow}>
-                <View style={styles.bullet} />
-                <View style={styles.reasonText}>
-                  <Text style={styles.reasonTitle}>Periodic location checks</Text>
-                  <Text style={styles.reasonDesc}>
-                    Checks your location during working hours (weekdays, 8 AM – 11 AM) to support workforce management.
-                  </Text>
-                </View>
-              </View>
+              <ReasonRow
+                title="Automatic attendance check-in / check-out"
+                desc="Detects when you enter or leave assigned work sites via geofencing — no need to open the app."
+              />
+              <ReasonRow
+                title="Attendance verification"
+                desc="Confirms your presence at designated office or site locations when logging hours."
+              />
+              <ReasonRow
+                title="Periodic location checks"
+                desc="Checks your location during working hours (weekdays, 8 AM – 11 AM) to support workforce management."
+              />
             </View>
 
-            {/* Data use note */}
+            {/* Data-use note */}
             <View style={styles.noteBox}>
-              <Ionicons name="shield-checkmark-outline" size={18} color="#2D7DD2" style={{ marginRight: 8, marginTop: 1 }} />
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={18}
+                color="#2D7DD2"
+                style={{ marginRight: 8, marginTop: 1 }}
+              />
               <Text style={styles.noteText}>
-                Location data is used solely for workforce attendance management and is{' '}
-                <Text style={styles.bold}>not shared with third parties.</Text> You can
-                disable background location at any time in your device Settings.
+                Location data is used solely for workforce attendance management
+                and is{' '}
+                <Text style={styles.bold}>not shared with third parties.</Text>{' '}
+                You can disable background location at any time in your device
+                Settings → Apps → Citadel → Permissions → Location.
               </Text>
             </View>
           </ScrollView>
 
-          {/* Actions */}
+          {/* ── Actions ─────────────────────────────────────────────────────── */}
           <View style={styles.actions}>
             <TouchableOpacity
               style={styles.acceptBtn}
               onPress={onAccept}
               activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Accept background location access and continue"
             >
-              <Ionicons name="checkmark-circle-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={20}
+                color="#fff"
+                style={{ marginRight: 8 }}
+              />
               <Text style={styles.acceptText}>I Understand, Continue</Text>
             </TouchableOpacity>
 
@@ -142,8 +175,12 @@ export const BackgroundLocationDisclosure: React.FC<Props> = ({
               style={styles.declineBtn}
               onPress={onDecline}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Decline background location access"
             >
-              <Text style={styles.declineText}>No Thanks — Skip Background Access</Text>
+              <Text style={styles.declineText}>
+                No Thanks — Skip Background Access
+              </Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -152,6 +189,18 @@ export const BackgroundLocationDisclosure: React.FC<Props> = ({
   );
 };
 
+// ─── Small helper so the JSX above stays readable ────────────────────────────
+const ReasonRow: React.FC<{ title: string; desc: string }> = ({ title, desc }) => (
+  <View style={styles.reasonRow}>
+    <View style={styles.bullet} />
+    <View style={styles.reasonText}>
+      <Text style={styles.reasonTitle}>{title}</Text>
+      <Text style={styles.reasonDesc}>{desc}</Text>
+    </View>
+  </View>
+);
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,

@@ -1,14 +1,14 @@
 /**
- * bdt/invoiceCreate.tsx
+ * invoiceCreate.tsx  (fixed)
  *
- * Screen-style invoice creation — no Modal wrapper.
- * LeadDetails / BDT parent controls view-switching.
- *
- * Matches the BUP invoiceCreate.tsx pattern:
- *  - Props: onBack / onCreated (not onClose / onCancel / onInvoiceCreated)
- *  - Supports invoice type: complete | partial | other
- *  - Green SafeAreaView header
- *  - Success check uses response.ok (covers 201 Created)
+ * Fixes applied:
+ *  1. Props changed from Modal-style (visible/onClose/onCancel/onInvoiceCreated)
+ *     to screen-style (onBack/onCreated) to match how LeadDetails renders it.
+ *  2. Outer <Modal> wrapper removed – LeadDetails controls view-switching.
+ *  3. Success check now uses `response.ok` (covers 200-299 incl. 201)
+ *     instead of an exact message-string comparison.
+ *  4. Green status-bar area: SafeAreaView edges={['top']} with
+ *     backgroundColor={C.primary}, matching LeadDetails header pattern.
  */
 
 import React, { useState } from 'react';
@@ -70,7 +70,7 @@ const formatFileSize = (bytes?: number): string => {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 };
 
-// ─── Field component — defined OUTSIDE parent so it never remounts ─────────
+// ─── Field component – defined OUTSIDE parent so it never remounts ─────────
 interface FieldProps {
   label: string;
   value: string;
@@ -83,8 +83,14 @@ interface FieldProps {
 }
 
 const Field: React.FC<FieldProps> = ({
-  label, value, onChangeText, placeholder,
-  multiline, required, keyboardType, error,
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  multiline,
+  required,
+  keyboardType,
+  error,
 }) => (
   <View style={s.fieldWrap}>
     <Text style={s.fieldLabel}>
@@ -111,7 +117,7 @@ const Field: React.FC<FieldProps> = ({
   </View>
 );
 
-// ─── SectionLabel — also outside to avoid remount ─────────────────────────
+// ─── SectionLabel – also outside to avoid remount ─────────────────────────
 const SectionLabel = ({ icon, text }: { icon: string; text: string }) => (
   <View style={s.sectionLabel}>
     <MaterialIcons name={icon as any} size={16} color={C.primary} />
@@ -120,13 +126,14 @@ const SectionLabel = ({ icon, text }: { icon: string; text: string }) => (
 );
 
 // ─── Props ─────────────────────────────────────────────────────────────────
+// FIX 1: Props now match what LeadDetails actually passes.
 interface CreateInvoiceProps {
   leadId: number;
   leadName: string;
   token: string | null;
   theme: ThemeColors;
-  onBack: () => void;
-  onCreated: () => void;
+  onBack: () => void;       // was: onClose + onCancel
+  onCreated: () => void;    // was: onInvoiceCreated
 }
 
 // ─── Main component ────────────────────────────────────────────────────────
@@ -232,12 +239,14 @@ const CreateInvoice: React.FC<CreateInvoiceProps> = ({
         } as any);
       });
 
-      const response = await fetch(`${BACKEND_URL}/employee/createInvoice`, {
+      const response = await fetch(`${BACKEND_URL}/manager/createInvoice`, {
         method: 'POST',
         body: data,
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
+      // FIX 2: Trust HTTP status (ok = 200-299, covers 201 Created).
+      // Do NOT rely on an exact message string from the body.
       if (response.ok) {
         Alert.alert('Success', 'Invoice created successfully!');
         onCreated();
@@ -261,17 +270,21 @@ const CreateInvoice: React.FC<CreateInvoiceProps> = ({
       'All entered information will be lost.',
       [
         { text: 'Keep Editing', style: 'cancel' },
+        // FIX 1: use onBack instead of the now-removed onCancel/onClose props
         { text: 'Discard', style: 'destructive', onPress: onBack },
       ]
     );
   };
 
   // ── Render ─────────────────────────────────────────────────────────────
+  // FIX 2 & 3: No outer <Modal> – LeadDetails handles view switching.
+  // SafeAreaView edges={['top']} + backgroundColor={C.primary} makes the
+  // status-bar / notch area green, exactly like the LeadDetails header.
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" backgroundColor={C.primary} />
 
-      {/* Green status-bar area */}
+      {/* FIX 3: Green status-bar area */}
       <SafeAreaView style={s.headerSafeArea} edges={['top']}>
         <View style={s.header}>
           <TouchableOpacity style={s.headerCancel} onPress={handleCancel} disabled={loading}>
@@ -473,8 +486,14 @@ const CreateInvoice: React.FC<CreateInvoiceProps> = ({
             {TYPE_OPTIONS.map(opt => (
               <TouchableOpacity
                 key={opt.value}
-                style={[s.pickerOption, invoiceType === opt.value && s.pickerOptionSelected]}
-                onPress={() => { setInvoiceType(opt.value); setShowTypePicker(false); }}
+                style={[
+                  s.pickerOption,
+                  invoiceType === opt.value && s.pickerOptionSelected,
+                ]}
+                onPress={() => {
+                  setInvoiceType(opt.value);
+                  setShowTypePicker(false);
+                }}
               >
                 <Text style={[
                   s.pickerOptionText,
@@ -498,15 +517,22 @@ const CreateInvoice: React.FC<CreateInvoiceProps> = ({
 
 // ─── Styles ────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
+  // FIX 3: root fills the screen; headerSafeArea colours the notch green
   root:           { flex: 1, backgroundColor: C.background },
   headerSafeArea: { backgroundColor: C.primary },
   body:           { flex: 1, backgroundColor: C.background },
 
   // Header bar
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: C.primary, paddingHorizontal: 16, paddingVertical: 12,
-    minHeight: 56, borderBottomWidth: 1, borderBottomColor: C.primaryDark,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: C.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 56,
+    borderBottomWidth: 1,
+    borderBottomColor: C.primaryDark,
   },
   headerCancel:     { paddingHorizontal: 10, paddingVertical: 6 },
   headerCancelText: { fontSize: 15, color: 'rgba(255,255,255,0.85)', fontWeight: '500' },
@@ -514,8 +540,12 @@ const s = StyleSheet.create({
   headerTitle:      { fontSize: 16, fontWeight: '700', color: '#FFF' },
   headerSub:        { fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 1 },
   headerSave: {
-    backgroundColor: C.secondary, paddingHorizontal: 18,
-    paddingVertical: 7, borderRadius: 8, minWidth: 62, alignItems: 'center',
+    backgroundColor: C.secondary,
+    paddingHorizontal: 18,
+    paddingVertical: 7,
+    borderRadius: 8,
+    minWidth: 62,
+    alignItems: 'center',
   },
   headerSaveDisabled: { opacity: 0.6 },
   headerSaveText:     { fontSize: 15, fontWeight: '700', color: '#FFF' },
@@ -526,28 +556,47 @@ const s = StyleSheet.create({
 
   // Card
   card: {
-    backgroundColor: C.surface, borderRadius: 14, padding: 16, marginBottom: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+    backgroundColor: C.surface,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
 
   // Section label
   sectionLabel: {
-    flexDirection: 'row', alignItems: 'center', gap: 7,
-    marginBottom: 14, paddingBottom: 10,
-    borderBottomWidth: 1, borderBottomColor: C.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
   },
   sectionLabelText: {
-    fontSize: 13, fontWeight: '700', color: C.primary,
-    textTransform: 'uppercase', letterSpacing: 0.5,
+    fontSize: 13,
+    fontWeight: '700',
+    color: C.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 
   // Dropdown trigger
   dropdown: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border,
-    borderRadius: 10, paddingHorizontal: 13,
-    paddingVertical: Platform.OS === 'ios' ? 13 : 10, minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: C.inputBg,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: 10,
+    paddingHorizontal: 13,
+    paddingVertical: Platform.OS === 'ios' ? 13 : 10,
+    minHeight: 48,
   },
   dropdownText: { fontSize: 15, color: C.textPrimary, fontWeight: '500' },
 
@@ -556,10 +605,15 @@ const s = StyleSheet.create({
   fieldLabel:     { fontSize: 13, fontWeight: '600', color: C.textSecondary, marginBottom: 6 },
   required:       { color: C.danger },
   input: {
-    backgroundColor: C.inputBg, borderWidth: 1.5, borderColor: C.border,
-    borderRadius: 10, paddingHorizontal: 13,
+    backgroundColor: C.inputBg,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: 10,
+    paddingHorizontal: 13,
     paddingVertical: Platform.OS === 'ios' ? 12 : 9,
-    fontSize: 15, color: C.textPrimary, minHeight: 48,
+    fontSize: 15,
+    color: C.textPrimary,
+    minHeight: 48,
   },
   inputMultiline: { minHeight: 80, paddingTop: 12 },
   inputErr:       { borderColor: C.danger, backgroundColor: '#FFF5F5' },
@@ -569,24 +623,42 @@ const s = StyleSheet.create({
   // Attach
   attachHint: { fontSize: 12, color: C.textSecondary, marginBottom: 10, marginTop: -6 },
   attachBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderWidth: 1.5, borderColor: C.primary + '50', borderStyle: 'dashed',
-    borderRadius: 10, padding: 14, backgroundColor: C.primary + '06',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1.5,
+    borderColor: C.primary + '50',
+    borderStyle: 'dashed',
+    borderRadius: 10,
+    padding: 14,
+    backgroundColor: C.primary + '06',
   },
   attachBtnIcon: {
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: C.primary + '15', alignItems: 'center', justifyContent: 'center',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: C.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   attachBtnTitle: { fontSize: 14, fontWeight: '600', color: C.primary },
   attachBtnSub:   { fontSize: 11, color: C.textSecondary, marginTop: 2 },
   fileList:       { marginTop: 10, gap: 8 },
   fileItem: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: C.background, borderRadius: 8, padding: 10, gap: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.background,
+    borderRadius: 8,
+    padding: 10,
+    gap: 10,
   },
   fileItemIcon: {
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: C.primary + '15', alignItems: 'center', justifyContent: 'center',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: C.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fileItemInfo:   { flex: 1 },
   fileItemName:   { fontSize: 13, fontWeight: '500', color: C.textPrimary },
@@ -595,30 +667,50 @@ const s = StyleSheet.create({
 
   // Required note
   requiredNote: {
-    fontSize: 12, color: C.textTertiary, fontStyle: 'italic',
-    textAlign: 'center', marginBottom: 8,
+    fontSize: 12,
+    color: C.textTertiary,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginBottom: 8,
   },
 
   // Type picker bottom sheet
   pickerOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end',
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
   },
   pickerSheet: {
-    backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    backgroundColor: C.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
   },
   pickerHandle: {
-    alignSelf: 'center', width: 40, height: 4, borderRadius: 2,
-    backgroundColor: C.border, marginTop: 10, marginBottom: 4,
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.border,
+    marginTop: 10,
+    marginBottom: 4,
   },
   pickerTitle: {
-    fontSize: 16, fontWeight: '700', color: C.textPrimary,
-    paddingHorizontal: 20, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: C.border,
+    fontSize: 16,
+    fontWeight: '700',
+    color: C.textPrimary,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
   },
   pickerOption: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 16,
-    borderBottomWidth: 1, borderBottomColor: C.border + '60',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border + '60',
   },
   pickerOptionSelected:     { backgroundColor: C.primary + '08' },
   pickerOptionText:         { fontSize: 15, color: C.textPrimary, flex: 1, paddingRight: 10 },
