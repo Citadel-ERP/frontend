@@ -50,11 +50,11 @@ interface ChatRoom {
   last_message_at: string;
   created_at: string;
   is_muted?: boolean;
-  muted_until?: string | null;  // ← NEW
+  muted_until?: string | null;
   is_pinned?: boolean;
   unread_count?: number;
   last_message?: Message;
-  block_status?: {             // ← NEW: backend already filters, but kept for safety
+  block_status?: {
     is_blocked: boolean;
     blocked_by_me: boolean;
     blocked_by_other: boolean;
@@ -65,7 +65,7 @@ interface ListProps {
   chatRooms: ChatRoom[];
   currentUser: User;
   onChatSelect: (room: ChatRoom) => void;
-  onMute: (roomId: number, duration: string) => void;  // ← CHANGED: now takes duration
+  onMute: (roomId: number, duration: string) => void;
   onUnmute: (roomId: number) => void;
   onPin: (roomId: number) => void;
   onUnpin: (roomId: number) => void;
@@ -74,10 +74,10 @@ interface ListProps {
   onRefresh?: () => void;
   isRefreshing?: boolean;
   onStartChat?: () => void;
-  onScroll?: () => void;      // NEW
-  onLoadMore?: () => void;    // NEW
-  hasMore?: boolean;          // NEW
-  isLoadingMore?: boolean;    // NEW
+  onScroll?: () => void;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
 }
 
 // ── Helper: is this chat actually muted right now (considering expiry) ─────
@@ -85,6 +85,12 @@ function isChatMuted(room: ChatRoom): boolean {
   if (!room.is_muted) return false;
   if (!room.muted_until) return true; // muted forever
   return new Date(room.muted_until) > new Date();
+}
+
+// ── Helper: format unread count for display ─────────────────────────────────
+function formatUnreadCount(count: number): string {
+  if (count > 99) return '99+';
+  return String(count);
 }
 
 export const List: React.FC<ListProps> = ({
@@ -100,13 +106,12 @@ export const List: React.FC<ListProps> = ({
   onRefresh,
   onStartChat,
   isRefreshing = false,
-  onScroll,      // NEW
-  onLoadMore,    // NEW
-  hasMore,       // NEW
-  isLoadingMore, // NEW
+  onScroll,
+  onLoadMore,
+  hasMore,
+  isLoadingMore,
 }) => {
   const [contextMenuRoom, setContextMenuRoom] = useState<number | null>(null);
-  // ── Mute duration sheet state ──────────────────────────────────────────────
   const [muteTargetRoomId, setMuteTargetRoomId] = useState<number | null>(null);
   const [showMuteSheet, setShowMuteSheet] = useState(false);
 
@@ -197,7 +202,6 @@ export const List: React.FC<ListProps> = ({
     );
   };
 
-  // ── Open mute duration sheet ───────────────────────────────────────────────
   const handleMutePress = (roomId: number) => {
     setContextMenuRoom(null);
     setMuteTargetRoomId(roomId);
@@ -216,8 +220,10 @@ export const List: React.FC<ListProps> = ({
 
   const renderChatItem = ({ item: room, index }: { item: ChatRoom; index: number }) => {
     const isPinned = room.is_pinned;
-    const muted = isChatMuted(room);            // ← uses expiry-aware helper
+    const muted = isChatMuted(room);
     const showPinnedDivider = index > 0 && chatRooms[index - 1].is_pinned && !isPinned;
+    const unreadCount = room.unread_count || 0;
+    const hasUnread = unreadCount > 0;
 
     return (
       <View>
@@ -237,11 +243,18 @@ export const List: React.FC<ListProps> = ({
 
           <View style={styles.chatInfo}>
             <View style={styles.chatHeaderRow}>
-              <Text style={styles.chatName} numberOfLines={1}>
+              <Text
+                style={[styles.chatName, hasUnread && !muted && styles.chatNameUnread]}
+                numberOfLines={1}
+              >
                 {getChatName(room)}
               </Text>
-              {/* ── Time: grey when muted, normal otherwise ── */}
-              <Text style={[styles.chatTime, muted && styles.chatTimeMuted]}>
+              {/* Time: green when unread & unmuted, grey otherwise */}
+              <Text style={[
+                styles.chatTime,
+                hasUnread && !muted && styles.chatTimeUnread,
+                muted && styles.chatTimeMuted,
+              ]}>
                 {formatTime(room.last_message_at)}
               </Text>
             </View>
@@ -252,18 +265,24 @@ export const List: React.FC<ListProps> = ({
               </Text>
 
               <View style={styles.chatBadges}>
-                {/* ── Mute bell — only shows when mute is actually active ── */}
+                {/* Mute bell — only shows when mute is actually active */}
                 {muted && (
                   <Ionicons name="volume-mute" size={15} color="#8696a0" />
                 )}
                 {isPinned && (
                   <Ionicons name="pin" size={15} color="#8696a0" />
                 )}
-                {(room.unread_count || 0) > 0 && (
+
+                {/* ── Unread count badge (replaces the old dot) ── */}
+                {hasUnread && (
                   <View style={[
-                    styles.unreadDot,
-                    muted && styles.unreadDotMuted,  // grey dot when muted
-                  ]} />
+                    styles.unreadBadge,
+                    muted && styles.unreadBadgeMuted,
+                  ]}>
+                    <Text style={styles.unreadBadgeText}>
+                      {formatUnreadCount(unreadCount)}
+                    </Text>
+                  </View>
                 )}
               </View>
             </View>
@@ -298,23 +317,13 @@ export const List: React.FC<ListProps> = ({
         data={chatRooms}
         renderItem={renderChatItem}
         keyExtractor={item => item.id.toString()}
-        onScroll={onScroll}  // NEW: Forward scroll events
-        scrollEventThrottle={400}  // NEW: Throttle to reduce events
-        onEndReached={onLoadMore}  // NEW: Trigger load more at bottom
-        onEndReachedThreshold={0.1}  // NEW: Trigger when 10% from bottom
+        onScroll={onScroll}
+        scrollEventThrottle={400}
+        onEndReached={onLoadMore}
+        onEndReachedThreshold={0.1}
         style={styles.list}
         contentContainerStyle={chatRooms.length === 0 ? styles.emptyListContent : undefined}
         ListEmptyComponent={renderEmptyState}
-        // refreshControl={
-        //   onRefresh ? (
-        //     <RefreshControl
-        //       refreshing={isRefreshing}
-        //       onRefresh={onRefresh}
-        //       colors={['#00a884']}
-        //       tintColor="#00a884"
-        //     />
-        //   ) : undefined
-        // }
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
         }
@@ -343,24 +352,6 @@ export const List: React.FC<ListProps> = ({
             >
               <Text style={styles.contextMenuText}>Mark as unread</Text>
             </TouchableOpacity>
-
-            {/* {contextRoom?.is_pinned ? (
-              <TouchableOpacity
-                style={styles.contextMenuItem}
-                onPress={() => { if (contextMenuRoom) { onUnpin(contextMenuRoom); setContextMenuRoom(null); } }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.contextMenuText}>Unpin chat</Text>
-              </TouchableOpacity>
-            ) : pinnedCount < 5 ? (
-              <TouchableOpacity
-                style={styles.contextMenuItem}
-                onPress={() => { if (contextMenuRoom) { onPin(contextMenuRoom); setContextMenuRoom(null); } }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.contextMenuText}>Pin chat</Text>
-              </TouchableOpacity>
-            ) : null} */}
 
             {/* Mute / Unmute */}
             {contextRoomMuted ? (
@@ -444,50 +435,76 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 18, fontWeight: '600' },
   chatInfo: { flex: 1, minWidth: 0 },
   chatHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 },
-  chatName: { flex: 1, fontSize: 16, fontWeight: '500', color: '#111b21', marginRight: 8 },
+  chatName: { flex: 1, fontSize: 16, fontWeight: '400', color: '#111b21', marginRight: 8 },
+  // Bold name when there are unread messages (unmuted)
+  chatNameUnread: { fontWeight: '600' },
   chatTime: { fontSize: 12, color: '#8696a0' },
+  // Green timestamp when unread & unmuted — mirrors WhatsApp
+  chatTimeUnread: { color: '#00a884', fontWeight: '500' },
   chatTimeMuted: { color: '#adb5bd' },
   chatPreviewRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   chatPreview: { flex: 1, fontSize: 14, color: '#667781', marginRight: 8 },
   chatBadges: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  unreadDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#00a884' },
-  unreadDotMuted: { backgroundColor: '#8696a0' },   // ← grey dot when muted
+
+  // ── Unread count badge (replaces old unreadDot) ──────────────────────────
+  unreadBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#00a884',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+  },
+  // Grey badge when chat is muted — mirrors WhatsApp behaviour
+  unreadBadgeMuted: {
+    backgroundColor: '#8696a0',
+  },
+  unreadBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 14,
+    includeFontPadding: false,
+  },
+  // ─────────────────────────────────────────────────────────────────────────
+
   pinnedDivider: { height: 8, backgroundColor: '#f0f2f5', justifyContent: 'center', paddingHorizontal: 16 },
   dividerLine: { height: 1, backgroundColor: '#e9edef' },
-  modalBackdrop: { 
-  flex: 1, 
-  backgroundColor: 'rgba(0,0,0,0.4)', 
-  justifyContent: 'center', 
-  alignItems: 'center' 
-},
-contextMenu: { 
-  backgroundColor: '#ffffff', 
-  borderRadius: 16, 
-  width: 300,
-  paddingVertical: 4,
-  shadowColor: '#000', 
-  shadowOffset: { width: 0, height: 8 }, 
-  shadowOpacity: 0.15, 
-  shadowRadius: 24, 
-  elevation: 10,
-  overflow: 'hidden',
-},
-contextMenuItem: { 
-  paddingVertical: 16, 
-  paddingHorizontal: 24,
-  borderBottomWidth: 1,
-  borderBottomColor: '#f0f2f5',
-},
-contextMenuText: { 
-  fontSize: 15, 
-  color: '#111b21',
-  fontWeight: '400',
-  letterSpacing: 0.1,
-},
-deleteText: { 
-  color: '#ef4444',
-  fontWeight: '500',
-},
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  contextMenu: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    width: 300,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    elevation: 10,
+    overflow: 'hidden',
+  },
+  contextMenuItem: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f2f5',
+  },
+  contextMenuText: {
+    fontSize: 15,
+    color: '#111b21',
+    fontWeight: '400',
+    letterSpacing: 0.1,
+  },
+  deleteText: {
+    color: '#ef4444',
+    fontWeight: '500',
+  },
   sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: '#ffffff', borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingBottom: 28 },
   sheetHeader: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#e9edef' },
@@ -496,7 +513,7 @@ deleteText: {
   sheetOptionText: { fontSize: 16, color: '#111b21' },
   sheetCancel: { borderBottomWidth: 0, marginTop: 8 },
   sheetCancelText: { fontSize: 16, color: '#00a884', fontWeight: '600', textAlign: 'center' },
-  loadingFooter: {  // ← ADD THIS
+  loadingFooter: {
     paddingVertical: 16,
     alignItems: 'center',
   },

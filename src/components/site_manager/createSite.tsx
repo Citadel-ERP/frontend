@@ -1,19 +1,13 @@
 /**
- * createSite.tsx  (refactored)
+ * createSite.tsx  (updated)
  *
- * Key changes from original:
- *  1. Draft persistence — useCreateSiteDraft hook wires auto-save (debounced)
- *     and handles restore / discard prompts.
- *  2. DraftBanner component — non-intrusive banner shown when a draft is
- *     detected; offers "Continue" and "Start Fresh" actions.
- *  3. Back-press guard — saves the draft immediately before navigating away
- *     so no data is lost even if the debounce hasn't fired yet.
- *  4. onSiteCreated callback — deletes the draft atomically on success so
- *     no stale data lingers after creation.
- *  5. All original UI / business logic is preserved verbatim; only the
- *     persistence layer is new.
- *  6. "Monthly Rent Per Sqft" and "Area Per Floor" now support chip-style
- *     multiline input, consistent with "Total Available Area".
+ * Changes from previous version:
+ *  1. 2-Wheeler slots & charges: now accept free text (e.g., "Free", "Complimentary")
+ *     in addition to numbers. Numeric keyboard restriction removed.
+ *  2. Micro Market: grouped options with clear visual distinction between
+ *     Bengaluru and Hyderabad zones. New Hyderabad options: PBD, SBD, CBD.
+ *  3. Property Specifications: added "Stilt" field (next to Basements).
+ *     Value is sent to the backend as `stilt`.
  */
 
 import React, { useState, useRef, useCallback, useMemo } from 'react';
@@ -75,7 +69,13 @@ const BUILDING_STATUS_OPTIONS = [
   { label: 'Custom', value: 'custom' },
 ];
 
-const MICRO_MARKET_OPTIONS = [
+/**
+ * Micro Market options — grouped by city.
+ * isHeader items are non-selectable section dividers rendered with distinct styling.
+ */
+const MICRO_MARKET_OPTIONS: Array<{ label: string; value: string; isHeader?: boolean }> = [
+  // ── Bengaluru ───────────────────────────────────────────────────────────────
+  { label: '🟢  Bengaluru', value: '__header_blr', isHeader: true },
   { label: 'CBD', value: 'CBD' },
   { label: 'North', value: 'North' },
   { label: 'South', value: 'South' },
@@ -84,7 +84,19 @@ const MICRO_MARKET_OPTIONS = [
   { label: 'ORR', value: 'ORR' },
   { label: 'Electronic City / Hosur Road', value: 'Electronic City/Hosur Road' },
   { label: 'HSR', value: 'HSR' },
+  // ── Hyderabad ───────────────────────────────────────────────────────────────
+  { label: '🔵  Hyderabad', value: '__header_hyd', isHeader: true },
+  { label: 'PBD — Peripheral Business District', value: 'HYD_PBD' },
+  { label: 'SBD — Secondary Business District', value: 'HYD_SBD' },
+  { label: 'CBD — Central Business District', value: 'HYD_CBD' },
 ];
+
+/**
+ * Returns the display label for a given micro_market value.
+ * Falls back to the raw value if not found in options.
+ */
+const getMicroMarketLabel = (value: string): string =>
+  MICRO_MARKET_OPTIONS.find((o) => !o.isHeader && o.value === value)?.label ?? value;
 
 /** Initial / empty state for the main form object. */
 const INITIAL_NEW_SITE = {
@@ -95,6 +107,7 @@ const INITIAL_NEW_SITE = {
   micro_market: '',
   total_floors: '',
   number_of_basements: '',
+  stilt: '',                    // ← NEW
   floor_condition: 'bareshell',
   area_per_floor: '',
   floor_wise_area: '',
@@ -111,8 +124,8 @@ const INITIAL_NEW_SITE = {
   oc: false,
   rental_escalation: '',
   security_deposit: '',
-  two_wheeler_slots: '',
-  two_wheeler_charges: '',
+  two_wheeler_slots: '',        // free text
+  two_wheeler_charges: '',      // free text
   efficiency: '',
   notice_period: '',
   lease_term: '',
@@ -166,11 +179,7 @@ interface CreateSiteProps {
 }
 
 // ─── DraftBanner ─────────────────────────────────────────────────────────────
-/**
- * Non-modal, non-intrusive banner shown at the top of the form when an
- * unexpired draft is detected. Lets the user choose to continue or start fresh
- * without blocking the entire screen.
- */
+
 interface DraftBannerProps {
   expiresInMs: number;
   onRestore: () => void;
@@ -241,10 +250,7 @@ const bannerStyles = StyleSheet.create({
 });
 
 // ─── SavingIndicator ─────────────────────────────────────────────────────────
-/**
- * Tiny "Saving…" chip shown in the header while a debounced write is in-flight.
- * Purely cosmetic; never blocks interaction.
- */
+
 const SavingIndicator: React.FC<{ visible: boolean }> = ({ visible }) => {
   if (!visible) return null;
   return (
@@ -291,7 +297,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
   const [seatsPerUnitEntries, setSeatsPerUnitEntries] = useState<string[]>([]);
   const [currentSeatsPerUnitInput, setCurrentSeatsPerUnitInput] = useState('');
 
-  // ── NEW: Chip-list fields for Rent and Area Per Floor ────────────────────────
+  // Chip-list fields for Rent and Area Per Floor
   const [rentEntries, setRentEntries] = useState<string[]>([]);
   const [currentRentInput, setCurrentRentInput] = useState('');
   const [areaPerFloorEntries, setAreaPerFloorEntries] = useState<string[]>([]);
@@ -304,7 +310,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
   const [distanceFromMetro, setDistanceFromMetro] = useState('');
   const [showMetroSelector, setShowMetroSelector] = useState(false);
 
-  // Photos & amenities (photos deliberately excluded from draft — URIs are ephemeral)
+  // Photos & amenities
   const [buildingPhotos, setBuildingPhotos] = useState<Array<{ id: number; uri: string; type: string }>>([]);
   const [otherAmenities, setOtherAmenities] = useState<OtherAmenity[]>([]);
 
@@ -323,13 +329,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
 
   // ── Draft persistence ─────────────────────────────────────────────────────────
 
-  /**
-   * Assemble the current form state into a SiteDraftData object.
-   * useMemo so the reference only changes when form state actually changes,
-   * which prevents spurious re-renders in useCreateSiteDraft.
-   *
-   * Note: photos are intentionally excluded (URIs are not stable across sessions).
-   */
   const currentDraftData: SiteDraftData = useMemo(() => ({
     siteType,
     newSite,
@@ -337,7 +336,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     totalAreaEntries,
     numberOfUnitsEntries,
     seatsPerUnitEntries,
-    // NEW: persist rent and area-per-floor chip entries
     rentEntries,
     areaPerFloorEntries,
     customFloorCondition,
@@ -368,14 +366,8 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     discardDraft,
     onSiteCreated: clearDraftOnSuccess,
     saveNow,
-  } = useCreateSiteDraft(currentDraftData, {
-    debounceMs: 500,
-  });
+  } = useCreateSiteDraft(currentDraftData, { debounceMs: 500 });
 
-  /**
-   * Hydrate all form state from a SiteDraftData object.
-   * Called when the user taps "Continue Draft".
-   */
   const hydrateFromDraft = useCallback((draft: SiteDraftData) => {
     if (draft.siteType !== undefined) setSiteType(draft.siteType);
     if (draft.newSite) setNewSite({ ...INITIAL_NEW_SITE, ...draft.newSite });
@@ -394,7 +386,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     if (draft.distanceFromMetro !== undefined) setDistanceFromMetro(draft.distanceFromMetro);
     if (draft.customMetroStation !== undefined) setCustomMetroStation(draft.customMetroStation);
     if (draft.otherAmenities) setOtherAmenities(draft.otherAmenities);
-    // Restore step so the user lands exactly where they left off.
     if (typeof draft.currentStep === 'number') setCurrentStep(draft.currentStep);
   }, []);
 
@@ -403,11 +394,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     if (draft) hydrateFromDraft(draft);
   }, [restoreDraft, hydrateFromDraft]);
 
-  /**
-   * Intercepts the back press to flush the draft before unmounting.
-   * This ensures that even if the debounce hasn't fired, the latest state
-   * is persisted when the user navigates away mid-form.
-   */
   const handleBack = useCallback(async () => {
     await saveNow(currentDraftData);
     onBack();
@@ -457,8 +443,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       setCurrentSeatsPerUnitInput('');
     }
   };
-
-  // ── NEW: Chip handlers for Rent and Area Per Floor ───────────────────────────
 
   const addRentEntry = () => {
     if (currentRentInput.trim()) {
@@ -590,10 +574,9 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       if (newSite.micro_market) siteData.micro_market = newSite.micro_market;
       if (newSite.total_floors) siteData.total_floors = newSite.total_floors;
       if (newSite.number_of_basements) siteData.number_of_basements = newSite.number_of_basements;
+      if (newSite.stilt) siteData.stilt = newSite.stilt;          // ← NEW
       if (distanceFromMetro) siteData.distance_from_metro_station = distanceFromMetro;
 
-
-      // ── NEW: area_per_floor now supports multiple chip entries ────────────────
       if (areaPerFloorEntries.length > 0) {
         siteData.area_per_floor = areaPerFloorEntries.join('\n');
       } else if (newSite.area_per_floor) {
@@ -609,7 +592,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       if (newSite.availble_floors) siteData.availble_floors = newSite.availble_floors;
 
       if (siteType === 'conventional' || siteType === 'for_sale') {
-        // ── NEW: rent now supports multiple chip entries ───────────────────────
         if (rentEntries.length > 0) {
           siteData.rent = rentEntries.join('\n');
         } else if (newSite.rent) {
@@ -638,8 +620,11 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
 
       if (newSite.car_parking_charges) siteData.car_parking_charges = parseCurrency(newSite.car_parking_charges);
       if (newSite.car_parking_slots) siteData.car_parking_slots = newSite.car_parking_slots;
+
+      // ── 2-Wheeler: now free text — send as-is without numeric coercion ────────
       if (newSite.two_wheeler_slots) siteData.two_wheeler_slots = newSite.two_wheeler_slots;
-      if (newSite.two_wheeler_charges) siteData.two_wheeler_charges = parseCurrency(newSite.two_wheeler_charges);
+      if (newSite.two_wheeler_charges) siteData.two_wheeler_charges = newSite.two_wheeler_charges;
+
       if (newSite.car_parking_ratio_left && newSite.car_parking_ratio_right) {
         siteData.car_parking_ratio = `${newSite.car_parking_ratio_left}:${newSite.car_parking_ratio_right}`;
       }
@@ -698,7 +683,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       if (!response.ok) throw new Error(responseData.message || `HTTP ${response.status}`);
       if (responseData.message !== 'Site created successfully') throw new Error(responseData.message || 'Failed to create site');
 
-      // ── Draft cleanup: delete draft before notifying parent ─────────────────
       await clearDraftOnSuccess();
 
       Alert.alert('Success', 'Site created successfully!');
@@ -809,7 +793,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
         <Text style={styles.formLabel}>Micro Market</Text>
         <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowMicroMarketDropdown(true)}>
           <Text style={[styles.dropdownButtonText, !newSite.micro_market && { color: WHATSAPP_COLORS.textTertiary }]}>
-            {newSite.micro_market || 'Select micro market...'}
+            {newSite.micro_market ? getMicroMarketLabel(newSite.micro_market) : 'Select micro market...'}
           </Text>
           <Ionicons name="chevron-down" size={16} color={WHATSAPP_COLORS.textSecondary} />
         </TouchableOpacity>
@@ -863,20 +847,31 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       <Text style={styles.stepDescription}>
         {siteType === 'conventional' || siteType === 'for_sale' ? 'Area and floor details' : 'Seat and unit configuration'}
       </Text>
+
+      {/* ── Total Floors | Basements | Stilt (3-column row) ── */}
       <View style={styles.row}>
-        <View style={styles.halfWidth}>
+        <View style={styles.thirdWidth}>
           <Text style={styles.formLabel}>Total Floors</Text>
           <TextInput style={styles.input} value={newSite.total_floors}
             onChangeText={(v) => setNewSite({ ...newSite, total_floors: v })}
             placeholder="10" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
-        <View style={styles.halfWidth}>
+        <View style={styles.thirdWidth}>
           <Text style={styles.formLabel}>Basements</Text>
           <TextInput style={styles.input} value={newSite.number_of_basements}
             onChangeText={(v) => setNewSite({ ...newSite, number_of_basements: v })}
             placeholder="2" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
+        {/* ── NEW: Stilt field ── */}
+        <View style={styles.thirdWidth}>
+          <Text style={styles.formLabel}>Stilt</Text>
+          <TextInput style={styles.input} value={newSite.stilt}
+            onChangeText={(v) => setNewSite({ ...newSite, stilt: v })}
+            placeholder="e.g., 1" keyboardType="numeric"
+            placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
+        </View>
       </View>
+
       <View style={styles.formGroup}>
         <Text style={styles.formLabel}>Floor Condition</Text>
         <TouchableOpacity style={styles.dropdownButton} onPress={() => setShowFloorConditionDropdown(true)}>
@@ -907,7 +902,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             onRemove: (i) => setTotalAreaEntries((p) => p.filter((_, idx) => idx !== i)),
           })}
 
-          {/* ── NEW: Area Per Floor as chip input ── */}
           {renderChipInput({
             label: 'Area Per Floor — Typical Floor Plate (sq ft)',
             hint: 'The standard floor plate area of the entire building',
@@ -1005,7 +999,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       )}
       {siteType === 'conventional' || siteType === 'for_sale' ? (
         <>
-          {/* ── NEW: Monthly Rent Per Sqft as chip input, full width ── */}
           {renderChipInput({
             label: 'Monthly Rent Per sqft (₹)',
             hint: 'Enter rent per entry — supports text and numbers',
@@ -1164,21 +1157,33 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             placeholder="5,500" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
         </View>
       </View>
+
+      {/* ── Two-Wheeler: free-text fields (supports numbers AND text like "Free") ── */}
       <Text style={styles.subSectionTitle}>Two-Wheeler Parking</Text>
+      <Text style={styles.fieldHint}>Tip: you can enter a number or descriptive text (e.g. "Free", "On request")</Text>
       <View style={styles.row}>
         <View style={styles.halfWidth}>
           <Text style={styles.formLabel}>2-Wheeler Slots</Text>
-          <TextInput style={styles.input} value={newSite.two_wheeler_slots}
+          <TextInput
+            style={styles.input}
+            value={newSite.two_wheeler_slots}
             onChangeText={(v) => setNewSite({ ...newSite, two_wheeler_slots: v })}
-            placeholder="100" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
+            placeholder="e.g., 100 or Unlimited"
+            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+          />
         </View>
         <View style={styles.halfWidth}>
-          <Text style={styles.formLabel}>2-Wheeler Charges (₹)</Text>
-          <TextInput style={styles.input} value={newSite.two_wheeler_charges}
-            onChangeText={(v) => setNewSite({ ...newSite, two_wheeler_charges: formatCurrency(v) })}
-            placeholder="1,000" keyboardType="numeric" placeholderTextColor={WHATSAPP_COLORS.textTertiary} />
+          <Text style={styles.formLabel}>2-Wheeler Charges</Text>
+          <TextInput
+            style={styles.input}
+            value={newSite.two_wheeler_charges}
+            onChangeText={(v) => setNewSite({ ...newSite, two_wheeler_charges: v })}
+            placeholder="e.g., ₹500 or Free"
+            placeholderTextColor={WHATSAPP_COLORS.textTertiary}
+          />
         </View>
       </View>
+
       <Text style={styles.subSectionTitle}>Power</Text>
       <View style={styles.row}>
         <View style={styles.halfWidth}>
@@ -1388,18 +1393,39 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
 
   // ─── Modals ───────────────────────────────────────────────────────────────────
 
-  const DropdownModal = ({ visible, options, onSelect, onClose, title }: any) => (
+  /**
+   * Generic dropdown modal.
+   * Supports grouped options via `isHeader` flag — headers are non-interactive
+   * and rendered with a distinct city-header style.
+   */
+  const DropdownModal = ({ visible, options, onSelect, onClose, title }: {
+    visible: boolean;
+    options: Array<{ label: string; value: string; isHeader?: boolean }>;
+    onSelect: (value: string) => void;
+    onClose: () => void;
+    title: string;
+  }) => (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.dropdownOverlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.dropdownContainer}>
           <Text style={styles.dropdownTitle}>{title}</Text>
           <ScrollView style={styles.dropdownScroll}>
-            {options.map((option: any) => (
-              <TouchableOpacity key={option.value} style={styles.dropdownOption}
-                onPress={() => { onSelect(option.value); onClose(); }}>
-                <Text style={styles.dropdownOptionText}>{option.label}</Text>
-              </TouchableOpacity>
-            ))}
+            {options.map((option) =>
+              option.isHeader ? (
+                // City section header — not tappable
+                <View key={option.value} style={styles.dropdownSectionHeader}>
+                  <Text style={styles.dropdownSectionHeaderText}>{option.label}</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  key={option.value}
+                  style={styles.dropdownOption}
+                  onPress={() => { onSelect(option.value); onClose(); }}
+                >
+                  <Text style={styles.dropdownOptionText}>{option.label}</Text>
+                </TouchableOpacity>
+              )
+            )}
           </ScrollView>
         </View>
       </TouchableOpacity>
@@ -1448,14 +1474,12 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor={WHATSAPP_COLORS.primary} />
 
-      {/* Header — includes "Saving…" indicator when a write is in-flight */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="chevron-back" size={24} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Create New Site</Text>
-        {/* Saving indicator lives in the header spacer area */}
         <SavingIndicator visible={isSaving} />
       </View>
 
@@ -1474,7 +1498,6 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.scrollContent}
           >
-            {/* Draft restoration banner — shown above form content, non-blocking */}
             {draftDetected && (
               <DraftBanner
                 expiresInMs={draftExpiresInMs}
@@ -1532,15 +1555,15 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
       </View>
 
       <DropdownModal visible={showBuildingStatusDropdown} options={BUILDING_STATUS_OPTIONS}
-        onSelect={(v: string) => setNewSite({ ...newSite, building_status: v })}
+        onSelect={(v) => setNewSite({ ...newSite, building_status: v })}
         onClose={() => setShowBuildingStatusDropdown(false)} title="Select Building Status" />
 
       <DropdownModal visible={showFloorConditionDropdown} options={FLOOR_CONDITION_OPTIONS}
-        onSelect={(v: string) => setNewSite({ ...newSite, floor_condition: v })}
+        onSelect={(v) => setNewSite({ ...newSite, floor_condition: v })}
         onClose={() => setShowFloorConditionDropdown(false)} title="Select Floor Condition" />
 
       <DropdownModal visible={showMicroMarketDropdown} options={MICRO_MARKET_OPTIONS}
-        onSelect={(v: string) => setNewSite({ ...newSite, micro_market: v })}
+        onSelect={(v) => setNewSite({ ...newSite, micro_market: v })}
         onClose={() => setShowMicroMarketDropdown(false)} title="Select Micro Market" />
 
       <ImageSourceModal />
@@ -1548,7 +1571,7 @@ const CreateSite: React.FC<CreateSiteProps> = ({ token, onBack, onSiteCreated, t
   );
 };
 
-// ─── Styles (identical to original) ──────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#075E54' },
@@ -1580,6 +1603,8 @@ const styles = StyleSheet.create({
   textArea: { minHeight: 100, textAlignVertical: 'top' },
   row: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   halfWidth: { flex: 1 },
+  // ── NEW: thirdWidth for 3-column rows (e.g., Total Floors | Basements | Stilt) ──
+  thirdWidth: { flex: 1 },
   dropdownButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 12, borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 8, backgroundColor: '#FFFFFF' },
   dropdownButtonText: { fontSize: 14, color: '#1F2937' },
   dropdownOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 16, width: '100%' },
@@ -1588,6 +1613,22 @@ const styles = StyleSheet.create({
   dropdownScroll: { maxHeight: 300 },
   dropdownOption: { paddingVertical: 12, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   dropdownOptionText: { fontSize: 14, color: '#1F2937' },
+  // ── NEW: city group header styles inside dropdown ──
+  dropdownSectionHeader: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#F0FDF4',
+    borderBottomWidth: 1,
+    borderBottomColor: '#D1FAE5',
+    marginTop: 4,
+  },
+  dropdownSectionHeaderText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#065F46',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
   imageSourceContainer: { width: '100%', maxWidth: 400, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
   imageSourceOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#F5F5F5', marginBottom: 12, elevation: 2 },
   imageSourceText: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginLeft: 12 },
