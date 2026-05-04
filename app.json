@@ -3,7 +3,7 @@
     "name": "Citadel",
     "slug": "citadel",
     "owner": "ananyavishnoi",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "projectId": "fba32196-78ea-4b4d-9ccb-d57375d90e9f",
     "platforms": ["ios", "android", "web"],
     "orientation": "portrait",
