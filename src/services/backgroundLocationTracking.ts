@@ -1,74 +1,69 @@
-// services/backgroundLocationTracking.ts
+/**
+ * src/services/backgroundLocationTracking.ts
+ *
+ * Periodic location capture for employer visibility (separate from attendance).
+ * Sends coordinates to /core/saveLocation every ≥15 minutes during work hours.
+ *
+ * Google Play compliance:
+ *   ✅  requestBackgroundPermissionsAsync only called after prominent disclosure
+ *   ✅  showDisclosure callback required; service aborts if not provided when
+ *       background permission is missing
+ *   ✅  Work-status check prevents tracking on leave / holidays
+ *   ✅  Only runs Monday–Friday 08:00–11:00 (configurable)
+ */
+
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as BackgroundFetch from 'expo-background-fetch';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from '../config/config';
 
-const RANDOM_LOCATION_TASK = 'random-location-check';
+// ── Constants ─────────────────────────────────────────────────────────────────
 
-// Define the random location tracking task
-TaskManager.defineTask(RANDOM_LOCATION_TASK, async () => {
+const LOCATION_TRACK_TASK = 'citadel-location-track';
+const LAST_TRACKED_KEY = 'citadel_last_location_tracked';
+const TOKEN_KEY = 'token_2';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function isWithinTrackingHours(): boolean {
+  const now = new Date();
+  const day = now.getDay();
+  const hour = now.getHours();
+  return day >= 1 && day <= 5 && hour >= 8 && hour < 11;
+}
+
+// ── Task definition ───────────────────────────────────────────────────────────
+
+TaskManager.defineTask(LOCATION_TRACK_TASK, async () => {
   try {
-    console.log('🎯 Random location check triggered');
-    
-    // Check if it's within working hours (8 AM - 11 AM, Mon-Fri)
-    const now = new Date();
-    const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const hours = now.getHours();
-    
-    // Check if it's Monday-Friday (1-5)
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      console.log('⏭️ Weekend - skipping location capture');
+    if (!isWithinTrackingHours()) {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
-    
-    // Check if between 8 AM and 11 AM (8, 9, 10 hours only)
-    if (hours < 8 || hours >= 11) {
-      console.log(`⏭️ Outside working hours (${hours}:00) - skipping`);
-      return BackgroundFetch.BackgroundFetchResult.NoData;
-    }
-    
-    // Get token
-    const token = await AsyncStorage.getItem('token_2');
+
+    const token = await AsyncStorage.getItem(TOKEN_KEY);
     if (!token) {
-      console.log('❌ No token found');
       return BackgroundFetch.BackgroundFetchResult.Failed;
     }
-    
-    // Check with backend for leave/holiday status
-    const statusResponse = await fetch(`${BACKEND_URL}/core/checkWorkStatus`, {
+
+    // Check leave / holiday
+    const statusRes = await fetch(`${BACKEND_URL}/core/checkWorkStatus`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
     });
-    
-    if (!statusResponse.ok) {
-      console.log('❌ Failed to check work status');
-      return BackgroundFetch.BackgroundFetchResult.Failed;
+    if (statusRes.ok) {
+      const data = await statusRes.json();
+      if (data.data === false) {
+        return BackgroundFetch.BackgroundFetchResult.NoData;
+      }
     }
-    
-    const statusData = await statusResponse.json();
-    console.log('📊 Work status response:', statusData);
-    
-    // If backend returns data: false, it means user has leave or it's a holiday
-    if (statusData.data === false) {
-      console.log('⏭️ User has leave or holiday - skipping location');
-      return BackgroundFetch.BackgroundFetchResult.NoData;
-    }
-    
-    // Get current location
+
     const location = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.Balanced,
     });
-    
-    console.log('📍 Location captured:', {
-      lat: location.coords.latitude,
-      lng: location.coords.longitude,
-    });
-    
-    // Send location to backend
-    const locationResponse = await fetch(`${BACKEND_URL}/core/saveLocation`, {
+
+    const res = await fetch(`${BACKEND_URL}/core/saveLocation`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -78,191 +73,141 @@ TaskManager.defineTask(RANDOM_LOCATION_TASK, async () => {
         timestamp: new Date().toISOString(),
       }),
     });
-    
-    if (locationResponse.ok) {
-      console.log('✅ Location sent to backend successfully');
-      
-      // Store last tracked time
-      await AsyncStorage.setItem(
-        'last_location_tracked',
-        new Date().toISOString()
-      );
-      
+
+    if (res.ok) {
+      await AsyncStorage.setItem(LAST_TRACKED_KEY, new Date().toISOString());
       return BackgroundFetch.BackgroundFetchResult.NewData;
-    } else {
-      console.log('❌ Failed to send location to backend');
-      return BackgroundFetch.BackgroundFetchResult.Failed;
     }
-    
-  } catch (error) {
-    console.error('❌ Error in random location task:', error);
+
+    return BackgroundFetch.BackgroundFetchResult.Failed;
+
+  } catch (err) {
+    console.error('[LocationTrack] Task error:', err);
     return BackgroundFetch.BackgroundFetchResult.Failed;
   }
 });
 
+// ── BackgroundLocationService ─────────────────────────────────────────────────
+
 export class BackgroundLocationService {
-  static async initialize(): Promise<boolean> {
+  /**
+   * Initialize the periodic location tracking service.
+   *
+   * Requires background location permission. If not yet granted, calls
+   * `showDisclosure` first (Google Play mandatory prominent disclosure),
+   * then requests the system permission.
+   *
+   * @param showDisclosure  Async callback that shows the disclosure modal and
+   *                        resolves with true (accepted) / false (declined).
+   *                        If omitted and background permission is not granted,
+   *                        the service will NOT start.
+   */
+  static async initialize(
+    showDisclosure?: () => Promise<boolean>,
+  ): Promise<boolean> {
     try {
-      console.log('🚀 Initializing background location service...');
-      
-      // Request background location permissions
-      const { status: foregroundStatus } = 
-        await Location.requestForegroundPermissionsAsync();
-      
-      if (foregroundStatus !== 'granted') {
-        console.log('❌ Foreground location permission denied');
+      console.log('[LocationTrack] Initializing…');
+
+      // Foreground permission must already exist
+      const { status: fgStatus } = await Location.getForegroundPermissionsAsync();
+      if (fgStatus !== 'granted') {
+        console.warn('[LocationTrack] Foreground permission missing — aborting');
         return false;
       }
-      
-      const { status: backgroundStatus } = 
-        await Location.requestBackgroundPermissionsAsync();
-      
-      if (backgroundStatus !== 'granted') {
-        console.log('❌ Background location permission denied');
-        return false;
-      }
-      
-      console.log('✅ Location permissions granted');
-      
-      // Check if task is already registered
-      const isRegistered = await TaskManager.isTaskRegisteredAsync(
-        RANDOM_LOCATION_TASK
+
+      // Background permission
+      const bgGranted = await BackgroundLocationService.ensureBackgroundPermission(
+        showDisclosure,
       );
-      
+      if (!bgGranted) {
+        console.log('[LocationTrack] Background permission not available — skipping');
+        return false;
+      }
+
+      // Register (or skip if already registered)
+      const isRegistered = await TaskManager.isTaskRegisteredAsync(LOCATION_TRACK_TASK);
       if (isRegistered) {
-        console.log('✅ Task already registered');
+        console.log('[LocationTrack] Already registered');
         return true;
       }
-      
-      // Register background fetch task with 15-minute interval
-      // Note: iOS enforces minimum 15 minutes, Android can be more frequent
-      await BackgroundFetch.registerTaskAsync(RANDOM_LOCATION_TASK, {
-        minimumInterval: 15 * 60, // 15 minutes in seconds
-        stopOnTerminate: false, // Continue after app is closed
-        startOnBoot: true, // Start when device boots
+
+      await BackgroundFetch.registerTaskAsync(LOCATION_TRACK_TASK, {
+        minimumInterval: 15 * 60,
+        stopOnTerminate: false,
+        startOnBoot: true,
       });
-      
-      console.log('✅ Background location service initialized (15-min interval)');
+
+      console.log('[LocationTrack] Initialized (15-min interval)');
       return true;
-      
-    } catch (error) {
-      console.error('❌ Failed to initialize location service:', error);
+
+    } catch (err) {
+      console.error('[LocationTrack] Initialization failed:', err);
       return false;
     }
   }
-  
-  /**
-   * Stop background location tracking
-   */
+
+  /** Stop the location tracking service. */
   static async stop(): Promise<void> {
     try {
-      await BackgroundFetch.unregisterTaskAsync(RANDOM_LOCATION_TASK);
-      console.log('🛑 Background location service stopped');
-    } catch (error) {
-      console.error('❌ Error stopping location service:', error);
+      const isRegistered = await TaskManager.isTaskRegisteredAsync(LOCATION_TRACK_TASK);
+      if (isRegistered) {
+        await BackgroundFetch.unregisterTaskAsync(LOCATION_TRACK_TASK);
+        console.log('[LocationTrack] Stopped');
+      }
+    } catch (err) {
+      console.error('[LocationTrack] Stop failed:', err);
     }
   }
-  
-  /**
-   * Check if service is running
-   */
+
+  /** True if the tracking task is currently registered. */
   static async isRunning(): Promise<boolean> {
     try {
       const status = await BackgroundFetch.getStatusAsync();
-      const isRegistered = await TaskManager.isTaskRegisteredAsync(
-        RANDOM_LOCATION_TASK
-      );
-      
+      const isRegistered = await TaskManager.isTaskRegisteredAsync(LOCATION_TRACK_TASK);
       return (
-        status === BackgroundFetch.BackgroundFetchStatus.Available &&
-        isRegistered
+        status === BackgroundFetch.BackgroundFetchStatus.Available && isRegistered
       );
-    } catch (error) {
-      console.error('❌ Error checking service status:', error);
+    } catch {
       return false;
     }
   }
-  
-  /**
-   * Manually trigger location capture (for testing)
-   */
-  static async captureLocationNow(): Promise<void> {
-    try {
-      const token = await AsyncStorage.getItem('token_2');
-      if (!token) {
-        console.log('❌ No token found');
-        return;
-      }
-      
-      // Check work status
-      const statusResponse = await fetch(`${BACKEND_URL}/core/checkWorkStatus`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      });
-      
-      if (!statusResponse.ok) {
-        throw new Error('Failed to check work status');
-      }
-      
-      const statusData = await statusResponse.json();
-      console.log('📊 Manual check - Work status:', statusData);
-      
-      // Check if data is false (holiday/leave exists)
-      if (statusData.data === false) {
-        console.log('⏭️ User has leave or holiday - skipping location capture');
-        return;
-      }
-      
-      // Get location
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      
-      console.log('📍 Manual location captured:', {
-        lat: location.coords.latitude,
-        lng: location.coords.longitude,
-      });
-      
-      // Send to backend
-      const response = await fetch(`${BACKEND_URL}/core/saveLocation`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          timestamp: new Date().toISOString(),
-        }),
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Location captured and sent:', result);
-        
-        // Store last tracked time
-        await AsyncStorage.setItem(
-          'last_location_tracked',
-          new Date().toISOString()
-        );
-      } else {
-        console.log('❌ Failed to send location');
-      }
-    } catch (error) {
-      console.error('❌ Error capturing location:', error);
-    }
-  }
-  
-  /**
-   * Get last tracked location info
-   */
-  static async getLastTrackedInfo(): Promise<{
-    timestamp: string | null;
+
+  /** Diagnostic info for settings / debug screens. */
+  static async getInfo(): Promise<{
     isRunning: boolean;
+    lastTracked: string | null;
   }> {
-    const timestamp = await AsyncStorage.getItem('last_location_tracked');
-    const isRunning = await this.isRunning();
-    
-    return { timestamp, isRunning };
+    const isRunning = await BackgroundLocationService.isRunning();
+    const lastTracked = await AsyncStorage.getItem(LAST_TRACKED_KEY);
+    return { isRunning, lastTracked };
+  }
+
+  // ── Private ─────────────────────────────────────────────────────────────────
+
+  private static async ensureBackgroundPermission(
+    showDisclosure?: () => Promise<boolean>,
+  ): Promise<boolean> {
+    const { status } = await Location.getBackgroundPermissionsAsync();
+
+    if (status === 'granted') {
+      return true;
+    }
+
+    if (!showDisclosure) {
+      console.warn(
+        '[LocationTrack] Background permission not granted and no showDisclosure provided.',
+      );
+      return false;
+    }
+
+    // Mandatory prominent disclosure BEFORE the OS dialog
+    const accepted = await showDisclosure();
+    if (!accepted) {
+      console.log('[LocationTrack] User declined disclosure');
+      return false;
+    }
+
+    const { status: newStatus } = await Location.requestBackgroundPermissionsAsync();
+    return newStatus === 'granted';
   }
 }
