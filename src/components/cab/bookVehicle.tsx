@@ -189,6 +189,159 @@ const sheetStyles = StyleSheet.create({
     safeAreaBottom: { height: 24 },
 });
 
+// ─── Web Date/Time Picker ────────────────────────────────────────────────────
+interface WebPickerModalProps {
+    visible: boolean;
+    mode: 'date' | 'time';
+    value: Date;
+    minimumDate?: Date;
+    title: string;
+    accentColor: string;
+    onCancel: () => void;
+    onConfirm: (date: Date) => void;
+}
+
+const toDateInputString = (d: Date): string =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+const toTimeInputString = (d: Date): string =>
+    `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+const WebPickerModal: React.FC<WebPickerModalProps> = ({
+    visible, mode, value, minimumDate, title, accentColor, onCancel, onConfirm,
+}) => {
+    const [tempValue, setTempValue] = useState('');
+
+    useEffect(() => {
+        setTempValue(mode === 'date' ? toDateInputString(value) : toTimeInputString(value));
+    }, [value, visible, mode]);
+
+    if (!visible) return null;
+
+    const handleConfirm = () => {
+        if (!tempValue) { onCancel(); return; }
+        const result = new Date(value);
+        if (mode === 'date') {
+            const [y, m, d] = tempValue.split('-').map(Number);
+            result.setFullYear(y, m - 1, d);
+        } else {
+            const [h, min] = tempValue.split(':').map(Number);
+            result.setHours(h, min, 0, 0);
+        }
+        onConfirm(result);
+    };
+
+    const minAttr =
+        minimumDate && mode === 'date' ? toDateInputString(minimumDate) : undefined;
+
+    return (
+        <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+            <Pressable style={webPickerStyles.overlay} onPress={onCancel}>
+                <Pressable style={webPickerStyles.card} onPress={() => { /* absorb */ }}>
+                    {/* Header */}
+                    <View style={sheetStyles.header}>
+                        <TouchableOpacity
+                            onPress={onCancel}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                            <Text style={sheetStyles.cancelBtn}>Cancel</Text>
+                        </TouchableOpacity>
+                        <Text style={sheetStyles.title}>{title}</Text>
+                        <TouchableOpacity
+                            onPress={handleConfirm}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                            <Text style={[sheetStyles.doneBtn, { color: accentColor }]}>Done</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={sheetStyles.divider} />
+
+                    {/* Native HTML date / time input */}
+                    <input
+                        type={mode}
+                        value={tempValue}
+                        min={minAttr}
+                        onChange={e => setTempValue(e.target.value)}
+                        style={{
+                            fontSize: 18,
+                            padding: '12px 14px',
+                            width: '100%',
+                            marginTop: 20,
+                            marginBottom: 20,
+                            borderRadius: 12,
+                            border: `1.5px solid ${accentColor}60`,
+                            outline: 'none',
+                            color: '#1a1a1a',
+                            boxSizing: 'border-box',
+                            accentColor,
+                            cursor: 'pointer',
+                            backgroundColor: '#f9f9f9',
+                        } as React.CSSProperties}
+                    />
+
+                    {/* Preset date shortcuts — only for date mode */}
+                    {mode === 'date' && (
+                        <View style={sheetStyles.presetRow}>
+                            {['Today', 'Tomorrow', 'Next Week'].map((label, i) => {
+                                const d = new Date();
+                                if (i === 1) d.setDate(d.getDate() + 1);
+                                if (i === 2) d.setDate(d.getDate() + 7);
+                                return (
+                                    <TouchableOpacity
+                                        key={label}
+                                        style={[sheetStyles.presetChip, { borderColor: accentColor + '50' }]}
+                                        onPress={() => setTempValue(toDateInputString(d))}
+                                    >
+                                        <Text style={[sheetStyles.presetText, { color: accentColor }]}>{label}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                    )}
+
+                    {/* Confirm button */}
+                    <TouchableOpacity
+                        style={[sheetStyles.confirmButton, { backgroundColor: accentColor }]}
+                        onPress={handleConfirm}
+                        activeOpacity={0.85}
+                    >
+                        <MaterialCommunityIcons
+                            name={mode === 'date' ? 'calendar-check' : 'clock-check-outline'}
+                            size={18}
+                            color="#fff"
+                        />
+                        <Text style={sheetStyles.confirmButtonText}>
+                            Confirm {mode === 'date' ? 'Date' : 'Time'}
+                        </Text>
+                    </TouchableOpacity>
+                </Pressable>
+            </Pressable>
+        </Modal>
+    );
+};
+
+const webPickerStyles = StyleSheet.create({
+    overlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 24,
+    },
+    card: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 20,
+        width: '100%',
+        maxWidth: 420,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.18,
+        shadowRadius: 20,
+        elevation: 20,
+    },
+});
+
 // ─── Cab Sharing Section ──────────────────────────────────────────────────────
 interface CabSharingSectionProps {
     sharingWith: AssignedEmployee[];
@@ -268,7 +421,7 @@ const CabSharingSection: React.FC<CabSharingSectionProps> = ({
 
     return (
         <View style={sharingStyles.container}>
-            {/* Section header — matches other sectionTitle style */}
+            {/* Section header */}
             <View style={sharingStyles.headerRow}>
                 <MaterialCommunityIcons name="account-multiple-plus" size={16} color="#008069" />
                 <Text style={sharingStyles.label}>Share Cab With</Text>
@@ -304,7 +457,7 @@ const CabSharingSection: React.FC<CabSharingSectionProps> = ({
                 </View>
             )}
 
-            {/* Search input — matches formInput style */}
+            {/* Search input */}
             <View style={sharingStyles.inputWrapper}>
                 <MaterialCommunityIcons name="magnify" size={18} color="#aaa" style={sharingStyles.searchIcon} />
                 <TextInput
@@ -388,7 +541,6 @@ const CabSharingSection: React.FC<CabSharingSectionProps> = ({
 };
 
 const sharingStyles = StyleSheet.create({
-    // Matches scheduleCard / routeCard — white bg, same shadow, same radius
     container: {
         backgroundColor: '#fff',
         borderRadius: 16,
@@ -399,7 +551,6 @@ const sharingStyles = StyleSheet.create({
         shadowRadius: 6,
         elevation: 1,
     },
-    // Matches sectionTitle inside the card
     headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -428,8 +579,6 @@ const sharingStyles = StyleSheet.create({
         fontSize: 11,
         fontWeight: '700',
     },
-
-    // ── Chips — green tint to match bookingFor selected person ──
     chipsContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -468,8 +617,6 @@ const sharingStyles = StyleSheet.create({
         fontWeight: '600',
         flex: 1,
     },
-
-    // ── Search input — matches formInput exactly ──
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -489,8 +636,6 @@ const sharingStyles = StyleSheet.create({
         paddingVertical: 0,
     },
     inputLoader: { flexShrink: 0 },
-
-    // ── Dropdown — matches autocompleteList style ──
     dropdown: {
         marginTop: 6,
         backgroundColor: '#fff',
@@ -534,8 +679,6 @@ const sharingStyles = StyleSheet.create({
         gap: 6,
     },
     emptyStateText: { fontSize: 13, color: '#aaa' },
-
-    // ── Helper ──
     helperText: {
         fontSize: 11,
         color: '#aaa',
@@ -678,9 +821,9 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
         switch (activePicker) {
             case 'startDate': return bookingForm.startDate;
             case 'startTime': return bookingForm.startTime;
-            case 'endDate': return bookingForm.endDate;
-            case 'endTime': return bookingForm.endTime;
-            default: return new Date();
+            case 'endDate':   return bookingForm.endDate;
+            case 'endTime':   return bookingForm.endTime;
+            default:          return new Date();
         }
     };
 
@@ -691,9 +834,9 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
         switch (activePicker) {
             case 'startDate': return 'Select Start Date';
             case 'startTime': return 'Select Start Time';
-            case 'endDate': return 'Select End Date';
-            case 'endTime': return 'Select End Time';
-            default: return 'Select';
+            case 'endDate':   return 'Select End Date';
+            case 'endTime':   return 'Select End Time';
+            default:          return 'Select';
         }
     };
 
@@ -793,7 +936,6 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
 
                                 {/* ── Trip Route ── */}
                                 <View style={styles.section}>
-                                    {/* Section title with required marker */}
                                     <View style={styles.sectionTitleRow}>
                                         <Text style={styles.sectionTitle}>Trip Route</Text>
                                         <Text style={styles.requiredStar}>*</Text>
@@ -1021,7 +1163,7 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                         </View>
                     </KeyboardAvoidingView>
 
-                    {/* ── iOS Picker Sheet ── */}
+                    {/* ── iOS Picker Sheet (inside Modal overlay) ── */}
                     {Platform.OS === 'ios' && (
                         <IOSPickerSheet
                             visible={activePicker !== null}
@@ -1041,7 +1183,7 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                 </View>
             </Modal>
 
-            {/* Android Date/Time Picker — must be outside Modal */}
+            {/* ── Android Date/Time Picker (must live outside Modal) ── */}
             {Platform.OS === 'android' && activePicker !== null && (
                 <DateTimePicker
                     value={getPickerValue()}
@@ -1058,6 +1200,24 @@ const BookVehicleModal: React.FC<BookVehicleModalProps> = ({
                         }
                         setActivePicker(null);
                     }}
+                />
+            )}
+
+            {/* ── Web Date/Time Picker ── */}
+            {Platform.OS === 'web' && (
+                <WebPickerModal
+                    visible={activePicker !== null}
+                    mode={getPickerMode()}
+                    value={getPickerValue()}
+                    minimumDate={
+                        activePicker === 'startDate' || activePicker === 'endDate'
+                            ? new Date()
+                            : undefined
+                    }
+                    title={getPickerTitle()}
+                    accentColor={getPickerAccent()}
+                    onCancel={() => setActivePicker(null)}
+                    onConfirm={applyPickerValue}
                 />
             )}
         </>
@@ -1109,7 +1269,6 @@ const styles = StyleSheet.create({
         fontSize: 14, fontWeight: '700', color: '#333',
         marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5,
     },
-    // Row to place * next to a section title
     sectionTitleRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1123,7 +1282,6 @@ const styles = StyleSheet.create({
         lineHeight: 20,
         marginBottom: 2,
     },
-    // Inline * next to a field label
     routeLabelRow: {
         flexDirection: 'row',
         alignItems: 'center',

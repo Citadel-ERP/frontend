@@ -209,6 +209,26 @@ export const BackgroundAttendanceService = {
     return this.unregisterBackgroundFetchTask();
   },
 
+  // ── Backward-compatible aliases ───────────────────────────────────────────
+  // Dashboard.tsx may still call initialize() or initializeAll() from before
+  // the refactor. These aliases forward to registerBackgroundFetchTask() so
+  // the old call sites keep working without any Dashboard changes.
+
+  /** @deprecated Use registerBackgroundFetchTask() directly. */
+  async initialize(
+    _showDisclosure?: () => Promise<boolean>,
+  ): Promise<{ backgroundFetch: boolean; geofencing: boolean }> {
+    const backgroundFetch = await this.registerBackgroundFetchTask();
+    return { backgroundFetch, geofencing: false };
+  },
+
+  /** @deprecated Use registerBackgroundFetchTask() directly. */
+  async initializeAll(
+    _showDisclosure?: () => Promise<boolean>,
+  ): Promise<{ backgroundFetch: boolean; geofencing: boolean }> {
+    return this.initialize(_showDisclosure);
+  },
+
   /** Diagnostic status for settings / debug screens. */
   async getStatus(): Promise<{
     fetchRegistered: boolean;

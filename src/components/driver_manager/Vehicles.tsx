@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+ import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -193,6 +193,12 @@ const Vehicles: React.FC<VehiclesProps> = ({
     const [odometerReadings, setOdometerReadings] = useState<{ [key: number]: string }>({});
     const [submittingOdometer, setSubmittingOdometer] = useState(false);
 
+    // Web-compatible delete confirmation modal state
+    const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ visible: boolean; vehicleId: number | null }>({
+        visible: false,
+        vehicleId: null,
+    });
+
     useEffect(() => {
         if (token) {
             fetchVehicles();
@@ -349,7 +355,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
                         setIsDriverModalVisible(false);
                         setSelectedAssignment(null);
                         setSelectedDriverId('');
-                        // Refresh the bookings
                         if (selectedVehicle) {
                             fetchCarBookings(selectedVehicle.id);
                         }
@@ -398,10 +403,8 @@ const Vehicles: React.FC<VehiclesProps> = ({
                 return;
             }
 
-            // Clear readings first
             setOdometerReadings({});
 
-            // Set modal state
             setOdometerModal({
                 visible: true,
                 type: status === 'in-progress' ? 'start' : 'end',
@@ -457,7 +460,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
                     const data = JSON.parse(text);
                     if (response.ok) {
                         Alert.alert('Success', 'Booking status updated successfully!');
-                        // Refresh bookings
                         if (selectedVehicle) {
                             fetchCarBookings(selectedVehicle.id);
                         }
@@ -490,7 +492,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
     };
 
     const handleOdometerConfirm = async () => {
-        // Check if all assignments have readings
         const missingReadings = odometerModal.assignments.filter(
             assignment => !odometerReadings[assignment.id]?.trim()
         );
@@ -500,7 +501,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
             return;
         }
 
-        // Validate that readings are numeric
         const invalidReadings = Object.entries(odometerReadings).filter(
             ([_, value]) => isNaN(Number(value)) || Number(value) <= 0
         );
@@ -769,7 +769,14 @@ const Vehicles: React.FC<VehiclesProps> = ({
         setActiveIndex(index);
     };
 
-    const handleDeleteVehicle = async (vehicleId: number) => {
+    // ─── DELETE VEHICLE (web-safe) ────────────────────────────────────────────
+    const handleDeleteVehicle = (vehicleId: number) => {
+        if (Platform.OS === 'web') {
+            // On web, Alert.alert is a no-op — show our custom modal instead
+            setDeleteConfirmModal({ visible: true, vehicleId });
+            return;
+        }
+        // Native (iOS / Android) — use the standard Alert sheet
         Alert.alert(
             'Delete Vehicle',
             'Are you sure you want to delete this vehicle? This action cannot be undone.',
@@ -778,44 +785,44 @@ const Vehicles: React.FC<VehiclesProps> = ({
                 {
                     text: 'Delete',
                     style: 'destructive',
-                    onPress: async () => {
-                        setLoading(true);
-                        try {
-                            const response = await fetch(`${BACKEND_URL}/manager/deleteVehicle`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Accept': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    token,
-                                    vehicle_id: vehicleId
-                                }),
-                            });
-
-                            const text = await response.text();
-
-                            if (text.trim().startsWith('{')) {
-                                const data = JSON.parse(text);
-                                if (response.ok) {
-                                    Alert.alert('Success', 'Vehicle deleted successfully!');
-                                    setCurrentView('main');
-                                    fetchVehicles();
-                                } else {
-                                    Alert.alert('Error', data.message || 'Failed to delete vehicle');
-                                }
-                            }
-                        } catch (error) {
-                            console.error('Error deleting vehicle:', error);
-                            Alert.alert('Error', 'Network error occurred');
-                        } finally {
-                            setLoading(false);
-                        }
-                    }
-                }
+                    onPress: () => performDeleteVehicle(vehicleId),
+                },
             ]
         );
     };
+
+    const performDeleteVehicle = async (vehicleId: number) => {
+        setLoading(true);
+        try {
+            const response = await fetch(`${BACKEND_URL}/manager/deleteVehicle`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ token, vehicle_id: vehicleId }),
+            });
+
+            const text = await response.text();
+
+            if (text.trim().startsWith('{')) {
+                const data = JSON.parse(text);
+                if (response.ok) {
+                    Alert.alert('Success', 'Vehicle deleted successfully!');
+                    setCurrentView('main');
+                    fetchVehicles();
+                } else {
+                    Alert.alert('Error', data.message || 'Failed to delete vehicle');
+                }
+            }
+        } catch (error) {
+            console.error('Error deleting vehicle:', error);
+            Alert.alert('Error', 'Network error occurred');
+        } finally {
+            setLoading(false);
+        }
+    };
+    // ─────────────────────────────────────────────────────────────────────────
 
     const initializeUpdateForm = (vehicle: Vehicle) => {
         setDeletedPhotoIds([]);
@@ -840,44 +847,42 @@ const Vehicles: React.FC<VehiclesProps> = ({
         });
     };
 
-
     const pickImage = async (index: number) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'We need camera roll permissions to upload photos');
-        return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true, // ✅ ENABLES INTERACTIVE CROP/ZOOM
-        aspect: [16, 9], // ✅ SETS CROP BOX TO 16:9 RATIO
-        quality: 0.8, // Good quality with reasonable file size
-    });
-
-    if (!result.canceled && result.assets[0]) {
-        const newPhotos = [...updateVehicleForm.photos];
-
-        if (index < newPhotos.length) {
-            newPhotos[index] = {
-                id: newPhotos[index].id,
-                photo: result.assets[0].uri,
-                uri: result.assets[0].uri,
-                isNew: true,
-            };
-        } else {
-            newPhotos.push({
-                id: Date.now(),
-                photo: result.assets[0].uri,
-                uri: result.assets[0].uri,
-                isNew: true,
-            });
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission Denied', 'We need camera roll permissions to upload photos');
+            return;
         }
 
-        setUpdateVehicleForm({ ...updateVehicleForm, photos: newPhotos });
-    }
-};
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [16, 9],
+            quality: 0.8,
+        });
 
+        if (!result.canceled && result.assets[0]) {
+            const newPhotos = [...updateVehicleForm.photos];
+
+            if (index < newPhotos.length) {
+                newPhotos[index] = {
+                    id: newPhotos[index].id,
+                    photo: result.assets[0].uri,
+                    uri: result.assets[0].uri,
+                    isNew: true,
+                };
+            } else {
+                newPhotos.push({
+                    id: Date.now(),
+                    photo: result.assets[0].uri,
+                    uri: result.assets[0].uri,
+                    isNew: true,
+                });
+            }
+
+            setUpdateVehicleForm({ ...updateVehicleForm, photos: newPhotos });
+        }
+    };
 
     const removePhoto = (index: number) => {
         if (updateVehicleForm.photos.length <= 1) {
@@ -1230,7 +1235,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
         return vehicle.status.replace('_', ' ').toUpperCase();
     };
 
-    // Booking Card Component (same as in Bookings.tsx)
+    // Booking Card Component
     const BookingCardComponent: React.FC<{
         booking: CarBooking;
         index: number;
@@ -1254,17 +1259,14 @@ const Vehicles: React.FC<VehiclesProps> = ({
         }, []);
 
         const handleStatusChange = (status: string) => {
-            // Never allow updating to 'Assigned' status manually
             if (status === 'assigned' && booking.status !== 'assigned') {
                 Alert.alert('Invalid Action', 'Cannot manually set status to Assigned');
                 return;
             }
 
-            // Normalize current status to lowercase for comparison
             const currentStatus = booking.status.toLowerCase();
             const newStatus = status.toLowerCase();
 
-            // From assigned: only allow in-progress or cancelled
             if (currentStatus === 'assigned') {
                 if (newStatus !== 'in-progress' && newStatus !== 'cancelled') {
                     Alert.alert('Invalid Action', 'From Assigned, you can only move to In-Progress or Cancelled');
@@ -1272,7 +1274,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
                 }
             }
 
-            // From in-progress: only allow completed or cancelled
             if (currentStatus === 'in-progress') {
                 if (newStatus !== 'completed' && newStatus !== 'cancelled') {
                     Alert.alert('Invalid Action', 'From In-Progress, you can only move to Completed or Cancelled');
@@ -1280,7 +1281,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
                 }
             }
 
-            // From completed or cancelled: no changes allowed
             if (currentStatus === 'completed' || currentStatus === 'cancelled') {
                 Alert.alert('Invalid Action', 'Cannot change status from ' + booking.status);
                 return;
@@ -1306,13 +1306,11 @@ const Vehicles: React.FC<VehiclesProps> = ({
                 return;
             }
 
-            // Check if we need odometer readings
             if ((selectedStatus === 'in-progress' || selectedStatus === 'completed') && booking.vehicle_assignments.length === 0) {
                 Alert.alert('Error', 'No vehicles assigned to this booking');
                 return;
             }
 
-            // Only set loading for non-odometer status updates
             if (selectedStatus !== 'in-progress' && selectedStatus !== 'completed') {
                 setIsUpdating(true);
             }
@@ -1366,7 +1364,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
                     </View>
                 </View>
 
-                {/* Vehicle Assignments Section */}
                 {assignments.length > 0 && (
                     <View style={styles.assignmentsSection}>
                         <Text style={styles.assignmentsSectionTitle}>Assigned Vehicles & Drivers</Text>
@@ -1427,7 +1424,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
                     </View>
                 )}
 
-                {/* Odometer Readings - Show for completed bookings */}
                 {booking.status === 'completed' && assignments.length > 0 && (
                     <View style={styles.odometerSection}>
                         <Text style={styles.odometerSectionTitle}>Odometer Readings</Text>
@@ -1514,7 +1510,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
                     </View>
                 </View>
 
-                {/* End Date & Time Section */}
                 {booking.end_time && (
                     <View style={[styles.bookingCardFooter, { paddingTop: 8, borderTopWidth: 0 }]}>
                         <View style={styles.dateTimeInfo}>
@@ -1548,7 +1543,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                 const statusColor = getStatusColor(status);
                                 const isSelected = selectedStatus === status;
 
-                                // Determine if this option should be disabled
                                 const currentStatus = booking.status.toLowerCase();
                                 let isDisabled = false;
 
@@ -2182,10 +2176,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                         </View>
 
                         <View style={styles.actionButtonsContainer}>
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                            >
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                                 <TouchableOpacity
                                     style={styles.actionButton}
                                     onPress={() => {
@@ -2213,7 +2204,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                     <MaterialCommunityIcons name="gas-station" size={24} color="#008069" />
                                     <Text style={styles.actionButtonText}>Fuel History</Text>
                                 </TouchableOpacity>
-
                                 <TouchableOpacity style={styles.actionButton} onPress={() => setIsDownloadReportModalVisible(true)}>
                                     <MaterialCommunityIcons name="file-download" size={24} color="#008069" />
                                     <Text style={styles.actionButtonText}>Download Report</Text>
@@ -2307,27 +2297,25 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                     </View>
                                 </TouchableOpacity>
                                 <View style={[styles.headerCenter, { marginRight: 60, height: 40 }]}>
-    <Text style={[styles.logoText, { marginTop: 6 }]}>CITADEL</Text>
-</View>
-<TouchableOpacity
-    style={{
-        position: 'absolute',
-        right: 0,
-        backgroundColor: 'transparent',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6
-    }}
-    onPress={() => {
-        setCurrentView('create-vehicle');
-    }}
->
-    <MaterialCommunityIcons name="plus" size={20} color="#FFFFFF" />
-    <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>Add</Text>
-</TouchableOpacity>
+                                    <Text style={[styles.logoText, { marginTop: 6 }]}>CITADEL</Text>
+                                </View>
+                                <TouchableOpacity
+                                    style={{
+                                        position: 'absolute',
+                                        right: 0,
+                                        backgroundColor: 'transparent',
+                                        paddingHorizontal: 16,
+                                        paddingVertical: 10,
+                                        borderRadius: 8,
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 6
+                                    }}
+                                    onPress={() => setCurrentView('create-vehicle')}
+                                >
+                                    <MaterialCommunityIcons name="plus" size={20} color="#FFFFFF" />
+                                    <Text style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 14 }}>Add</Text>
+                                </TouchableOpacity>
                             </View>
                         </View>
                         <View style={styles.titleSection}>
@@ -2379,11 +2367,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                         <View style={styles.emptyStateContainer}>
                             <View style={styles.emptyStateCard}>
                                 <View style={styles.emptyIconContainer}>
-                                    <MaterialCommunityIcons
-                                        name="car-off"
-                                        size={64}
-                                        color="#CBD5E0"
-                                    />
+                                    <MaterialCommunityIcons name="car-off" size={64} color="#CBD5E0" />
                                 </View>
                                 <Text style={styles.emptyStateTitle}>No Vehicles Found</Text>
                                 <Text style={styles.emptyStateMessage}>
@@ -2391,9 +2375,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                 </Text>
                                 <TouchableOpacity
                                     style={styles.searchBtn}
-                                    onPress={() => {
-                                        setCurrentView('create-vehicle');
-                                    }}
+                                    onPress={() => setCurrentView('create-vehicle')}
                                 >
                                     <Text style={styles.searchBtnText}>Add First Vehicle</Text>
                                 </TouchableOpacity>
@@ -2475,8 +2457,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                 formatDateTime={formatDate}
             />
 
-            {/* Car Bookings Modal */}
-            {/* Car Bookings Modal - COMPLETELY FIXED VERSION */}
+            {/* ── Car Bookings Modal ─────────────────────────────────────────────── */}
             <Modal
                 visible={isCarBookingsModalVisible}
                 transparent={true}
@@ -2495,7 +2476,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
                         maxHeight: '90%',
                         height: '90%',
                     }}>
-                        {/* Header */}
                         <View style={{
                             backgroundColor: '#008069',
                             paddingTop: Platform.OS === 'ios' ? 50 : 40,
@@ -2508,18 +2488,10 @@ const Vehicles: React.FC<VehiclesProps> = ({
                             justifyContent: 'space-between',
                         }}>
                             <View style={{ flex: 1 }}>
-                                <Text style={{
-                                    fontSize: 18,
-                                    fontWeight: '700',
-                                    color: '#FFFFFF',
-                                    marginBottom: 4,
-                                }}>
+                                <Text style={{ fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 4 }}>
                                     Vehicle Bookings
                                 </Text>
-                                <Text style={{
-                                    fontSize: 13,
-                                    color: 'rgba(255, 255, 255, 0.8)'
-                                }}>
+                                <Text style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.8)' }}>
                                     {selectedVehicle?.make} {selectedVehicle?.model} ({selectedVehicle?.license_plate})
                                 </Text>
                             </View>
@@ -2538,59 +2510,27 @@ const Vehicles: React.FC<VehiclesProps> = ({
                             </TouchableOpacity>
                         </View>
 
-                        {/* Content */}
                         {loadingCarBookings ? (
-                            <View style={{
-                                flex: 1,
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                                paddingVertical: 60,
-                            }}>
+                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 }}>
                                 <ActivityIndicator size="large" color="#008069" />
-                                <Text style={{
-                                    marginTop: 16,
-                                    color: '#666',
-                                    fontSize: 14
-                                }}>
-                                    Loading bookings...
-                                </Text>
+                                <Text style={{ marginTop: 16, color: '#666', fontSize: 14 }}>Loading bookings...</Text>
                             </View>
                         ) : carBookings.length === 0 ? (
-                            <View style={{
-                                flex: 1,
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                                paddingVertical: 60,
-                                paddingHorizontal: 32,
-                            }}>
+                            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60, paddingHorizontal: 32 }}>
                                 <MaterialCommunityIcons name="calendar-remove" size={80} color="#E0E0E0" />
-                                <Text style={{
-                                    fontSize: 18,
-                                    fontWeight: '600',
-                                    color: '#333',
-                                    marginTop: 20,
-                                    marginBottom: 8,
-                                }}>
+                                <Text style={{ fontSize: 18, fontWeight: '600', color: '#333', marginTop: 20, marginBottom: 8 }}>
                                     No Bookings Found
                                 </Text>
-                                <Text style={{
-                                    fontSize: 14,
-                                    color: '#666',
-                                    textAlign: 'center',
-                                }}>
+                                <Text style={{ fontSize: 14, color: '#666', textAlign: 'center' }}>
                                     This vehicle has no bookings yet.
                                 </Text>
                             </View>
                         ) : (
                             <ScrollView
                                 style={{ flex: 1, backgroundColor: '#F5F5F5' }}
-                                contentContainerStyle={{
-                                    padding: 16,
-                                    paddingBottom: 40,
-                                }}
+                                contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
                                 showsVerticalScrollIndicator={true}
                             >
-                                {/* Success Banner */}
                                 <View style={{
                                     backgroundColor: '#E8F5E9',
                                     padding: 16,
@@ -2602,17 +2542,11 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                     borderLeftColor: '#008069',
                                 }}>
                                     <MaterialCommunityIcons name="check-circle" size={24} color="#008069" />
-                                    <Text style={{
-                                        fontSize: 15,
-                                        fontWeight: '600',
-                                        color: '#008069',
-                                        marginLeft: 12,
-                                    }}>
+                                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#008069', marginLeft: 12 }}>
                                         Found {carBookings.length} booking{carBookings.length !== 1 ? 's' : ''}
                                     </Text>
                                 </View>
 
-                                {/* Render Each Booking */}
                                 {carBookings.map((booking, index) => {
                                     const assignments = booking.vehicle_assignments || [];
                                     const firstVehicle = assignments.length > 0 ? assignments[0].vehicle : null;
@@ -2634,26 +2568,12 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                                 borderLeftColor: getStatusColor(booking.status),
                                             }}
                                         >
-                                            {/* Booking Header */}
-                                            <View style={{
-                                                flexDirection: 'row',
-                                                justifyContent: 'space-between',
-                                                alignItems: 'flex-start',
-                                                marginBottom: 16,
-                                            }}>
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                                                 <View style={{ flex: 1 }}>
-                                                    <Text style={{
-                                                        fontSize: 16,
-                                                        fontWeight: '700',
-                                                        color: '#1A1A1A',
-                                                        marginBottom: 4,
-                                                    }}>
+                                                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#1A1A1A', marginBottom: 4 }}>
                                                         Booking #{booking.id}
                                                     </Text>
-                                                    <Text style={{
-                                                        fontSize: 14,
-                                                        color: '#666',
-                                                    }}>
+                                                    <Text style={{ fontSize: 14, color: '#666' }}>
                                                         {booking.booked_for?.full_name || 'Unknown'}
                                                     </Text>
                                                 </View>
@@ -2666,286 +2586,131 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                                     alignItems: 'center',
                                                     gap: 6,
                                                 }}>
-                                                    <MaterialCommunityIcons
-                                                        name={getStatusIconBooking(booking.status)}
-                                                        size={14}
-                                                        color={getStatusColor(booking.status)}
-                                                    />
-                                                    <Text style={{
-                                                        fontSize: 12,
-                                                        fontWeight: '600',
-                                                        color: getStatusColor(booking.status),
-                                                        textTransform: 'capitalize',
-                                                    }}>
+                                                    <MaterialCommunityIcons name={getStatusIconBooking(booking.status)} size={14} color={getStatusColor(booking.status)} />
+                                                    <Text style={{ fontSize: 12, fontWeight: '600', color: getStatusColor(booking.status), textTransform: 'capitalize' }}>
                                                         {booking.status}
                                                     </Text>
                                                 </View>
                                             </View>
 
-                                            {/* Vehicle & Driver Info */}
                                             {assignments.length > 0 && (
-                                                <View style={{
-                                                    backgroundColor: '#F8F9FA',
-                                                    borderRadius: 12,
-                                                    padding: 12,
-                                                    marginBottom: 16,
-                                                }}>
-                                                    <Text style={{
-                                                        fontSize: 13,
-                                                        fontWeight: '600',
-                                                        color: '#666',
-                                                        marginBottom: 12,
-                                                    }}>
+                                                <View style={{ backgroundColor: '#F8F9FA', borderRadius: 12, padding: 12, marginBottom: 16 }}>
+                                                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#666', marginBottom: 12 }}>
                                                         ASSIGNED VEHICLES & DRIVERS
                                                     </Text>
                                                     {assignments.map((assignment) => (
-                                                        <View
-                                                            key={assignment.id}
-                                                            style={{
-                                                                backgroundColor: '#FFFFFF',
-                                                                borderRadius: 8,
-                                                                padding: 12,
-                                                                marginBottom: 8,
-                                                            }}
-                                                        >
-                                                            <View style={{
-                                                                flexDirection: 'row',
-                                                                alignItems: 'center',
-                                                                marginBottom: 8,
-                                                            }}>
-                                                                <MaterialCommunityIcons
-                                                                    name="car"
-                                                                    size={18}
-                                                                    color="#008069"
-                                                                />
-                                                                <Text style={{
-                                                                    fontSize: 14,
-                                                                    fontWeight: '500',
-                                                                    color: '#333',
-                                                                    marginLeft: 8,
-                                                                    flex: 1,
-                                                                }}>
+                                                        <View key={assignment.id} style={{ backgroundColor: '#FFFFFF', borderRadius: 8, padding: 12, marginBottom: 8 }}>
+                                                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                                                <MaterialCommunityIcons name="car" size={18} color="#008069" />
+                                                                <Text style={{ fontSize: 14, fontWeight: '500', color: '#333', marginLeft: 8, flex: 1 }}>
                                                                     {assignment.vehicle.make} {assignment.vehicle.model}
                                                                 </Text>
-                                                                <Text style={{
-                                                                    fontSize: 12,
-                                                                    color: '#666',
-                                                                    fontWeight: '600',
-                                                                }}>
+                                                                <Text style={{ fontSize: 12, color: '#666', fontWeight: '600' }}>
                                                                     {assignment.vehicle.license_plate}
                                                                 </Text>
                                                             </View>
-                                                            <View style={{
-                                                                flexDirection: 'row',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'space-between',
-                                                            }}>
-                                                                <View style={{
-                                                                    flexDirection: 'row',
-                                                                    alignItems: 'center',
-                                                                    flex: 1,
-                                                                }}>
-                                                                    <MaterialCommunityIcons
-                                                                        name="account-circle"
-                                                                        size={18}
-                                                                        color={assignment.assigned_driver ? "#00d285" : "#999"}
-                                                                    />
-                                                                    <Text style={{
-                                                                        fontSize: 13,
-                                                                        color: assignment.assigned_driver ? '#333' : '#999',
-                                                                        marginLeft: 8,
-                                                                        fontStyle: assignment.assigned_driver ? 'normal' : 'italic',
-                                                                    }}>
+                                                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                                                    <MaterialCommunityIcons name="account-circle" size={18} color={assignment.assigned_driver ? "#00d285" : "#999"} />
+                                                                    <Text style={{ fontSize: 13, color: assignment.assigned_driver ? '#333' : '#999', marginLeft: 8, fontStyle: assignment.assigned_driver ? 'normal' : 'italic' }}>
                                                                         {assignment.assigned_driver?.full_name || 'No driver assigned'}
                                                                     </Text>
                                                                 </View>
-                                                                {booking.status.toLowerCase() !== 'completed' &&
-                                                                    booking.status.toLowerCase() !== 'cancelled' && (
-                                                                        <TouchableOpacity
-                                                                            onPress={() => handleOpenDriverModal(assignment)}
-                                                                            style={{
-                                                                                flexDirection: 'row',
-                                                                                alignItems: 'center',
-                                                                                backgroundColor: '#E8F5E9',
-                                                                                paddingHorizontal: 10,
-                                                                                paddingVertical: 6,
-                                                                                borderRadius: 6,
-                                                                                gap: 4,
-                                                                            }}
-                                                                        >
-                                                                            <MaterialCommunityIcons
-                                                                                name="pencil"
-                                                                                size={14}
-                                                                                color="#008069"
-                                                                            />
-                                                                            <Text style={{
-                                                                                fontSize: 12,
-                                                                                color: '#008069',
-                                                                                fontWeight: '600',
-                                                                            }}>
-                                                                                {assignment.assigned_driver ? 'Change' : 'Assign'}
-                                                                            </Text>
-                                                                        </TouchableOpacity>
-                                                                    )}
+                                                                {booking.status.toLowerCase() !== 'completed' && booking.status.toLowerCase() !== 'cancelled' && (
+                                                                    <TouchableOpacity
+                                                                        onPress={() => handleOpenDriverModal(assignment)}
+                                                                        style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, gap: 4 }}
+                                                                    >
+                                                                        <MaterialCommunityIcons name="pencil" size={14} color="#008069" />
+                                                                        <Text style={{ fontSize: 12, color: '#008069', fontWeight: '600' }}>
+                                                                            {assignment.assigned_driver ? 'Change' : 'Assign'}
+                                                                        </Text>
+                                                                    </TouchableOpacity>
+                                                                )}
                                                             </View>
                                                         </View>
                                                     ))}
                                                 </View>
                                             )}
 
-                                            {/* Trip Details */}
                                             <View style={{ marginBottom: 16 }}>
-                                                <View style={{
-                                                    flexDirection: 'row',
-                                                    alignItems: 'center',
-                                                    marginBottom: 8,
-                                                }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                                                     <MaterialCommunityIcons name="map-marker" size={18} color="#00d285" />
-                                                    <Text style={{
-                                                        fontSize: 14,
-                                                        color: '#333',
-                                                        marginLeft: 10,
-                                                    }}>
-                                                        {booking.start_location}
-                                                    </Text>
+                                                    <Text style={{ fontSize: 14, color: '#333', marginLeft: 10 }}>{booking.start_location}</Text>
                                                 </View>
-                                                <View style={{
-                                                    marginLeft: 9,
-                                                    marginVertical: 4,
-                                                }}>
+                                                <View style={{ marginLeft: 9, marginVertical: 4 }}>
                                                     <MaterialCommunityIcons name="arrow-down" size={16} color="#ccc" />
                                                 </View>
-                                                <View style={{
-                                                    flexDirection: 'row',
-                                                    alignItems: 'center',
-                                                    marginBottom: 8,
-                                                }}>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                                                     <MaterialCommunityIcons name="map-marker" size={18} color="#ff5e7a" />
-                                                    <Text style={{
-                                                        fontSize: 14,
-                                                        color: '#333',
-                                                        marginLeft: 10,
-                                                    }}>
-                                                        {booking.end_location}
-                                                    </Text>
+                                                    <Text style={{ fontSize: 14, color: '#333', marginLeft: 10 }}>{booking.end_location}</Text>
                                                 </View>
                                                 {booking.purpose && (
-                                                    <View style={{
-                                                        flexDirection: 'row',
-                                                        alignItems: 'center',
-                                                    }}>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                                         <MaterialCommunityIcons name="information" size={18} color="#666" />
-                                                        <Text style={{
-                                                            fontSize: 14,
-                                                            color: '#666',
-                                                            marginLeft: 10,
-                                                        }}>
-                                                            {booking.purpose}
-                                                        </Text>
+                                                        <Text style={{ fontSize: 14, color: '#666', marginLeft: 10 }}>{booking.purpose}</Text>
                                                     </View>
                                                 )}
                                             </View>
 
-                                            {/* Dates */}
-                                            <View style={{
-                                                flexDirection: 'row',
-                                                gap: 16,
-                                                paddingTop: 12,
-                                                borderTopWidth: 1,
-                                                borderTopColor: '#F0F0F0',
-                                            }}>
+                                            <View style={{ flexDirection: 'row', gap: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F0F0F0' }}>
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                                     <MaterialCommunityIcons name="calendar" size={16} color="#666" />
                                                     <Text style={{ fontSize: 13, color: '#666' }}>
-                                                        {new Date(booking.start_time).toLocaleDateString('en-US', {
-                                                            month: 'short',
-                                                            day: 'numeric',
-                                                        })}
+                                                        {new Date(booking.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                                     </Text>
                                                 </View>
                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                                                     <MaterialCommunityIcons name="clock-outline" size={16} color="#666" />
                                                     <Text style={{ fontSize: 13, color: '#666' }}>
-                                                        {new Date(booking.start_time).toLocaleTimeString('en-US', {
-                                                            hour: '2-digit',
-                                                            minute: '2-digit',
-                                                        })}
+                                                        {new Date(booking.start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                                                     </Text>
                                                 </View>
                                             </View>
 
-                                            {/* Status Update Actions */}
-                                            {booking.status.toLowerCase() !== 'completed' &&
-                                                booking.status.toLowerCase() !== 'cancelled' && (
-                                                    <View style={{
-                                                        marginTop: 16,
-                                                        paddingTop: 16,
-                                                        borderTopWidth: 1,
-                                                        borderTopColor: '#F0F0F0',
-                                                    }}>
-                                                        <Text style={{
-                                                            fontSize: 13,
-                                                            fontWeight: '600',
-                                                            color: '#666',
-                                                            marginBottom: 12,
-                                                        }}>
-                                                            QUICK ACTIONS
-                                                        </Text>
-                                                        <View style={{
-                                                            flexDirection: 'row',
-                                                            flexWrap: 'wrap',
-                                                            gap: 8,
-                                                        }}>
-                                                            {['assigned', 'in-progress', 'completed', 'cancelled'].map((status) => {
-                                                                const currentStatus = booking.status.toLowerCase();
-                                                                let isDisabled = false;
-
-                                                                if (currentStatus === 'assigned') {
-                                                                    isDisabled = status !== 'in-progress' && status !== 'cancelled';
-                                                                } else if (currentStatus === 'in-progress') {
-                                                                    isDisabled = status !== 'completed' && status !== 'cancelled';
-                                                                }
-
-                                                                if (isDisabled) return null;
-
-                                                                return (
-                                                                    <TouchableOpacity
-                                                                        key={status}
-                                                                        onPress={() => updateBookingStatus(booking.id, status)}
-                                                                        style={{
-                                                                            flexDirection: 'row',
-                                                                            alignItems: 'center',
-                                                                            backgroundColor: '#FFFFFF',
-                                                                            paddingHorizontal: 14,
-                                                                            paddingVertical: 10,
-                                                                            borderRadius: 8,
-                                                                            borderWidth: 1.5,
-                                                                            borderColor: getStatusColor(status),
-                                                                            gap: 6,
-                                                                            minWidth: '45%',
-                                                                            justifyContent: 'center',
-                                                                        }}
-                                                                    >
-                                                                        <MaterialCommunityIcons
-                                                                            name={getStatusIconBooking(status)}
-                                                                            size={16}
-                                                                            color={getStatusColor(status)}
-                                                                        />
-                                                                        <Text style={{
-                                                                            fontSize: 13,
-                                                                            fontWeight: '600',
-                                                                            color: getStatusColor(status),
-                                                                        }}>
-                                                                            {status === 'in-progress' ? 'Start' :
-                                                                                status === 'completed' ? 'Complete' :
-                                                                                    status === 'cancelled' ? 'Cancel' : 'Assign'}
-                                                                        </Text>
-                                                                    </TouchableOpacity>
-                                                                );
-                                                            })}
-                                                        </View>
+                                            {booking.status.toLowerCase() !== 'completed' && booking.status.toLowerCase() !== 'cancelled' && (
+                                                <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#F0F0F0' }}>
+                                                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#666', marginBottom: 12 }}>
+                                                        QUICK ACTIONS
+                                                    </Text>
+                                                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                                                        {['assigned', 'in-progress', 'completed', 'cancelled'].map((status) => {
+                                                            const currentStatus = booking.status.toLowerCase();
+                                                            let isDisabled = false;
+                                                            if (currentStatus === 'assigned') {
+                                                                isDisabled = status !== 'in-progress' && status !== 'cancelled';
+                                                            } else if (currentStatus === 'in-progress') {
+                                                                isDisabled = status !== 'completed' && status !== 'cancelled';
+                                                            }
+                                                            if (isDisabled) return null;
+                                                            return (
+                                                                <TouchableOpacity
+                                                                    key={status}
+                                                                    onPress={() => updateBookingStatus(booking.id, status)}
+                                                                    style={{
+                                                                        flexDirection: 'row',
+                                                                        alignItems: 'center',
+                                                                        backgroundColor: '#FFFFFF',
+                                                                        paddingHorizontal: 14,
+                                                                        paddingVertical: 10,
+                                                                        borderRadius: 8,
+                                                                        borderWidth: 1.5,
+                                                                        borderColor: getStatusColor(status),
+                                                                        gap: 6,
+                                                                        minWidth: '45%',
+                                                                        justifyContent: 'center',
+                                                                    }}
+                                                                >
+                                                                    <MaterialCommunityIcons name={getStatusIconBooking(status)} size={16} color={getStatusColor(status)} />
+                                                                    <Text style={{ fontSize: 13, fontWeight: '600', color: getStatusColor(status) }}>
+                                                                        {status === 'in-progress' ? 'Start' : status === 'completed' ? 'Complete' : status === 'cancelled' ? 'Cancel' : 'Assign'}
+                                                                    </Text>
+                                                                </TouchableOpacity>
+                                                            );
+                                                        })}
                                                     </View>
-                                                )}
+                                                </View>
+                                            )}
                                         </View>
                                     );
                                 })}
@@ -2955,7 +2720,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                 </View>
             </Modal>
 
-            {/* Driver Selection Modal */}
+            {/* ── Driver Selection Modal ─────────────────────────────────────────── */}
             <Modal
                 visible={isDriverModalVisible}
                 transparent
@@ -2988,10 +2753,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                     >
                                         <View style={styles.driverOptionContent}>
                                             {driver.profile_picture ? (
-                                                <Image
-                                                    source={{ uri: driver.profile_picture }}
-                                                    style={styles.driverAvatar}
-                                                />
+                                                <Image source={{ uri: driver.profile_picture }} style={styles.driverAvatar} />
                                             ) : (
                                                 <View style={styles.driverAvatarPlaceholder}>
                                                     <MaterialCommunityIcons name="account" size={24} color="#999" />
@@ -3028,54 +2790,22 @@ const Vehicles: React.FC<VehiclesProps> = ({
                 </View>
             </Modal>
 
-            {/* Odometer Reading Modal */}
-            <Modal
-                visible={odometerModal.visible}
-                transparent={true}
-                animationType="slide"
-            >
-                <View style={{
-                    flex: 1,
-                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    padding: 20,
-                }}>
-                    <View style={{
-                        backgroundColor: '#FFFFFF',
-                        borderRadius: 20,
-                        width: '100%',
-                        maxWidth: 500,
-                        height: 600,
-                        overflow: 'hidden',
-                    }}>
-                        {/* Header - Fixed height */}
-                        <View style={{
-                            backgroundColor: '#075E54',
-                            paddingVertical: 16,
-                            paddingHorizontal: 20,
-                            height: 80,
-                        }}>
+            {/* ── Odometer Reading Modal ─────────────────────────────────────────── */}
+            <Modal visible={odometerModal.visible} transparent={true} animationType="slide">
+                <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                    <View style={{ backgroundColor: '#FFFFFF', borderRadius: 20, width: '100%', maxWidth: 500, height: 600, overflow: 'hidden' }}>
+                        <View style={{ backgroundColor: '#075E54', paddingVertical: 16, paddingHorizontal: 20, height: 80 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <View style={{ flex: 1 }}>
                                     <Text style={{ fontSize: 18, fontWeight: '700', color: '#FFFFFF' }}>
                                         {odometerModal.type === 'start' ? 'Start Trip' : 'Complete Trip'}
                                     </Text>
-                                    <Text style={{ fontSize: 13, color: '#FFFFFF', marginTop: 4 }}>
-                                        Enter odometer readings
-                                    </Text>
+                                    <Text style={{ fontSize: 13, color: '#FFFFFF', marginTop: 4 }}>Enter odometer readings</Text>
                                 </View>
                                 <TouchableOpacity
                                     onPress={() => {
                                         if (!submittingOdometer) {
-                                            setOdometerModal({
-                                                visible: false,
-                                                type: 'start',
-                                                bookingId: null,
-                                                selectedStatus: '',
-                                                cancellationReason: undefined,
-                                                assignments: [],
-                                            });
+                                            setOdometerModal({ visible: false, type: 'start', bookingId: null, selectedStatus: '', cancellationReason: undefined, assignments: [] });
                                             setOdometerReadings({});
                                         }
                                     }}
@@ -3087,28 +2817,9 @@ const Vehicles: React.FC<VehiclesProps> = ({
                             </View>
                         </View>
 
-                        {/* Content - ScrollView with calculated height */}
-                        <ScrollView
-                            style={{
-                                height: 440,
-                            }}
-                            contentContainerStyle={{
-                                padding: 20,
-                                paddingBottom: 40,
-                            }}
-                            showsVerticalScrollIndicator={true}
-                        >
-                            {/* Info Icon */}
+                        <ScrollView style={{ height: 440 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }} showsVerticalScrollIndicator={true}>
                             <View style={{ alignItems: 'center', marginBottom: 20 }}>
-                                <View style={{
-                                    width: 60,
-                                    height: 60,
-                                    borderRadius: 30,
-                                    backgroundColor: '#E8F5E9',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    marginBottom: 10
-                                }}>
+                                <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: '#E8F5E9', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
                                     <MaterialCommunityIcons name="speedometer" size={30} color="#008069" />
                                 </View>
                                 <Text style={{ fontSize: 14, color: '#666', textAlign: 'center' }}>
@@ -3116,74 +2827,27 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                 </Text>
                             </View>
 
-                            {/* VEHICLE INPUTS */}
                             {odometerModal.assignments.map((assignment, index) => (
-                                <View
-                                    key={assignment.id}
-                                    style={{
-                                        backgroundColor: '#F5F5F5',
-                                        borderRadius: 12,
-                                        padding: 16,
-                                        marginBottom: 16,
-                                    }}
-                                >
-                                    {/* Vehicle Header */}
+                                <View key={assignment.id} style={{ backgroundColor: '#F5F5F5', borderRadius: 12, padding: 16, marginBottom: 16 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                                        <View style={{
-                                            width: 32,
-                                            height: 32,
-                                            borderRadius: 16,
-                                            backgroundColor: '#008069',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            marginRight: 10
-                                        }}>
-                                            <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' }}>
-                                                {index + 1}
-                                            </Text>
+                                        <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#008069', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                                            <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' }}>{index + 1}</Text>
                                         </View>
                                         <View style={{ flex: 1 }}>
                                             <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#000' }}>
                                                 {assignment.vehicle.make} {assignment.vehicle.model}
                                             </Text>
-                                            <Text style={{ fontSize: 13, color: '#666' }}>
-                                                {assignment.vehicle.license_plate}
-                                            </Text>
+                                            <Text style={{ fontSize: 13, color: '#666' }}>{assignment.vehicle.license_plate}</Text>
                                         </View>
                                     </View>
-
-                                    {/* Input */}
-                                    <View style={{
-                                        backgroundColor: '#FFFFFF',
-                                        borderRadius: 8,
-                                        borderWidth: 2,
-                                        borderColor: odometerReadings[assignment.id] ? '#008069' : '#DDD',
-                                        flexDirection: 'row',
-                                        alignItems: 'center',
-                                        paddingHorizontal: 12,
-                                        height: 50,
-                                    }}>
-                                        <MaterialCommunityIcons
-                                            name="speedometer"
-                                            size={20}
-                                            color={odometerReadings[assignment.id] ? '#008069' : '#999'}
-                                        />
+                                    <View style={{ backgroundColor: '#FFFFFF', borderRadius: 8, borderWidth: 2, borderColor: odometerReadings[assignment.id] ? '#008069' : '#DDD', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, height: 50 }}>
+                                        <MaterialCommunityIcons name="speedometer" size={20} color={odometerReadings[assignment.id] ? '#008069' : '#999'} />
                                         <TextInput
-                                            style={{
-                                                flex: 1,
-                                                paddingVertical: 0,
-                                                paddingHorizontal: 10,
-                                                fontSize: 16,
-                                                color: '#000',
-                                                height: 50,
-                                            }}
+                                            style={{ flex: 1, paddingVertical: 0, paddingHorizontal: 10, fontSize: 16, color: '#000', height: 50 }}
                                             value={odometerReadings[assignment.id] || ''}
                                             onChangeText={(text) => {
                                                 const numeric = text.replace(/[^0-9]/g, '');
-                                                setOdometerReadings(prev => ({
-                                                    ...prev,
-                                                    [assignment.id]: numeric
-                                                }));
+                                                setOdometerReadings(prev => ({ ...prev, [assignment.id]: numeric }));
                                             }}
                                             placeholder="Enter reading"
                                             placeholderTextColor="#999"
@@ -3192,17 +2856,8 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                         />
                                         <Text style={{ fontSize: 13, color: '#666' }}>km</Text>
                                     </View>
-
-                                    {/* Success Message */}
                                     {odometerReadings[assignment.id] && (
-                                        <View style={{
-                                            flexDirection: 'row',
-                                            alignItems: 'center',
-                                            marginTop: 8,
-                                            backgroundColor: '#E8F5E9',
-                                            padding: 6,
-                                            borderRadius: 6
-                                        }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, backgroundColor: '#E8F5E9', padding: 6, borderRadius: 6 }}>
                                             <MaterialCommunityIcons name="check-circle" size={14} color="#008069" />
                                             <Text style={{ fontSize: 11, color: '#008069', marginLeft: 4, fontWeight: '600' }}>
                                                 Recorded: {Number(odometerReadings[assignment.id]).toLocaleString()} km
@@ -3213,37 +2868,12 @@ const Vehicles: React.FC<VehiclesProps> = ({
                             ))}
                         </ScrollView>
 
-                        {/* Footer - Fixed height */}
-                        <View style={{
-                            flexDirection: 'row',
-                            padding: 16,
-                            borderTopWidth: 1,
-                            borderTopColor: '#EEE',
-                            height: 80,
-                            backgroundColor: '#FAFAFA',
-                        }}>
+                        <View style={{ flexDirection: 'row', padding: 16, borderTopWidth: 1, borderTopColor: '#EEE', height: 80, backgroundColor: '#FAFAFA' }}>
                             <TouchableOpacity
-                                style={{
-                                    flex: 1,
-                                    paddingVertical: 12,
-                                    backgroundColor: '#FFF',
-                                    borderRadius: 8,
-                                    borderWidth: 1,
-                                    borderColor: '#DDD',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    marginRight: 8,
-                                }}
+                                style={{ flex: 1, paddingVertical: 12, backgroundColor: '#FFF', borderRadius: 8, borderWidth: 1, borderColor: '#DDD', alignItems: 'center', justifyContent: 'center', marginRight: 8 }}
                                 onPress={() => {
                                     if (!submittingOdometer) {
-                                        setOdometerModal({
-                                            visible: false,
-                                            type: 'start',
-                                            bookingId: null,
-                                            selectedStatus: '',
-                                            cancellationReason: undefined,
-                                            assignments: [],
-                                        });
+                                        setOdometerModal({ visible: false, type: 'start', bookingId: null, selectedStatus: '', cancellationReason: undefined, assignments: [] });
                                         setOdometerReadings({});
                                     }
                                 }}
@@ -3251,26 +2881,15 @@ const Vehicles: React.FC<VehiclesProps> = ({
                             >
                                 <Text style={{ fontSize: 15, fontWeight: '600', color: '#666' }}>Cancel</Text>
                             </TouchableOpacity>
-
                             <TouchableOpacity
-                                style={{
-                                    flex: 1,
-                                    paddingVertical: 12,
-                                    backgroundColor: (Object.keys(odometerReadings).length === odometerModal.assignments.length && !submittingOdometer) ? '#008069' : '#CCC',
-                                    borderRadius: 8,
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    marginLeft: 8,
-                                }}
+                                style={{ flex: 1, paddingVertical: 12, backgroundColor: (Object.keys(odometerReadings).length === odometerModal.assignments.length && !submittingOdometer) ? '#008069' : '#CCC', borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginLeft: 8 }}
                                 onPress={handleOdometerConfirm}
                                 disabled={Object.keys(odometerReadings).length !== odometerModal.assignments.length || submittingOdometer}
                             >
                                 {submittingOdometer ? (
                                     <ActivityIndicator color="#FFF" size="small" />
                                 ) : (
-                                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#FFF' }}>
-                                        Confirm
-                                    </Text>
+                                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#FFF' }}>Confirm</Text>
                                 )}
                             </TouchableOpacity>
                         </View>
@@ -3278,7 +2897,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                 </View>
             </Modal>
 
-            {/* Download Report Modal */}
+            {/* ── Download Report Modal ──────────────────────────────────────────── */}
             {!showMonthPicker && !showYearPicker && (
                 <Modal
                     visible={isDownloadReportModalVisible}
@@ -3299,11 +2918,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
                             setSelectedYear('');
                         }}
                     >
-                        <TouchableOpacity
-                            activeOpacity={1}
-                            onPress={(e) => e.stopPropagation()}
-                            style={{ width: '100%' }}
-                        >
+                        <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()} style={{ width: '100%' }}>
                             <View style={styles.downloadReportModalContainer}>
                                 <View style={styles.downloadReportModalHeader}>
                                     <View style={styles.downloadReportHeaderContent}>
@@ -3333,16 +2948,10 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                             <TouchableOpacity
                                                 style={styles.downloadReportPickerContainer}
                                                 activeOpacity={0.7}
-                                                onPress={() => {
-                                                    setTempMonth(selectedMonth);
-                                                    setShowMonthPicker(true);
-                                                }}
+                                                onPress={() => { setTempMonth(selectedMonth); setShowMonthPicker(true); }}
                                             >
                                                 <View style={styles.iosPickerButton} pointerEvents="none">
-                                                    <Text style={[
-                                                        styles.iosPickerButtonText,
-                                                        !selectedMonth && { color: '#999' }
-                                                    ]}>
+                                                    <Text style={[styles.iosPickerButtonText, !selectedMonth && { color: '#999' }]}>
                                                         {selectedMonth
                                                             ? generateMonthYearOptions().months.find(m => m.value === selectedMonth)?.label
                                                             : 'Choose a month...'}
@@ -3352,18 +2961,10 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                             </TouchableOpacity>
                                         ) : (
                                             <View style={styles.downloadReportPickerContainer}>
-                                                <Picker
-                                                    selectedValue={selectedMonth}
-                                                    onValueChange={(value) => setSelectedMonth(value)}
-                                                    style={styles.downloadReportPicker}
-                                                >
+                                                <Picker selectedValue={selectedMonth} onValueChange={(value) => setSelectedMonth(value)} style={styles.downloadReportPicker}>
                                                     <Picker.Item label="Choose a month..." value="" />
                                                     {generateMonthYearOptions().months.map((month) => (
-                                                        <Picker.Item
-                                                            key={month.value}
-                                                            label={month.label}
-                                                            value={month.value}
-                                                        />
+                                                        <Picker.Item key={month.value} label={month.label} value={month.value} />
                                                     ))}
                                                 </Picker>
                                             </View>
@@ -3376,16 +2977,10 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                             <TouchableOpacity
                                                 style={styles.downloadReportPickerContainer}
                                                 activeOpacity={0.7}
-                                                onPress={() => {
-                                                    setTempYear(selectedYear);
-                                                    setShowYearPicker(true);
-                                                }}
+                                                onPress={() => { setTempYear(selectedYear); setShowYearPicker(true); }}
                                             >
                                                 <View style={styles.iosPickerButton} pointerEvents="none">
-                                                    <Text style={[
-                                                        styles.iosPickerButtonText,
-                                                        !selectedYear && { color: '#999' }
-                                                    ]}>
+                                                    <Text style={[styles.iosPickerButtonText, !selectedYear && { color: '#999' }]}>
                                                         {selectedYear || 'Choose a year...'}
                                                     </Text>
                                                     <Ionicons name="chevron-down" size={20} color="#666" />
@@ -3393,18 +2988,10 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                             </TouchableOpacity>
                                         ) : (
                                             <View style={styles.downloadReportPickerContainer}>
-                                                <Picker
-                                                    selectedValue={selectedYear}
-                                                    onValueChange={(value) => setSelectedYear(value)}
-                                                    style={styles.downloadReportPicker}
-                                                >
+                                                <Picker selectedValue={selectedYear} onValueChange={(value) => setSelectedYear(value)} style={styles.downloadReportPicker}>
                                                     <Picker.Item label="Choose a year..." value="" />
                                                     {generateMonthYearOptions().years.map((year) => (
-                                                        <Picker.Item
-                                                            key={year}
-                                                            label={year.toString()}
-                                                            value={year.toString()}
-                                                        />
+                                                        <Picker.Item key={year} label={year.toString()} value={year.toString()} />
                                                     ))}
                                                 </Picker>
                                             </View>
@@ -3415,19 +3002,12 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                 <View style={styles.downloadReportModalFooter}>
                                     <TouchableOpacity
                                         style={styles.downloadReportCancelButton}
-                                        onPress={() => {
-                                            setIsDownloadReportModalVisible(false);
-                                            setSelectedMonth('');
-                                            setSelectedYear('');
-                                        }}
+                                        onPress={() => { setIsDownloadReportModalVisible(false); setSelectedMonth(''); setSelectedYear(''); }}
                                     >
                                         <Text style={styles.downloadReportCancelButtonText}>Cancel</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
-                                        style={[
-                                            styles.downloadReportDownloadButton,
-                                            (!selectedMonth || !selectedYear || isDownloading) && styles.downloadReportDownloadButtonDisabled
-                                        ]}
+                                        style={[styles.downloadReportDownloadButton, (!selectedMonth || !selectedYear || isDownloading) && styles.downloadReportDownloadButtonDisabled]}
                                         onPress={handleDownloadReport}
                                         disabled={!selectedMonth || !selectedYear || isDownloading}
                                     >
@@ -3447,48 +3027,25 @@ const Vehicles: React.FC<VehiclesProps> = ({
                 </Modal>
             )}
 
+            {/* ── iOS Month Picker ───────────────────────────────────────────────── */}
             {Platform.OS === 'ios' && showMonthPicker && (
-                <Modal
-                    visible={showMonthPicker}
-                    transparent={true}
-                    animationType="slide"
-                    onRequestClose={() => {
-                        setShowMonthPicker(false);
-                    }}
-                >
+                <Modal visible={showMonthPicker} transparent={true} animationType="slide" onRequestClose={() => setShowMonthPicker(false)}>
                     <View style={styles.iosPickerModalOverlay}>
-                        <TouchableOpacity
-                            style={{ flex: 1 }}
-                            activeOpacity={1}
-                            onPress={() => setShowMonthPicker(false)}
-                        />
+                        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowMonthPicker(false)} />
                         <View style={styles.iosPickerModalContainer}>
                             <View style={styles.iosPickerHeader}>
-                                <TouchableOpacity onPress={() => {
-                                    setShowMonthPicker(false);
-                                }}>
+                                <TouchableOpacity onPress={() => setShowMonthPicker(false)}>
                                     <Text style={styles.iosPickerCancelText}>Cancel</Text>
                                 </TouchableOpacity>
                                 <Text style={{ fontSize: 17, fontWeight: '600', color: '#000' }}>Select Month</Text>
-                                <TouchableOpacity onPress={() => {
-                                    setSelectedMonth(tempMonth);
-                                    setShowMonthPicker(false);
-                                }}>
+                                <TouchableOpacity onPress={() => { setSelectedMonth(tempMonth); setShowMonthPicker(false); }}>
                                     <Text style={styles.iosPickerDoneText}>Done</Text>
                                 </TouchableOpacity>
                             </View>
-                            <Picker
-                                selectedValue={tempMonth}
-                                onValueChange={(value) => setTempMonth(value)}
-                                style={styles.iosPicker}
-                            >
+                            <Picker selectedValue={tempMonth} onValueChange={(value) => setTempMonth(value)} style={styles.iosPicker}>
                                 <Picker.Item label="Choose a month..." value="" />
                                 {generateMonthYearOptions().months.map((month) => (
-                                    <Picker.Item
-                                        key={month.value}
-                                        label={month.label}
-                                        value={month.value}
-                                    />
+                                    <Picker.Item key={month.value} label={month.label} value={month.value} />
                                 ))}
                             </Picker>
                         </View>
@@ -3496,50 +3053,135 @@ const Vehicles: React.FC<VehiclesProps> = ({
                 </Modal>
             )}
 
+            {/* ── iOS Year Picker ────────────────────────────────────────────────── */}
             {Platform.OS === 'ios' && showYearPicker && (
-                <Modal
-                    visible={showYearPicker}
-                    transparent={true}
-                    animationType="slide"
-                    onRequestClose={() => {
-                        setShowYearPicker(false);
-                    }}
-                >
+                <Modal visible={showYearPicker} transparent={true} animationType="slide" onRequestClose={() => setShowYearPicker(false)}>
                     <View style={styles.iosPickerModalOverlay}>
-                        <TouchableOpacity
-                            style={{ flex: 1 }}
-                            activeOpacity={1}
-                            onPress={() => setShowYearPicker(false)}
-                        />
+                        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowYearPicker(false)} />
                         <View style={styles.iosPickerModalContainer}>
                             <View style={styles.iosPickerHeader}>
-                                <TouchableOpacity onPress={() => {
-                                    setShowYearPicker(false);
-                                }}>
+                                <TouchableOpacity onPress={() => setShowYearPicker(false)}>
                                     <Text style={styles.iosPickerCancelText}>Cancel</Text>
                                 </TouchableOpacity>
                                 <Text style={{ fontSize: 17, fontWeight: '600', color: '#000' }}>Select Year</Text>
-                                <TouchableOpacity onPress={() => {
-                                    setSelectedYear(tempYear);
-                                    setShowYearPicker(false);
-                                }}>
+                                <TouchableOpacity onPress={() => { setSelectedYear(tempYear); setShowYearPicker(false); }}>
                                     <Text style={styles.iosPickerDoneText}>Done</Text>
                                 </TouchableOpacity>
                             </View>
-                            <Picker
-                                selectedValue={tempYear}
-                                onValueChange={(value) => setTempYear(value)}
-                                style={styles.iosPicker}
-                            >
+                            <Picker selectedValue={tempYear} onValueChange={(value) => setTempYear(value)} style={styles.iosPicker}>
                                 <Picker.Item label="Choose a year..." value="" />
                                 {generateMonthYearOptions().years.map((year) => (
-                                    <Picker.Item
-                                        key={year}
-                                        label={year.toString()}
-                                        value={year.toString()}
-                                    />
+                                    <Picker.Item key={year} label={year.toString()} value={year.toString()} />
                                 ))}
                             </Picker>
+                        </View>
+                    </View>
+                </Modal>
+            )}
+
+            {/* ── Web Delete Confirmation Modal ──────────────────────────────────── */}
+            {Platform.OS === 'web' && (
+                <Modal
+                    visible={deleteConfirmModal.visible}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setDeleteConfirmModal({ visible: false, vehicleId: null })}
+                >
+                    <View style={{
+                        flex: 1,
+                        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        padding: 24,
+                    }}>
+                        <View style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: 16,
+                            padding: 24,
+                            width: '100%',
+                            maxWidth: 400,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.2,
+                            shadowRadius: 12,
+                            elevation: 8,
+                        }}>
+                            {/* Icon */}
+                            <View style={{
+                                alignSelf: 'center',
+                                width: 56,
+                                height: 56,
+                                borderRadius: 28,
+                                backgroundColor: '#FFF0EE',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginBottom: 16,
+                            }}>
+                                <MaterialIcons name="delete" size={28} color="#FF3B30" />
+                            </View>
+
+                            {/* Title */}
+                            <Text style={{
+                                fontSize: 18,
+                                fontWeight: '700',
+                                color: '#1A1A1A',
+                                textAlign: 'center',
+                                marginBottom: 8,
+                            }}>
+                                Delete Vehicle
+                            </Text>
+
+                            {/* Message */}
+                            <Text style={{
+                                fontSize: 14,
+                                color: '#666',
+                                textAlign: 'center',
+                                lineHeight: 20,
+                                marginBottom: 24,
+                            }}>
+                                Are you sure you want to delete this vehicle? This action cannot be undone.
+                            </Text>
+
+                            {/* Buttons */}
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                <TouchableOpacity
+                                    style={{
+                                        flex: 1,
+                                        paddingVertical: 12,
+                                        borderRadius: 10,
+                                        borderWidth: 1.5,
+                                        borderColor: '#DDD',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        backgroundColor: '#FAFAFA',
+                                    }}
+                                    onPress={() => setDeleteConfirmModal({ visible: false, vehicleId: null })}
+                                >
+                                    <Text style={{ fontSize: 15, fontWeight: '600', color: '#444' }}>Cancel</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity
+                                    style={{
+                                        flex: 1,
+                                        paddingVertical: 12,
+                                        borderRadius: 10,
+                                        backgroundColor: '#FF3B30',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                    onPress={() => {
+                                        const id = deleteConfirmModal.vehicleId;
+                                        setDeleteConfirmModal({ visible: false, vehicleId: null });
+                                        if (id !== null) performDeleteVehicle(id);
+                                    }}
+                                >
+                                    {loading ? (
+                                        <ActivityIndicator color="#FFF" size="small" />
+                                    ) : (
+                                        <Text style={{ fontSize: 15, fontWeight: '600', color: '#FFF' }}>Delete</Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     </View>
                 </Modal>
