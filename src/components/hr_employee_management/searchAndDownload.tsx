@@ -12,7 +12,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { WHATSAPP_COLORS } from './constants';
 import { styles } from './styles';
-import alert from '../../utils/Alert';
 
 interface SearchAndDownloadProps {
   searchQuery: string;
@@ -22,6 +21,8 @@ interface SearchAndDownloadProps {
   onOpenWorkStats: () => void;
   onOpenBulkPayslips: () => void;
   onOpenBulkEmployees: () => void;
+  onOpenUpdateOrder: () => void;
+  onOpenEvents: () => void;
   placeholder: string;
 }
 
@@ -33,6 +34,8 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
   onOpenWorkStats,
   onOpenBulkPayslips,
   onOpenBulkEmployees,
+  onOpenUpdateOrder,
+  onOpenEvents,
   placeholder,
 }) => {
   const [searchFocused, setSearchFocused] = React.useState(false);
@@ -45,10 +48,12 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
 
   return (
     <View style={styles.searchAndDownloadContainer}>
-      <View style={[
-        styles.searchInputContainer,
-        searchFocused && styles.searchInputContainerFocused
-      ]}>
+      <View
+        style={[
+          styles.searchInputContainer,
+          searchFocused && styles.searchInputContainerFocused,
+        ]}
+      >
         <Ionicons
           name="search"
           size={18}
@@ -65,17 +70,8 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
           onBlur={() => setSearchFocused(false)}
           clearButtonMode="while-editing"
         />
-        {/* {searchQuery.length > 0 && (
-          <TouchableOpacity
-            style={[styles.clearButton, { marginLeft: -40 }]}
-            onPress={() => onSearchChange('')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="close-circle" size={18} color={WHATSAPP_COLORS.textTertiary} />
-          </TouchableOpacity>
-        )} */}
       </View>
-      
+
       <TouchableOpacity
         style={[localStyles.optionsButton, { marginTop: 5 }]}
         onPress={() => setOptionsVisible(true)}
@@ -91,13 +87,13 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
         animationType="fade"
         onRequestClose={() => setOptionsVisible(false)}
       >
-        <Pressable 
+        <Pressable
           style={localStyles.modalOverlay}
           onPress={() => setOptionsVisible(false)}
         >
           <View style={localStyles.modalContent}>
-            
-            {/* Work Statistics Option */}
+
+            {/* Work Statistics */}
             <TouchableOpacity
               style={localStyles.optionItem}
               onPress={() => handleOptionPress(onOpenWorkStats)}
@@ -115,7 +111,7 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
 
             <View style={localStyles.optionDivider} />
 
-            {/* Bulk Upload Payslips Option - NEW */}
+            {/* Bulk Upload Payslips */}
             <TouchableOpacity
               style={localStyles.optionItem}
               onPress={() => handleOptionPress(onOpenBulkPayslips)}
@@ -133,7 +129,7 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
 
             <View style={localStyles.optionDivider} />
 
-            {/* Bulk Upload Employees Option - NEW */}
+            {/* Bulk Update Employees */}
             <TouchableOpacity
               style={localStyles.optionItem}
               onPress={() => handleOptionPress(onOpenBulkEmployees)}
@@ -151,7 +147,7 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
 
             <View style={localStyles.optionDivider} />
 
-            {/* Manage Holidays Option */}
+            {/* Manage Holidays */}
             <TouchableOpacity
               style={localStyles.optionItem}
               onPress={() => handleOptionPress(onOpenHolidays)}
@@ -169,7 +165,7 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
 
             <View style={localStyles.optionDivider} />
 
-            {/* Download Attendance Option */}
+            {/* Download Attendance */}
             <TouchableOpacity
               style={localStyles.optionItem}
               onPress={() => handleOptionPress(onDownloadAttendance)}
@@ -184,6 +180,43 @@ const SearchAndDownload: React.FC<SearchAndDownloadProps> = ({
               </View>
               <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textTertiary} />
             </TouchableOpacity>
+
+            <View style={localStyles.optionDivider} />
+
+            {/* Update Order */}
+            <TouchableOpacity
+              style={localStyles.optionItem}
+              onPress={() => handleOptionPress(onOpenUpdateOrder)}
+              activeOpacity={0.7}
+            >
+              <View style={localStyles.optionIconContainer}>
+                <Ionicons name="swap-vertical-outline" size={22} color={WHATSAPP_COLORS.primary} />
+              </View>
+              <View style={localStyles.optionTextContainer}>
+                <Text style={localStyles.optionText}>Update Order</Text>
+                <Text style={localStyles.optionSubtext}>Reorder designation seniority</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textTertiary} />
+            </TouchableOpacity>
+
+            <View style={localStyles.optionDivider} />
+
+            {/* Update Events */}
+            <TouchableOpacity
+              style={localStyles.optionItem}
+              onPress={() => handleOptionPress(onOpenEvents)}
+              activeOpacity={0.7}
+            >
+              <View style={localStyles.optionIconContainer}>
+                <Ionicons name="calendar-number-outline" size={22} color={WHATSAPP_COLORS.primary} />
+              </View>
+              <View style={localStyles.optionTextContainer}>
+                <Text style={localStyles.optionText}>Update Events</Text>
+                <Text style={localStyles.optionSubtext}>Control who sees birthdays & anniversaries</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={WHATSAPP_COLORS.textTertiary} />
+            </TouchableOpacity>
+
           </View>
         </Pressable>
       </Modal>

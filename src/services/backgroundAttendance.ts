@@ -1,495 +1,257 @@
-// src/services/backgroundAttendance.ts
+/**
+ * src/services/backgroundAttendance.ts
+ *
+ * Periodic attendance check via expo-background-fetch (fallback mechanism).
+ *
+ * IMPORTANT — architecture note:
+ *   This service handles BACKGROUND FETCH ONLY (polling every ≥15 min).
+ *   Geofencing is handled exclusively by geofencing.ts.
+ *   Having both provides redundancy:
+ *     • Geofencing (geofencing.ts) = event-driven, battery-efficient, primary
+ *     • Background fetch (this file) = time-driven, fallback if geofencing misses
+ *
+ *   Do NOT define any geofence TaskManager tasks here — that caused the
+ *   conflicting duplicate-task bug in the previous version.
+ *
+ * Google Play compliance:
+ *   ✅  No background location permission requested here directly
+ *       (background fetch only needs foreground location to check position)
+ *   ✅  Working-hours guard limits battery impact
+ *   ✅  "Already marked today" guard prevents duplicate API calls
+ */
+
 import * as TaskManager from 'expo-task-manager';
 import * as BackgroundFetch from 'expo-background-fetch';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BACKEND_URL } from '../config/config';
-import { Platform } from 'react-native';
 
-const BACKGROUND_ATTENDANCE_TASK = 'BACKGROUND_ATTENDANCE_TASK';
-const GEOFENCING_TASK = 'OFFICE_GEOFENCING_TASK';
-const TOKEN_2_KEY = 'token_2';
-const OFFICE_LOCATION_KEY = 'office_location';
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const BACKGROUND_FETCH_TASK = 'citadel-attendance-fetch';
+const TOKEN_KEY = 'token_2';
 const LAST_ATTENDANCE_KEY = 'last_attendance_marked';
 
-// ============================================================================
-// CORE ATTENDANCE MARKING FUNCTION (Used by all methods)
-// ============================================================================
-async function markAttendance(latitude: number, longitude: number): Promise<boolean> {
-  try {
-    const token = await AsyncStorage.getItem(TOKEN_2_KEY);
-    if (!token) {
-      console.log('❌ No token found for attendance marking');
-      return false;
-    }
+/** Minimum allowed by both iOS and Android (15 min). */
+const FETCH_INTERVAL_SECONDS = 15 * 60;
 
-    // Check if already marked today
-    const lastMarked = await AsyncStorage.getItem(LAST_ATTENDANCE_KEY);
-    if (lastMarked) {
-      const lastDate = new Date(lastMarked);
-      const today = new Date();
-      if (
-        lastDate.getDate() === today.getDate() &&
-        lastDate.getMonth() === today.getMonth() &&
-        lastDate.getFullYear() === today.getFullYear()
-      ) {
-        console.log('✅ Attendance already marked today');
-        return true; // Already marked today
+// ── Internal helpers ──────────────────────────────────────────────────────────
+
+async function isAlreadyMarkedToday(): Promise<boolean> {
+  const raw = await AsyncStorage.getItem(LAST_ATTENDANCE_KEY);
+  if (!raw) return false;
+  const last = new Date(raw);
+  const now = new Date();
+  return (
+    last.getDate() === now.getDate() &&
+    last.getMonth() === now.getMonth() &&
+    last.getFullYear() === now.getFullYear()
+  );
+}
+
+function isWithinWorkingHours(): boolean {
+  const now = new Date();
+  const day = now.getDay();   // 0=Sun … 6=Sat
+  const hour = now.getHours();
+  return day >= 1 && day <= 5 && hour >= 8 && hour < 12;
+}
+
+async function markAttendanceViaFetch(): Promise<BackgroundFetch.BackgroundFetchResult> {
+  // Skip outside working hours
+  if (!isWithinWorkingHours()) {
+    return BackgroundFetch.BackgroundFetchResult.NoData;
+  }
+
+  // Skip if already marked today (prevents duplicate records)
+  if (await isAlreadyMarkedToday()) {
+    console.log('[BgFetch] Attendance already marked today');
+    return BackgroundFetch.BackgroundFetchResult.NoData;
+  }
+
+  // Auth token
+  const token = await AsyncStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    return BackgroundFetch.BackgroundFetchResult.Failed;
+  }
+
+  // Check work status (leave / holiday)
+  try {
+    const statusRes = await fetch(`${BACKEND_URL}/core/checkWorkStatus`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    if (statusRes.ok) {
+      const statusData = await statusRes.json();
+      if (statusData.data === false) {
+        console.log('[BgFetch] Leave/holiday — skipping');
+        return BackgroundFetch.BackgroundFetchResult.NoData;
       }
     }
+  } catch {
+    // Non-critical — proceed with attendance attempt
+  }
 
-    console.log('📍 Marking attendance at:', { latitude, longitude });
+  // Get current location
+  // Background fetch can use foreground location (no background permission needed
+  // when the task is woken by the OS fetch timer, iOS still provides location
+  // via the "location" background mode declared in app.json).
+  let location: Location.LocationObject;
+  try {
+    location = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    });
+  } catch (err) {
+    console.error('[BgFetch] Could not get location:', err);
+    return BackgroundFetch.BackgroundFetchResult.Failed;
+  }
 
-    const response = await fetch(`${BACKEND_URL}/core/markAutoAttendance`, {
+  // Mark attendance
+  try {
+    const res = await fetch(`${BACKEND_URL}/core/markAutoAttendance`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         token,
-        latitude: latitude.toString(),
-        longitude: longitude.toString(),
+        latitude: location.coords.latitude.toString(),
+        longitude: location.coords.longitude.toString(),
+        source: 'background_fetch',
       }),
     });
 
-    if (response.ok) {
-      const result = await response.json();
-      console.log('✅ Attendance marked successfully:', result);
-      
-      // Store last attendance mark time
+    if (res.ok) {
       await AsyncStorage.setItem(LAST_ATTENDANCE_KEY, new Date().toISOString());
-      
-      return true;
-    } else {
-      console.log('❌ Failed to mark attendance:', response.status);
-      return false;
+      console.log('[BgFetch] Attendance marked successfully');
+      return BackgroundFetch.BackgroundFetchResult.NewData;
     }
-  } catch (error) {
-    console.error('❌ Error marking attendance:', error);
-    return false;
-  }
-}
 
-// ============================================================================
-// HELPER: Check if within working hours
-// ============================================================================
-function isWithinWorkingHours(): boolean {
-  const now = new Date();
-  const currentHour = now.getHours();
-  const currentDay = now.getDay();
-  
-  // Monday to Friday (1-5)
-  const isWeekday = currentDay >= 1 && currentDay <= 5;
-  
-  // Between 9:00 AM and 12:00 PM (flexible 3-hour window)
-  const isWorkingHour = currentHour >= 9 && currentHour < 12;
-  
-  return isWeekday && isWorkingHour;
-}
+    console.warn('[BgFetch] Backend rejected attendance:', res.status);
+    return BackgroundFetch.BackgroundFetchResult.Failed;
 
-// ============================================================================
-// METHOD 1: BACKGROUND FETCH TASK
-// ============================================================================
-TaskManager.defineTask(BACKGROUND_ATTENDANCE_TASK, async () => {
-  try {
-    console.log('🔄 Background fetch task started');
-    
-    // Check if within working hours
-    if (!isWithinWorkingHours()) {
-      console.log('⏰ Outside working hours, skipping');
-      return BackgroundFetch.BackgroundFetchResult.NoData;
-    }
-    
-    // Get current location with background permission
-    let location;
-    try {
-      location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-        timeInterval: 5000,
-        mayShowUserSettingsDialog: false,
-      });
-    } catch (locError) {
-      console.log('❌ Could not get location in background:', locError);
-      return BackgroundFetch.BackgroundFetchResult.Failed;
-    }
-    
-    // Mark attendance
-    const success = await markAttendance(
-      location.coords.latitude,
-      location.coords.longitude
-    );
-    
-    return success 
-      ? BackgroundFetch.BackgroundFetchResult.NewData 
-      : BackgroundFetch.BackgroundFetchResult.Failed;
-    
-  } catch (error) {
-    console.error('❌ Background fetch task error:', error);
+  } catch (err) {
+    console.error('[BgFetch] Network error:', err);
     return BackgroundFetch.BackgroundFetchResult.Failed;
   }
-});
+}
 
-// ============================================================================
-// METHOD 2: GEOFENCING TASK
-// ============================================================================
-TaskManager.defineTask(GEOFENCING_TASK, async ({ data, error }: any) => {
-  if (error) {
-    console.error('❌ Geofencing error:', error);
-    return;
-  }
+// ── Task definition ───────────────────────────────────────────────────────────
+// Must be at module top-level so Expo's task runner can find it in a headless
+// JS context without re-initializing the full React app.
 
-  if (data.eventType === Location.GeofencingEventType.Enter) {
-    console.log('🏢 User entered office geofence!');
-    
-    // Check if within working hours
-    if (!isWithinWorkingHours()) {
-      console.log('⏰ Outside working hours, skipping geofence attendance');
-      return;
-    }
+TaskManager.defineTask(BACKGROUND_FETCH_TASK, markAttendanceViaFetch);
 
-    // Get current location
-    try {
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      
-      await markAttendance(
-        location.coords.latitude,
-        location.coords.longitude
-      );
-    } catch (locError) {
-      console.error('❌ Could not get location for geofencing:', locError);
-    }
-  }
-});
+// ── BackgroundAttendanceService ───────────────────────────────────────────────
 
-// ============================================================================
-// BACKGROUND ATTENDANCE SERVICE
-// ============================================================================
 export const BackgroundAttendanceService = {
-  
+
   /**
-   * Initialize all background methods.
+   * Register the background-fetch task.
+   * Safe to call multiple times — skips if already registered.
    *
-   * @param showDisclosure  Optional async callback that presents the
-   *                        prominent-disclosure dialog and resolves with
-   *                        `true` (accepted) or `false` (declined).
-   *                        Required the first time background permission
-   *                        is requested; safe to omit once already granted.
+   * Does NOT request any location permissions (the OS wakes the app on its
+   * own schedule; location is obtained inside the task).
    */
+  async registerBackgroundFetchTask(): Promise<boolean> {
+    try {
+      const status = await BackgroundFetch.getStatusAsync();
+
+      if (
+        status === BackgroundFetch.BackgroundFetchStatus.Denied ||
+        status === BackgroundFetch.BackgroundFetchStatus.Restricted
+      ) {
+        console.log('[BgFetch] Background fetch unavailable on this device');
+        return false;
+      }
+
+      const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
+      if (isRegistered) {
+        console.log('[BgFetch] Already registered');
+        return true;
+      }
+
+      await BackgroundFetch.registerTaskAsync(BACKGROUND_FETCH_TASK, {
+        minimumInterval: FETCH_INTERVAL_SECONDS,
+        stopOnTerminate: false,  // continue after app is killed
+        startOnBoot: true,       // restart after device reboot
+      });
+
+      console.log('[BgFetch] Registered (interval: 15 min)');
+      return true;
+
+    } catch (err) {
+      console.error('[BgFetch] Registration failed:', err);
+      return false;
+    }
+  },
+
+  /**
+   * Unregister the background-fetch task.
+   */
+  async unregisterBackgroundFetchTask(): Promise<boolean> {
+    try {
+      const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
+      if (isRegistered) {
+        await BackgroundFetch.unregisterTaskAsync(BACKGROUND_FETCH_TASK);
+        console.log('[BgFetch] Unregistered');
+      }
+      return true;
+    } catch (err) {
+      console.error('[BgFetch] Unregister failed:', err);
+      return false;
+    }
+  },
+
+  /**
+   * Stop all services managed by this module.
+   * (Geofencing is stopped separately by GeofencingService.stop().)
+   */
+  async stop(): Promise<boolean> {
+    return this.unregisterBackgroundFetchTask();
+  },
+
+  // ── Backward-compatible aliases ───────────────────────────────────────────
+  // Dashboard.tsx may still call initialize() or initializeAll() from before
+  // the refactor. These aliases forward to registerBackgroundFetchTask() so
+  // the old call sites keep working without any Dashboard changes.
+
+  /** @deprecated Use registerBackgroundFetchTask() directly. */
+  async initialize(
+    _showDisclosure?: () => Promise<boolean>,
+  ): Promise<{ backgroundFetch: boolean; geofencing: boolean }> {
+    const backgroundFetch = await this.registerBackgroundFetchTask();
+    return { backgroundFetch, geofencing: false };
+  },
+
+  /** @deprecated Use registerBackgroundFetchTask() directly. */
   async initializeAll(
-    showDisclosure?: () => Promise<boolean>
-  ): Promise<{
-    backgroundFetch: boolean;
-    geofencing: boolean;
+    _showDisclosure?: () => Promise<boolean>,
+  ): Promise<{ backgroundFetch: boolean; geofencing: boolean }> {
+    return this.initialize(_showDisclosure);
+  },
+
+  /** Diagnostic status for settings / debug screens. */
+  async getStatus(): Promise<{
+    fetchRegistered: boolean;
+    fetchStatus: string;
+    lastAttendance: string | null;
+    isAuthenticated: boolean;
   }> {
-    const results = {
-      backgroundFetch: false,
-      geofencing: false,
+    const fetchRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
+    const fetchStatusCode = await BackgroundFetch.getStatusAsync();
+    const lastAttendance = await AsyncStorage.getItem(LAST_ATTENDANCE_KEY);
+    const token = await AsyncStorage.getItem(TOKEN_KEY);
+
+    const statusLabel = {
+      [BackgroundFetch.BackgroundFetchStatus.Available]: 'Available',
+      [BackgroundFetch.BackgroundFetchStatus.Denied]: 'Denied',
+      [BackgroundFetch.BackgroundFetchStatus.Restricted]: 'Restricted',
     };
 
-    // Check authentication
-    const isAuthenticated = await this.isUserAuthenticated();
-    if (!isAuthenticated) {
-      console.log('❌ User not authenticated, skipping initialization');
-      return results;
-    }
-
-    // Initialize background fetch
-    results.backgroundFetch = await this.registerBackgroundTask();
-
-    // Initialize geofencing (requires background location + disclosure)
-    results.geofencing = await this.setupGeofencing(showDisclosure);
-
-    console.log('📊 Initialization results:', results);
-    return results;
-  },
-
-  // Register background fetch task
-  async registerBackgroundTask(): Promise<boolean> {
-    try {
-      const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_ATTENDANCE_TASK);
-      
-      if (!isRegistered) {
-        await BackgroundFetch.registerTaskAsync(BACKGROUND_ATTENDANCE_TASK, {
-          minimumInterval: 15 * 60, // 15 minutes (minimum allowed)
-          stopOnTerminate: false,
-          startOnBoot: true,
-        });
-        console.log('✅ Background fetch task registered');
-      } else {
-        console.log('ℹ️ Background fetch task already registered');
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('❌ Failed to register background task:', error);
-      return false;
-    }
-  },
-
-  /**
-   * Setup geofencing around office location.
-   *
-   * Google Play Prominent Disclosure requirement:
-   * Before calling `requestBackgroundPermissionsAsync`, we must show a
-   * prominent in-app disclosure explaining that background location is
-   * collected even when the app is closed.
-   *
-   * Pass `showDisclosure` from a screen/component that can render the
-   * `BackgroundLocationDisclosure` modal.  If the permission is already
-   * granted the disclosure is skipped automatically.
-   *
-   * @param showDisclosure  Async callback; resolves `true` = accepted.
-   */
-  async setupGeofencing(
-    showDisclosure?: () => Promise<boolean>
-  ): Promise<boolean> {
-    try {
-      // ── 1. Check current permission status ──────────────────────────────
-      const { status: existingStatus } = await Location.getBackgroundPermissionsAsync();
-
-      if (existingStatus !== 'granted') {
-        // ── 2. Disclosure required before system prompt ──────────────────
-        if (!showDisclosure) {
-          console.log(
-            '⚠️ Background location not granted and no disclosure callback provided. ' +
-            'Pass showDisclosure to setupGeofencing() to comply with Google Play policy.'
-          );
-          return false;
-        }
-
-        const accepted = await showDisclosure();
-        if (!accepted) {
-          console.log('ℹ️ User declined background location disclosure');
-          return false;
-        }
-
-        // ── 3. Now request the system permission ────────────────────────
-        const { status } = await Location.requestBackgroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.log('❌ Background location permission not granted');
-          return false;
-        }
-      }
-
-      // ── 4. Get saved office location ────────────────────────────────────
-      const officeLocationStr = await AsyncStorage.getItem(OFFICE_LOCATION_KEY);
-      if (!officeLocationStr) {
-        console.log('⚠️ No office location set, skipping geofencing');
-        return false;
-      }
-
-      const officeLocation = JSON.parse(officeLocationStr);
-      
-      // ── 5. Restart geofencing ────────────────────────────────────────────
-      const isTaskDefined = await TaskManager.isTaskDefined(GEOFENCING_TASK);
-      if (isTaskDefined) {
-        await Location.stopGeofencingAsync(GEOFENCING_TASK);
-      }
-
-      await Location.startGeofencingAsync(GEOFENCING_TASK, [
-        {
-          latitude: officeLocation.latitude,
-          longitude: officeLocation.longitude,
-          radius: officeLocation.radius || 150,
-          notifyOnEnter: true,
-          notifyOnExit: false,
-        },
-      ]);
-
-      console.log('✅ Geofencing started for office location');
-      return true;
-
-    } catch (error) {
-      console.error('❌ Failed to setup geofencing:', error);
-      return false;
-    }
-  },
-
-  // Save office location for geofencing
-  async setOfficeLocation(
-    latitude: number, 
-    longitude: number, 
-    radius: number = 150,
-    showDisclosure?: () => Promise<boolean>
-  ): Promise<boolean> {
-    try {
-      await AsyncStorage.setItem(
-        OFFICE_LOCATION_KEY,
-        JSON.stringify({ latitude, longitude, radius })
-      );
-      
-      // Restart geofencing with new location
-      await this.setupGeofencing(showDisclosure);
-      
-      console.log('✅ Office location saved and geofencing updated');
-      return true;
-    } catch (error) {
-      console.error('❌ Failed to save office location:', error);
-      return false;
-    }
-  },
-
-  // Get current office location
-  async getOfficeLocation(): Promise<{
-    latitude: number;
-    longitude: number;
-    radius: number;
-  } | null> {
-    try {
-      const officeLocationStr = await AsyncStorage.getItem(OFFICE_LOCATION_KEY);
-      if (!officeLocationStr) return null;
-      return JSON.parse(officeLocationStr);
-    } catch (error) {
-      console.error('❌ Failed to get office location:', error);
-      return null;
-    }
-  },
-
-  // Unregister background fetch task
-  async unregisterBackgroundTask(): Promise<boolean> {
-    try {
-      const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_ATTENDANCE_TASK);
-      
-      if (isRegistered) {
-        await BackgroundFetch.unregisterTaskAsync(BACKGROUND_ATTENDANCE_TASK);
-        console.log('✅ Background fetch task unregistered');
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('❌ Failed to unregister background task:', error);
-      return false;
-    }
-  },
-
-  // Stop geofencing
-  async stopGeofencing(): Promise<boolean> {
-    try {
-      const isTaskDefined = await TaskManager.isTaskDefined(GEOFENCING_TASK);
-      
-      if (isTaskDefined) {
-        await Location.stopGeofencingAsync(GEOFENCING_TASK);
-        console.log('✅ Geofencing stopped');
-      }
-      
-      return true;
-    } catch (error) {
-      console.error('❌ Failed to stop geofencing:', error);
-      return false;
-    }
-  },
-
-  // Stop all background services — alias kept for Dashboard.tsx compatibility
-  async stop(): Promise<boolean> {
-    return this.stopAll();
-  },
-
-  // Stop all background services
-  async stopAll(): Promise<boolean> {
-    try {
-      await this.unregisterBackgroundTask();
-      await this.stopGeofencing();
-      console.log('✅ All background services stopped');
-      return true;
-    } catch (error) {
-      console.error('❌ Failed to stop all services:', error);
-      return false;
-    }
-  },
-
-  // Check background fetch status
-  async getBackgroundFetchStatus(): Promise<BackgroundFetch.BackgroundFetchStatus> {
-    const status = await BackgroundFetch.getStatusAsync();
-    return status || BackgroundFetch.BackgroundFetchStatus.Denied;
-  },
-
-  // Check if user is authenticated
-  async isUserAuthenticated(): Promise<boolean> {
-    try {
-      const token = await AsyncStorage.getItem(TOKEN_2_KEY);
-      return !!token;
-    } catch (error) {
-      console.error('❌ Error checking authentication:', error);
-      return false;
-    }
-  },
-
-  // Manual attendance check (for testing or user-triggered)
-  async manualAttendanceCheck(): Promise<boolean> {
-    try {
-      const token = await AsyncStorage.getItem(TOKEN_2_KEY);
-      if (!token) {
-        console.log('❌ No token found for manual check');
-        return false;
-      }
-
-      // Request foreground permission for manual check
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('❌ Location permission denied for manual check');
-        return false;
-      }
-
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
-      return await markAttendance(
-        location.coords.latitude,
-        location.coords.longitude
-      );
-
-    } catch (error) {
-      console.error('❌ Manual attendance check error:', error);
-      return false;
-    }
-  },
-
-  // Initialize — alias matching Dashboard.tsx call site
-  async initialize(
-    showDisclosure?: () => Promise<boolean>
-  ): Promise<{ backgroundFetch: boolean; geofencing: boolean }> {
-    return this.initializeAll(showDisclosure);
-  },
-
-  // Get service status
-  async getServiceStatus(): Promise<{
-    isAuthenticated: boolean;
-    backgroundFetchStatus: string;
-    backgroundFetchRegistered: boolean;
-    geofencingActive: boolean;
-    officeLocation: any;
-    lastAttendance: string | null;
-  }> {
-    const isAuth = await this.isUserAuthenticated();
-    const fetchStatus = await this.getBackgroundFetchStatus();
-    const bgRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_ATTENDANCE_TASK);
-    const geoActive = await TaskManager.isTaskDefined(GEOFENCING_TASK);
-    const officeLocation = await this.getOfficeLocation();
-    const lastAttendance = await AsyncStorage.getItem(LAST_ATTENDANCE_KEY);
-
-    let statusText = 'Unknown';
-    switch (fetchStatus) {
-      case BackgroundFetch.BackgroundFetchStatus.Available:
-        statusText = 'Available';
-        break;
-      case BackgroundFetch.BackgroundFetchStatus.Denied:
-        statusText = 'Denied';
-        break;
-      case BackgroundFetch.BackgroundFetchStatus.Restricted:
-        statusText = 'Restricted';
-        break;
-    }
-
     return {
-      isAuthenticated: isAuth,
-      backgroundFetchStatus: statusText,
-      backgroundFetchRegistered: bgRegistered,
-      geofencingActive: geoActive,
-      officeLocation,
+      fetchRegistered,
+      fetchStatus: statusLabel[fetchStatusCode ?? BackgroundFetch.BackgroundFetchStatus.Denied] ?? 'Unknown',
       lastAttendance,
+      isAuthenticated: !!token,
     };
   },
 };

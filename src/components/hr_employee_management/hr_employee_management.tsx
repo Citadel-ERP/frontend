@@ -1,5 +1,5 @@
 // hr_employee_management/hr_employee_management.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   StatusBar,
@@ -24,6 +24,8 @@ import AttendanceDownloadModal from './AttendanceDownloadModal';
 import WorkStatistics from './WorkStatistics';
 import BulkUploadPayslips from './BulkUploadPayslips';
 import BulkUploadEmployees from './BulkUploadEmployees';
+import DesignationPriorityScreen from './priority';
+import EventsScreen from './events';
 import alert from '../../utils/Alert';
 
 interface CityGroup {
@@ -42,14 +44,63 @@ interface PaginationInfo {
   previous_page: number | null;
 }
 
+const mergeCityGroups = (existing: CityGroup[], incoming: CityGroup[]): CityGroup[] => {
+  const cityMap = new Map<string, Employee[]>();
+
+  for (const group of existing) {
+    cityMap.set(group.city, [...group.employees]);
+  }
+
+  for (const group of incoming) {
+    if (cityMap.has(group.city)) {
+      const existingEmployees = cityMap.get(group.city)!;
+      const existingIds = new Set(existingEmployees.map(e => e.employee_id));
+      const newEmployees = group.employees.filter(e => !existingIds.has(e.employee_id));
+      cityMap.set(group.city, [...existingEmployees, ...newEmployees]);
+    } else {
+      cityMap.set(group.city, [...group.employees]);
+    }
+  }
+
+  return Array.from(cityMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([city, employees]) => ({ city, employees }));
+};
+
+const filterCityGroups = (cityGroups: CityGroup[], query: string): CityGroup[] => {
+  if (!query.trim()) return cityGroups;
+  return cityGroups
+    .map(cityGroup => {
+      const filteredEmployees = cityGroup.employees.filter(employee => {
+        const fields = [
+          employee.full_name?.toLowerCase(),
+          employee.employee_id?.toLowerCase(),
+          employee.email?.toLowerCase(),
+          employee.designation?.toLowerCase(),
+          employee.city?.toLowerCase(),
+          `${employee.first_name} ${employee.last_name}`.toLowerCase(),
+        ].filter(Boolean);
+        return fields.some(f => f?.includes(query));
+      });
+      return filteredEmployees.length > 0 ? { ...cityGroup, employees: filteredEmployees } : null;
+    })
+    .filter(Boolean) as CityGroup[];
+};
+
+const PAGE_SIZE = 50;
+
 const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   const insets = useSafeAreaInsets();
   const [token, setToken] = useState<string | null>(null);
   const [tokenLoaded, setTokenLoaded] = useState(false);
+
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
   const [allEmployeesByCity, setAllEmployeesByCity] = useState<CityGroup[]>([]);
   const [filteredEmployeesByCity, setFilteredEmployeesByCity] = useState<CityGroup[]>([]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -59,221 +110,178 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   const [showWorkStatistics, setShowWorkStatistics] = useState(false);
   const [showBulkPayslips, setShowBulkPayslips] = useState(false);
   const [showBulkEmployees, setShowBulkEmployees] = useState(false);
+  const [showUpdateOrder, setShowUpdateOrder] = useState(false);
+  const [showEvents, setShowEvents] = useState(false);
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
 
-  // Get token on mount
+  const currentPageRef        = useRef(1);
+  const loadingMoreRef        = useRef(false);
+  const loadingRef            = useRef(false);
+  const paginationRef         = useRef<PaginationInfo | null>(null);
+  const searchQueryRef        = useRef('');
+  const tokenRef              = useRef<string | null>(null);
+  const allEmployeesByCityRef = useRef<CityGroup[]>([]);
+
+  const setLoadingMoreSynced = (val: boolean) => {
+    loadingMoreRef.current = val;
+    setLoadingMore(val);
+  };
+  const setLoadingSynced = (val: boolean) => {
+    loadingRef.current = val;
+    setLoading(val);
+  };
+
+  useEffect(() => {
+    allEmployeesByCityRef.current = allEmployeesByCity;
+  }, [allEmployeesByCity]);
+
+  // ── Token ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     const getToken = async () => {
       try {
-        console.log('=== Getting token from AsyncStorage ===');
-        console.log('Trying TOKEN_KEY:', TOKEN_KEY);
         const foundToken = await AsyncStorage.getItem(TOKEN_KEY);
         if (foundToken) {
-          console.log(`✅ Token found with key: ${TOKEN_KEY}`);
+          tokenRef.current = foundToken;
           setToken(foundToken);
         } else {
-          console.log(`❌ No token with key: ${TOKEN_KEY}`);
           setError('Authentication token not found. Please login again.');
         }
-        setTokenLoaded(true);
-      } catch (error) {
-        console.error('Error getting token:', error);
+      } catch {
         setError('Failed to retrieve authentication token');
+      } finally {
         setTokenLoaded(true);
       }
     };
     getToken();
   }, []);
 
-  // Fetch employees when token is available
   useEffect(() => {
     if (tokenLoaded && token) {
-      fetchEmployees(1);
+      fetchEmployees(1, true);
     }
   }, [token, tokenLoaded]);
 
-  // Filter employees when search query changes
+  // ── Search ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setFilteredEmployeesByCity(allEmployeesByCity);
-    } else {
-      filterEmployees(searchQuery.toLowerCase());
-    }
+    searchQueryRef.current = searchQuery;
+    const master = allEmployeesByCityRef.current;
+    setFilteredEmployeesByCity(
+      searchQuery.trim()
+        ? filterCityGroups(master, searchQuery.toLowerCase())
+        : master
+    );
   }, [searchQuery, allEmployeesByCity]);
 
-  const filterEmployees = (query: string) => {
-    if (allEmployeesByCity.length === 0) return;
-
-    const filtered = allEmployeesByCity
-      .map(cityGroup => {
-        const filteredEmployees = cityGroup.employees.filter(employee => {
-          const searchableFields = [
-            employee.full_name?.toLowerCase(),
-            employee.employee_id?.toLowerCase(),
-            employee.email?.toLowerCase(),
-            employee.designation?.toLowerCase(),
-            employee.city?.toLowerCase(),
-            `${employee.first_name} ${employee.last_name}`.toLowerCase(),
-          ].filter(Boolean);
-
-          return searchableFields.some(field =>
-            field?.includes(query)
-          );
-        });
-
-        if (filteredEmployees.length > 0) {
-          return {
-            ...cityGroup,
-            employees: filteredEmployees
-          };
-        }
-        return null;
-      })
-      .filter(Boolean) as CityGroup[];
-
-    console.log('Filtered employees:', {
-      query,
-      totalCities: filtered.length,
-      totalEmployees: filtered.reduce((sum, group) => sum + group.employees.length, 0)
-    });
-
-    setFilteredEmployeesByCity(filtered);
-  };
-
-  const fetchEmployees = async (page: number = 1) => {
-    console.log('=== fetchEmployees called ===');
-    console.log('Page:', page);
-
-    if (!token) {
-      console.log('No token available for fetch - aborting');
+  // ── Core fetch ─────────────────────────────────────────────────────────────
+  const fetchEmployees = useCallback(async (page: number, isReset: boolean) => {
+    const tok = tokenRef.current;
+    if (!tok) {
       setError('No authentication token available');
       return;
     }
 
-    setLoading(true);
+    if (isReset) {
+      setLoadingSynced(true);
+    } else {
+      setLoadingMoreSynced(true);
+    }
     setError(null);
 
     try {
-      const url = `${BACKEND_URL}/manager/getAllEmployees`;
-      console.log('Fetching from URL:', url);
-
-      const requestBody = {
-        token,
-        page,
-        page_size: 100,
-      };
-
-      console.log('Request Body:', JSON.stringify(requestBody));
-
-      const response = await fetch(url, {
+      const response = await fetch(`${BACKEND_URL}/manager/getAllEmployees`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ token: tok, page, page_size: PAGE_SIZE }),
       });
-
-      console.log('Response Status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
-        console.log('✅ SUCCESS - Data received');
-        console.log('Total items in pagination:', data.pagination?.total_items);
-        console.log('Cities count:', data.employees_by_city?.length);
+        const incoming: CityGroup[] = data.employees_by_city || [];
 
-        setAllEmployeesByCity(data.employees_by_city || []);
-        setFilteredEmployeesByCity(data.employees_by_city || []);
-        setCurrentPage(page);
+        if (isReset) {
+          setAllEmployeesByCity(incoming);
+        } else {
+          setAllEmployeesByCity(prev => mergeCityGroups(prev, incoming));
+        }
+
+        currentPageRef.current = page;
 
         if (data.pagination) {
-          const paginationData = {
-            ...data.pagination,
-            total_items: data.pagination.total_items || data.pagination.total_employees || 0
-          };
-          setPagination(paginationData);
+          const p = { ...data.pagination, total_items: data.pagination.total_items || 0 };
+          paginationRef.current = p;
+          setPagination(p);
         }
       } else {
         const errorText = await response.text();
-        console.error('❌ ERROR Response:', errorText);
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { message: errorText };
-        }
-        const errorMessage = errorData.message || `Server error: ${response.status}`;
-        setError(errorMessage);
+        let parsed: any;
+        try { parsed = JSON.parse(errorText); } catch { parsed = { message: errorText }; }
+        setError(parsed.message || `Server error: ${response.status}`);
       }
-    } catch (error: any) {
-      console.error('❌ FETCH ERROR:', error);
-      setError(`Network error: ${error.message}`);
+    } catch (err: any) {
+      setError(`Network error: ${err.message}`);
     } finally {
-      setLoading(false);
+      setLoadingSynced(false);
+      setLoadingMoreSynced(false);
     }
-  };
+  }, []);
 
+  // ── Load next page ─────────────────────────────────────────────────────────
+  const handleLoadMore = useCallback(() => {
+    if (loadingMoreRef.current || loadingRef.current) return;
+    if (!paginationRef.current?.has_next) return;
+    if (searchQueryRef.current.trim() !== '') return;
+
+    fetchEmployees(currentPageRef.current + 1, false);
+  }, [fetchEmployees]);
+
+  // ── Pull-to-refresh ────────────────────────────────────────────────────────
   const onRefresh = async () => {
-    console.log('=== Manual refresh triggered ===');
     setRefreshing(true);
-    await fetchEmployees(1);
+    await fetchEmployees(1, true);
     setRefreshing(false);
   };
 
-  const handleEmployeePress = (employee: Employee) => {
-    setSelectedEmployee(employee);
-  };
+  const handleEmployeePress      = (employee: Employee) => setSelectedEmployee(employee);
+  const handleBackFromDetails    = () => setSelectedEmployee(null);
+  const handleEmployeeDataChange = async () => fetchEmployees(1, true);
+  const handleEmployeeAdded      = () => fetchEmployees(1, true);
 
-  const handleBackFromDetails = () => {
-    setSelectedEmployee(null);
-  };
-
-  // Handle data changes from employee details screen
-  const handleEmployeeDataChange = async () => {
-    console.log('=== Employee data changed, refreshing list ===');
-    await fetchEmployees(currentPage);
-  };
-
+  // ── Attendance download ────────────────────────────────────────────────────
   const downloadAttendanceReport = async (month: number, year: number, employeeId?: string) => {
-    if (!token) {
+    const tok = tokenRef.current;
+    if (!tok) {
       alert('Error', 'Authentication required');
       throw new Error('Authentication required');
     }
 
     try {
-      console.log('Downloading attendance report:', { month, year, employeeId });
-
       const response = await fetch(`${BACKEND_URL}/manager/downloadAllAttendanceReport`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, month, year }),
+        body: JSON.stringify({ token: tok, month, year }),
       });
-
-      console.log('Response status:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        let errorData;
+        let errorData: any;
         try { errorData = JSON.parse(errorText); } catch { errorData = { message: errorText }; }
-        const errorMessage = errorData.message || 'Failed to download attendance report';
-        alert('Error', errorMessage);
-        throw new Error(errorMessage);
+        const msg = errorData.message || 'Failed to download attendance report';
+        alert('Error', msg);
+        throw new Error(msg);
       }
 
       const data = await response.json();
-      console.log('Success response:', data);
-
       if (!data.file_url) {
         alert('Error', 'Invalid response from server');
         throw new Error('Invalid response from server');
       }
 
-      const fileUrl = data.file_url;
-      const filename = data.filename || `attendance_report_${month}_${year}.xlsx`;
-      const monthName = data.month || '';
+      const {
+        file_url: fileUrl,
+        filename = `attendance_report_${month}_${year}.xlsx`,
+        month: monthName = '',
+      } = data;
 
       alert(
         'Report Ready',
@@ -282,33 +290,21 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
           {
             text: 'Open in Browser',
             onPress: async () => {
-              try {
-                await WebBrowser.openBrowserAsync(fileUrl);
-              } catch (err) {
-                console.error('Failed to open browser:', err);
-                alert('Error', 'Could not open the file in browser');
-              }
+              try { await WebBrowser.openBrowserAsync(fileUrl); }
+              catch { alert('Error', 'Could not open the file in browser'); }
             },
           },
           {
             text: 'Download & Share',
             onPress: async () => {
               try {
-                setLoading(true);
-
+                setLoadingSynced(true);
                 const fileUri = FileSystem.documentDirectory + filename;
-                console.log('Downloading to:', fileUri);
-
-                const downloadResult = await FileSystem.downloadAsync(fileUrl, fileUri);
-                console.log('Download result:', downloadResult);
-
-                if (downloadResult.status !== 200) {
-                  throw new Error(`Download failed with status: ${downloadResult.status}`);
-                }
-
+                const result = await FileSystem.downloadAsync(fileUrl, fileUri);
+                if (result.status !== 200) throw new Error(`Download failed: ${result.status}`);
                 const canShare = await Sharing.isAvailableAsync();
                 if (canShare) {
-                  await Sharing.shareAsync(downloadResult.uri, {
+                  await Sharing.shareAsync(result.uri, {
                     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                     dialogTitle: 'Share Attendance Report',
                     UTI: 'com.microsoft.excel.xlsx',
@@ -317,38 +313,26 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
                   Alert.alert('Info', `File saved to: ${fileUri}\n\nSharing is not available on this device.`);
                 }
               } catch (err: any) {
-                console.error('Download & share error:', err);
-                Alert.alert('Error', err.message || 'Failed to download and share the report. Please try "Open in Browser" instead.');
+                Alert.alert('Error', err.message || 'Failed to download. Try "Open in Browser".');
               } finally {
-                setLoading(false);
+                setLoadingSynced(false);
               }
             },
           },
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
+          { text: 'Cancel', style: 'cancel' },
         ]
       );
-    } catch (error: any) {
-      console.error('Download attendance error:', error);
-      throw error;
+    } catch (err: any) {
+      throw err;
     }
   };
 
-  const handleEmployeeAdded = () => {
-    fetchEmployees(1);
-  };
+  // ── Derived counts ─────────────────────────────────────────────────────────
+  const displayedCount = filteredEmployeesByCity.reduce((s, g) => s + g.employees.length, 0);
+  const totalEmployees = pagination?.total_items
+    ?? allEmployeesByCity.reduce((s, g) => s + g.employees.length, 0);
 
-  const getTotalDisplayedEmployees = () => {
-    return filteredEmployeesByCity.reduce((sum, group) => sum + (group.employees?.length || 0), 0);
-  };
-
-  const getAllEmployeesCount = () => {
-    return allEmployeesByCity.reduce((sum, group) => sum + (group.employees?.length || 0), 0);
-  };
-
-  // Route to different screens based on state
+  // ── Screen routing ─────────────────────────────────────────────────────────
   if (selectedEmployee) {
     return (
       <EmployeeDetails
@@ -361,12 +345,7 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   }
 
   if (showHolidayManagement) {
-    return (
-      <HolidayManagement
-        token={token || ''}
-        onBack={() => setShowHolidayManagement(false)}
-      />
-    );
+    return <HolidayManagement token={token || ''} onBack={() => setShowHolidayManagement(false)} />;
   }
 
   if (showAddEmployeeScreen) {
@@ -380,21 +359,11 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   }
 
   if (showWorkStatistics) {
-    return (
-      <WorkStatistics
-        token={token || ''}
-        onBack={() => setShowWorkStatistics(false)}
-      />
-    );
+    return <WorkStatistics token={token || ''} onBack={() => setShowWorkStatistics(false)} />;
   }
 
   if (showBulkPayslips) {
-    return (
-      <BulkUploadPayslips
-        token={token || ''}
-        onBack={() => setShowBulkPayslips(false)}
-      />
-    );
+    return <BulkUploadPayslips token={token || ''} onBack={() => setShowBulkPayslips(false)} />;
   }
 
   if (showBulkEmployees) {
@@ -407,17 +376,27 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
     );
   }
 
-  const allEmployeesCount = getAllEmployeesCount();
-  const displayedCount = getTotalDisplayedEmployees();
-  const totalEmployees = pagination?.total_items || allEmployeesCount;
+  if (showUpdateOrder) {
+    return (
+      <DesignationPriorityScreen
+        token={token || ''}
+        onBack={() => setShowUpdateOrder(false)}
+      />
+    );
+  }
+
+  if (showEvents) {
+    return (
+      <EventsScreen
+        token={token || ''}
+        onBack={() => setShowEvents(false)}
+      />
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor="#2D3748"
-        translucent={false}
-      />
+      <StatusBar barStyle="light-content" backgroundColor="#2D3748" translucent={false} />
       <Header
         title="HR Management"
         subtitle={
@@ -436,17 +415,21 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
         onOpenWorkStats={() => setShowWorkStatistics(true)}
         onOpenBulkPayslips={() => setShowBulkPayslips(true)}
         onOpenBulkEmployees={() => setShowBulkEmployees(true)}
+        onOpenUpdateOrder={() => setShowUpdateOrder(true)}
+        onOpenEvents={() => setShowEvents(true)}
         placeholder="Search by name, ID, city, or designation..."
       />
       <EmployeeList
         employeesByCity={filteredEmployeesByCity}
         loading={loading}
         refreshing={refreshing}
+        loadingMore={loadingMore}
         error={error}
         searchQuery={searchQuery}
         onRefresh={onRefresh}
         onEmployeePress={handleEmployeePress}
         onClearSearch={() => setSearchQuery('')}
+        onEndReached={handleLoadMore}
         totalEmployees={totalEmployees}
         displayedEmployees={displayedCount}
       />

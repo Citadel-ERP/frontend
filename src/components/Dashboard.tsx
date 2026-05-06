@@ -6,6 +6,11 @@
 //   `loading` flipped to false and re-rendered the dashboard.
 //   Fix: store the pending target in a ref (immune to re-renders), then consume it in a
 //   dedicated useEffect that fires only after `loading=false` AND `userData` is populated.
+//
+// UNREAD MESSAGES BADGE:
+//   Fetches total_unread count from /citadel_hub/countUnreadMessages on mount and
+//   whenever the user closes the chat screen. Count is passed down to BottomBar which
+//   renders a WhatsApp-style badge on the Message icon.
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
@@ -323,6 +328,45 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
       setUnreadNotificationCount(count);
     }
   }, []);
+
+  // --------------------------------------------------------------------------
+  // UNREAD MESSAGES BADGE — fetch from backend
+  // --------------------------------------------------------------------------
+  /**
+   * Calls countUnreadMessages and updates the badge count.
+   * Errors are swallowed silently — this is non-critical UI decoration.
+   */
+  const fetchUnreadMessageCount = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${BACKEND_URL}/citadel_hub/countUnreadMessages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data.total_unread === 'number') {
+        handleBadgeUpdate(data.total_unread);
+      }
+    } catch {
+      // Non-critical — silently ignore network / parse errors
+    }
+  }, [token, handleBadgeUpdate]);
+
+  // Fetch once when the token is available (i.e. on dashboard load)
+  useEffect(() => {
+    fetchUnreadMessageCount();
+  }, [fetchUnreadMessageCount]);
+
+  // Re-fetch when the user closes the chat screen (they may have read messages)
+  // useEffect(() => {
+  //   if (!showChat) {
+  //     fetchUnreadMessageCount();
+  //   }
+  // }, [showChat]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Note: fetchUnreadMessageCount intentionally excluded so we only fire on
+  // showChat transitions, not on every token/handleBadgeUpdate change.
 
   // --------------------------------------------------------------------------
   // CLOSE ALL PAGES
@@ -1232,7 +1276,20 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
     if (showChatRoom && selectedChatRoom)
       return <CitadelHub apiBaseUrl={BACKEND_URL} wsBaseUrl={BACKEND_URL_WEBSOCKET} token={token} currentUser={userData} />;
     if (showChat)
-      return <CitadelHub apiBaseUrl={BACKEND_URL} wsBaseUrl={BACKEND_URL_WEBSOCKET} token={token} onBack={handleBack} currentUser={userData} />;
+      return (
+        <CitadelHub
+          apiBaseUrl={BACKEND_URL}
+          wsBaseUrl={BACKEND_URL_WEBSOCKET}
+          token={token}
+          onBack={() => {
+            fetchUnreadMessageCount(); // refresh badge as user exits
+            handleBack();
+          }}
+          currentUser={userData}
+          onMessagesRead={fetchUnreadMessageCount} // fire whenever a room is opened
+        />
+      );
+
     if (showNotifications)
       return <Notifications onBack={handleBack} isDark={isDark} onBadgeUpdate={handleBadgeUpdate} onNavigateToModule={handleNavigateFromNotification} />;
     if (showDriverManager) return <DriverManager onBack={handleBack} />;
@@ -1364,14 +1421,19 @@ function DashboardContent({ onLogout }: { onLogout: () => void }) {
                       style={[styles.webNavItem, { backgroundColor: theme.navBg }, isActive && styles.webNavItemActive]}
                       onPress={() => { setActiveNavItem(item.id); setActivePage(item.id as ActivePage); }}
                     >
-                      <Ionicons name={item.icon as any} size={24} color={isActive ? item.activeColor : theme.textSub} />
-                      <Text style={[styles.webNavText, { color: isActive ? item.activeColor : theme.textSub, fontWeight: isActive ? '600' : '400' }]}>
-                        {item.label}
-                        {item.id === 'notifications' && unreadNotificationCount > 0 && (
-                          <View style={styles.badgeContainer}>
-                            <Text style={styles.badgeText}>{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</Text>
+                      <View style={styles.webNavIconWrapper}>
+                        <Ionicons name={item.icon as any} size={24} color={isActive ? item.activeColor : theme.textSub} />
+                        {/* Unread badge on the Messages nav item (web sidebar) */}
+                        {item.id === 'messages' && unreadNotificationCount > 0 && (
+                          <View style={styles.webNavBadge}>
+                            <Text style={styles.webNavBadgeText}>
+                              {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                            </Text>
                           </View>
                         )}
+                      </View>
+                      <Text style={[styles.webNavText, { color: isActive ? item.activeColor : theme.textSub, fontWeight: isActive ? '600' : '400' }]}>
+                        {item.label}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -1631,6 +1693,29 @@ const styles = StyleSheet.create({
   webNavigation: { flex: 1, overflow: 'auto' as any, paddingVertical: 16 },
   webNavItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 20, marginVertical: 2, position: 'relative' },
   webNavItemActive: { backgroundColor: 'rgba(0, 128, 105, 0.1)', borderLeftWidth: 3, borderLeftColor: '#008069' },
+  // Wraps icon + badge together so the badge sits top-right of the icon only
+  webNavIconWrapper: { position: 'relative' },
+  // Web sidebar badge — compact dot with count
+  webNavBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -8,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
+    backgroundColor: '#F15C6D',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: '#ffffff',
+  },
+  webNavBadgeText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '700',
+    lineHeight: 12,
+  },
   webNavText: { marginLeft: 12, fontSize: 14, flex: 1 },
   webCenterContent: { flex: 1, maxHeight: '100vh' as any, overflow: 'auto' as any, backgroundColor: 'transparent' },
   webRightSide: { width: 280, height: '100vh' as any, flexDirection: 'column', borderLeftWidth: 1, borderLeftColor: 'rgba(0,0,0,0.1)', overflow: 'hidden' },
@@ -1679,6 +1764,4 @@ const styles = StyleSheet.create({
   footer: { alignItems: 'center', paddingBottom: 30, paddingTop: 15 },
   footerLogo: { fontSize: 28, fontWeight: '700', letterSpacing: 5, color: '#a9a9a9b6', marginBottom: 5 },
   footerText: { fontSize: 10, color: '#666' },
-  badgeContainer: { position: 'absolute', top: -8, right: -8, backgroundColor: '#F15C6D', borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4 },
-  badgeText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
 });

@@ -3,7 +3,7 @@
     "name": "Citadel",
     "slug": "citadel",
     "owner": "ananyavishnoi",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "projectId": "fba32196-78ea-4b4d-9ccb-d57375d90e9f",
     "platforms": ["ios", "android", "web"],
     "orientation": "portrait",
@@ -16,6 +16,7 @@
       "backgroundColor": "#e7e6e5"
     },
     "assetBundlePatterns": ["**/*"],
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.citadelnetinc.app",
@@ -44,6 +45,7 @@
         "ITSAppUsesNonExemptEncryption": false
       }
     },
+
     "android": {
       "package": "com.citadelnetinc.app",
       "googleServicesFile": "./google-services.json",
@@ -51,12 +53,16 @@
         "foregroundImage": "./assets/images/adaptive_icon_android.png",
         "backgroundColor": "#FFFFFF"
       },
+
       "permissions": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
+
         "android.permission.ACCESS_BACKGROUND_LOCATION",
+
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
+
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.CAMERA",
         "android.permission.VIBRATE",
@@ -78,41 +84,66 @@
         "android.permission.ACCESS_NETWORK_STATE"
       ]
     },
+
     "web": {
       "bundler": "metro",
       "favicon": "./src/assets/app-icon-ios.png"
     },
+
     "plugins": [
       "expo-secure-store",
       "expo-dev-client",
+
       [
         "expo-contacts",
         {
           "contactsPermission": "Citadel needs access to your contacts so you can find colleagues and share contact details within the app."
         }
       ],
+
       [
         "expo-location",
         {
           "locationWhenInUsePermission": "Citadel uses your location to verify you are physically present at your assigned work site when marking attendance. For example, when you tap 'Mark Attendance', the app checks your GPS coordinates against your registered office location to confirm you are within the required distance before recording your check-in.",
+
           "locationAlwaysAndWhenInUsePermission": "Citadel uses your location in the background to automatically log when you arrive at or leave your assigned work site, so attendance is recorded without needing to open the app. For example, walking into your office automatically triggers a check-in based on your GPS location.",
+
           "locationAlwaysPermission": "Citadel uses your location in the background — even when the app is closed — to detect when you arrive at or depart from your registered work site and automatically record your attendance. For example, your check-out time is logged the moment your device detects you have left the office perimeter.",
+
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true
         }
       ],
+
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "minSdkVersion": 24,
+            "buildToolsVersion": "35.0.0"
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
+
       [
         "expo-av",
         {
           "microphonePermission": "Citadel uses your microphone to record voice messages and support audio during calls in team chats."
         }
       ],
+
       [
         "expo-local-authentication",
         {
           "faceIDPermission": "Citadel uses Face ID so you can log in quickly and securely without entering your password."
         }
       ],
+
       [
         "expo-image-picker",
         {
@@ -121,6 +152,7 @@
           "saveToPhotosAlbum": true
         }
       ],
+
       [
         "expo-notifications",
         {
@@ -135,10 +167,12 @@
           ]
         }
       ],
+
       "expo-task-manager",
       "expo-background-fetch",
       "expo-web-browser"
     ],
+
     "extra": {
       "eas": {
         "projectId": "fba32196-78ea-4b4d-9ccb-d57375d90e9f"
