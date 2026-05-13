@@ -1008,6 +1008,12 @@ const Vehicles: React.FC<VehiclesProps> = ({
         );
     };
 
+    // ─── DOCUMENT PICKER (web-safe) ───────────────────────────────────────────
+    // On web, expo-document-picker exposes the raw browser File object on
+    // asset.file. We store it as `webFile` so submitVehicleUpdate can append
+    // it directly to FormData — avoiding the [object Object] serialisation that
+    // happens when you pass a plain { uri, name, type } object to the browser's
+    // native FormData.
     const pickDocument = async (type: 'pollution_certificate' | 'rc_document' | 'insurance_document') => {
         try {
             const result = await DocumentPicker.getDocumentAsync({
@@ -1023,6 +1029,8 @@ const Vehicles: React.FC<VehiclesProps> = ({
                         uri: asset.uri,
                         name: asset.name,
                         type: asset.mimeType || 'application/pdf',
+                        // Capture the raw File object on web; undefined on mobile
+                        webFile: Platform.OS === 'web' ? (asset as any).file : undefined,
                     } as Document
                 });
             }
@@ -1031,7 +1039,21 @@ const Vehicles: React.FC<VehiclesProps> = ({
             Alert.alert('Error', 'Failed to pick document');
         }
     };
+    // ─────────────────────────────────────────────────────────────────────────
 
+    // ─── VEHICLE UPDATE SUBMIT (web-safe) ─────────────────────────────────────
+    // On web the browser's native FormData only accepts string | Blob | File.
+    // Passing a plain { uri, type, name } object silently calls .toString() and
+    // produces "[object Object]" — exactly what appeared in the Django logs.
+    //
+    // Fix strategy:
+    //   • Photos  → fetch(blobUri).blob() converts the in-memory blob: URL that
+    //               expo-image-picker returns on web into a real Blob.
+    //   • Docs    → use the raw File captured by pickDocument (asset.file).
+    //
+    // The mobile (iOS / Android) paths are completely unchanged — they still use
+    // the { uri, type, name } object form that React Native's FormData polyfill
+    // handles natively.
     const submitVehicleUpdate = async () => {
         if (!selectedVehicle) return;
 
@@ -1058,37 +1080,72 @@ const Vehicles: React.FC<VehiclesProps> = ({
             formData.append('seating_capacity', updateVehicleForm.seating_capacity);
             formData.append('year', updateVehicleForm.year);
 
-            updateVehicleForm.photos.forEach((photo, index) => {
-                if (photo.isNew && photo.uri) {
-                    formData.append('photos', {
-                        uri: photo.uri,
-                        type: 'image/jpeg',
-                        name: `vehicle_photo_${index}.jpg`,
-                    } as any);
+            // ── Photos ────────────────────────────────────────────────────────
+            if (Platform.OS === 'web') {
+                // Web: expo-image-picker returns a blob: URI. We must resolve it
+                // to a real Blob before appending; otherwise FormData serialises
+                // the object and Django sees "[object Object]" instead of a file.
+                for (let index = 0; index < updateVehicleForm.photos.length; index++) {
+                    const photo = updateVehicleForm.photos[index];
+                    if (photo.isNew && photo.uri) {
+                        try {
+                            const res = await fetch(photo.uri);
+                            const blob = await res.blob();
+                            formData.append('photos', blob, `vehicle_photo_${index}.jpg`);
+                        } catch (blobError) {
+                            console.error(`Failed to convert photo ${index} to blob:`, blobError);
+                        }
+                    }
                 }
-            });
+            } else {
+                // iOS / Android: React Native's FormData polyfill accepts the
+                // { uri, type, name } shorthand and reads the file from disk.
+                updateVehicleForm.photos.forEach((photo, index) => {
+                    if (photo.isNew && photo.uri) {
+                        formData.append('photos', {
+                            uri: photo.uri,
+                            type: 'image/jpeg',
+                            name: `vehicle_photo_${index}.jpg`,
+                        } as any);
+                    }
+                });
+            }
 
             if (deletedPhotoIds.length > 0) {
                 formData.append('delete_photo_ids', deletedPhotoIds.join(','));
             }
 
-            if (updateVehicleForm.pollution_certificate) {
-                formData.append('pollution_certificate', updateVehicleForm.pollution_certificate as any);
-            }
+            // ── Helper: append a document field safely across platforms ───────
+            // On web  → use the raw File object stored as doc.webFile.
+            // On mobile → pass the { uri, name, type } object (RN handles it).
+            // If webFile is absent on web (shouldn't happen, but defensive),
+            // we skip rather than appending [object Object].
+            const appendDocument = (fieldName: string, doc: Document | null) => {
+                if (!doc) return;
+                if (Platform.OS === 'web') {
+                    const webFile = (doc as any).webFile;
+                    if (webFile) {
+                        formData.append(fieldName, webFile, doc.name);
+                    } else {
+                        console.warn(`appendDocument: webFile missing for ${fieldName} on web — skipping`);
+                    }
+                } else {
+                    formData.append(fieldName, doc as any);
+                }
+            };
+
+            // ── Documents ─────────────────────────────────────────────────────
+            appendDocument('pollution_certificate', updateVehicleForm.pollution_certificate);
             if (updateVehicleForm.pollution_expiry_date) {
                 formData.append('pollution_expiry_date', updateVehicleForm.pollution_expiry_date);
             }
 
-            if (updateVehicleForm.rc_document) {
-                formData.append('rc_document', updateVehicleForm.rc_document as any);
-            }
+            appendDocument('rc_document', updateVehicleForm.rc_document);
             if (updateVehicleForm.registration_expiry_date) {
                 formData.append('registration_expiry_date', updateVehicleForm.registration_expiry_date);
             }
 
-            if (updateVehicleForm.insurance_document) {
-                formData.append('insurance_document', updateVehicleForm.insurance_document as any);
-            }
+            appendDocument('insurance_document', updateVehicleForm.insurance_document);
             if (updateVehicleForm.insurance_expiry_date) {
                 formData.append('insurance_expiry_date', updateVehicleForm.insurance_expiry_date);
             }
@@ -1120,6 +1177,7 @@ const Vehicles: React.FC<VehiclesProps> = ({
             setLoading(false);
         }
     };
+    // ─────────────────────────────────────────────────────────────────────────
 
     const generateMonthYearOptions = () => {
         const months = [
