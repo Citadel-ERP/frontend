@@ -1,4 +1,4 @@
- import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import CreateCar from './createCar';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import CrossPlatformDatePicker from '../../services/CrossPlatformDatePicker';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 import { LinearGradient } from 'expo-linear-gradient';
@@ -127,9 +127,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
     const scrollViewRef = useRef<ScrollView>(null);
     const photoScrollRef = useRef<ScrollView>(null);
     const [deletedPhotoIds, setDeletedPhotoIds] = useState<number[]>([]);
-    const [pollutionDatePickerOpen, setPollutionDatePickerOpen] = useState(false);
-    const [insuranceDatePickerOpen, setInsuranceDatePickerOpen] = useState(false);
-    const [registrationDatePickerOpen, setRegistrationDatePickerOpen] = useState(false);
     const [showMonthPicker, setShowMonthPicker] = useState(false);
     const [showYearPicker, setShowYearPicker] = useState(false);
     const [tempMonth, setTempMonth] = useState('');
@@ -772,11 +769,9 @@ const Vehicles: React.FC<VehiclesProps> = ({
     // ─── DELETE VEHICLE (web-safe) ────────────────────────────────────────────
     const handleDeleteVehicle = (vehicleId: number) => {
         if (Platform.OS === 'web') {
-            // On web, Alert.alert is a no-op — show our custom modal instead
             setDeleteConfirmModal({ visible: true, vehicleId });
             return;
         }
-        // Native (iOS / Android) — use the standard Alert sheet
         Alert.alert(
             'Delete Vehicle',
             'Are you sure you want to delete this vehicle? This action cannot be undone.',
@@ -923,21 +918,13 @@ const Vehicles: React.FC<VehiclesProps> = ({
         const existingDocument = updateVehicleForm[existingKey];
 
         let expiryDateField: keyof UpdateVehicleForm;
-        let datePickerOpen: boolean;
-        let setDatePickerOpen: (open: boolean) => void;
 
         if (type === 'pollution_certificate') {
             expiryDateField = 'pollution_expiry_date';
-            datePickerOpen = pollutionDatePickerOpen;
-            setDatePickerOpen = setPollutionDatePickerOpen;
         } else if (type === 'insurance_document') {
             expiryDateField = 'insurance_expiry_date';
-            datePickerOpen = insuranceDatePickerOpen;
-            setDatePickerOpen = setInsuranceDatePickerOpen;
         } else {
             expiryDateField = 'registration_expiry_date';
-            datePickerOpen = registrationDatePickerOpen;
-            setDatePickerOpen = setRegistrationDatePickerOpen;
         }
 
         let displayName = '';
@@ -998,39 +985,25 @@ const Vehicles: React.FC<VehiclesProps> = ({
                 </TouchableOpacity>
 
                 <View style={styles.expiryDateContainer}>
-                    <Text style={[styles.expiryLabel, { marginTop: 8 }]}>Expiry Date</Text>
-                    <TouchableOpacity
-                        style={styles.datePickerButton}
-                        onPress={() => setDatePickerOpen(true)}
-                    >
-                        <MaterialIcons name="calendar-today" size={20} color="#008069" />
-                        <Text style={styles.datePickerText}>
-                            {updateVehicleForm[expiryDateField]
-                                ? new Date(updateVehicleForm[expiryDateField] as string).toLocaleDateString('en-GB')
-                                : 'Select Expiry Date'}
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                {datePickerOpen && (
-                    <DateTimePicker
-                        value={updateVehicleForm[expiryDateField]
-                            ? new Date(updateVehicleForm[expiryDateField] as string)
-                            : new Date()}
-                        mode="date"
-                        display="default"
-                        onChange={(event, selectedDate) => {
-                            setDatePickerOpen(false);
-                            if (selectedDate) {
-                                setUpdateVehicleForm({
-                                    ...updateVehicleForm,
-                                    [expiryDateField]: selectedDate.toISOString()
-                                });
-                            }
-                        }}
+                    <Text style={[styles.expiryLabel, { marginTop: 8, marginBottom: 6 }]}>Expiry Date</Text>
+                    <CrossPlatformDatePicker
+                        value={
+                            updateVehicleForm[expiryDateField]
+                                ? (updateVehicleForm[expiryDateField] as string).split('T')[0]
+                                : ''
+                        }
+                        onChange={(dateStr) =>
+                            setUpdateVehicleForm({
+                                ...updateVehicleForm,
+                                [expiryDateField]: dateStr,
+                            })
+                        }
+                        placeholder="Select Expiry Date"
                         minimumDate={new Date()}
+                        accentColor="#008069"
+                        accessibilityLabel={`${title} expiry date`}
                     />
-                )}
+                </View>
             </View>
         );
     };
@@ -3106,7 +3079,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
                             shadowRadius: 12,
                             elevation: 8,
                         }}>
-                            {/* Icon */}
                             <View style={{
                                 alignSelf: 'center',
                                 width: 56,
@@ -3120,7 +3092,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                 <MaterialIcons name="delete" size={28} color="#FF3B30" />
                             </View>
 
-                            {/* Title */}
                             <Text style={{
                                 fontSize: 18,
                                 fontWeight: '700',
@@ -3131,7 +3102,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                 Delete Vehicle
                             </Text>
 
-                            {/* Message */}
                             <Text style={{
                                 fontSize: 14,
                                 color: '#666',
@@ -3142,7 +3112,6 @@ const Vehicles: React.FC<VehiclesProps> = ({
                                 Are you sure you want to delete this vehicle? This action cannot be undone.
                             </Text>
 
-                            {/* Buttons */}
                             <View style={{ flexDirection: 'row', gap: 12 }}>
                                 <TouchableOpacity
                                     style={{
