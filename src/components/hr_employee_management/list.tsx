@@ -83,6 +83,34 @@ const additionalStyles = {
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
+  // ── FIX: Load More button shown on web ────────────────────────────────────
+  loadMoreButton: {
+    margin: 16,
+    marginTop: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    backgroundColor: WHATSAPP_COLORS.primary,
+    borderRadius: 10,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    flexDirection: 'row' as const,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  loadMoreButtonText: {
+    color: '#fff',
+    fontWeight: '600' as const,
+    fontSize: 15,
+    marginLeft: 8,
+  },
+  loadMoreCount: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 13,
+    marginLeft: 6,
+  },
 };
 
 export const EmployeeList: React.FC<EmployeeListProps> = ({
@@ -102,8 +130,8 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
   const [collapsedCities, setCollapsedCities] = useState<Set<string>>(new Set());
   const [collapsedQuickActions, setCollapsedQuickActions] = useState(false);
 
-  // ── KEY FIX: prevent onEndReached from firing repeatedly while the parent
-  //    is already fetching or during the 1-second cooldown after a trigger ──
+  // ── Prevent onEndReached from firing repeatedly while the parent is already
+  //    fetching or during the 1-second cooldown after a trigger ──────────────
   const isCallingLoadMoreRef = useRef(false);
 
   const toggleCity = (city: string) => {
@@ -123,8 +151,11 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
   const getTotalEmployeesInView = () =>
     employeesByCity.reduce((sum, group) => sum + (group.employees?.length || 0), 0);
 
-  // ── Scroll-based end detection with cooldown debounce ─────────────────────
+  // ── FIX: Scroll-based end detection (native) with cooldown debounce ───────
+  // On web this is unreliable, so we show an explicit "Load More" button instead.
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (Platform.OS === 'web') return; // handled by the Load More button on web
+
     const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
     const distanceFromBottom =
       contentSize.height - contentOffset.y - layoutMeasurement.height;
@@ -293,6 +324,14 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
     .map(g => ({ ...g, employees: g.employees.filter(e => !quickActionIds.has(e.employee_id)) }))
     .filter(g => g.employees.length > 0);
 
+  // ── FIX: show "Load More" button on web instead of relying on scroll events ──
+  const remainingCount = totalEmployees - displayedEmployees;
+  const showLoadMoreButton =
+    Platform.OS === 'web' &&
+    !loadingMore &&
+    !searchQuery.trim() &&
+    remainingCount > 0;
+
   return (
     <ScrollView
       style={styles.scrollView}
@@ -358,7 +397,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
           </View>
         ))}
 
-        {/* Load-more spinner */}
+        {/* Load-more spinner (native) */}
         {loadingMore && (
           <View style={additionalStyles.loadingMoreContainer}>
             <ActivityIndicator size="small" color={WHATSAPP_COLORS.accent} />
@@ -368,8 +407,21 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
           </View>
         )}
 
+        {/* ── FIX: explicit Load More button on web ── */}
+        {showLoadMoreButton && (
+          <TouchableOpacity
+            style={additionalStyles.loadMoreButton}
+            onPress={onEndReached}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="chevron-down-circle-outline" size={20} color="#fff" />
+            <Text style={additionalStyles.loadMoreButtonText}>Load More</Text>
+            <Text style={additionalStyles.loadMoreCount}>({remainingCount} remaining)</Text>
+          </TouchableOpacity>
+        )}
+
         {/* End-of-list footer */}
-        {!loadingMore && getTotalEmployeesInView() > 0 && (
+        {!loadingMore && !showLoadMoreButton && getTotalEmployeesInView() > 0 && (
           <View style={styles.listFooter}>
             <Text style={styles.listFooterText}>
               {searchQuery

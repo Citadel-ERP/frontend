@@ -115,6 +115,9 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
 
   const [pagination, setPagination] = useState<PaginationInfo | null>(null);
 
+  // ── FIX: track whether a full (unpaginated) fetch has been done for search ──
+  const [allFetched, setAllFetched] = useState(false);
+
   const currentPageRef        = useRef(1);
   const loadingMoreRef        = useRef(false);
   const loadingRef            = useRef(false);
@@ -122,6 +125,11 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   const searchQueryRef        = useRef('');
   const tokenRef              = useRef<string | null>(null);
   const allEmployeesByCityRef = useRef<CityGroup[]>([]);
+
+  // ── FIX: cache the full employee list once fetched so search works globally ──
+  const allEmployeesCacheRef  = useRef<CityGroup[]>([]);
+  const fetchingAllRef        = useRef(false);
+  const allFetchedRef         = useRef(false);
 
   const setLoadingMoreSynced = (val: boolean) => {
     loadingMoreRef.current = val;
@@ -163,17 +171,28 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   }, [token, tokenLoaded]);
 
   // ── Search ─────────────────────────────────────────────────────────────────
+  // FIX: when a search query is entered and we haven't fetched all data yet,
+  // kick off a full (unpaginated) fetch in the background, then filter from
+  // the complete cache so employees on unloaded pages are also searchable.
   useEffect(() => {
     searchQueryRef.current = searchQuery;
-    const master = allEmployeesByCityRef.current;
-    setFilteredEmployeesByCity(
-      searchQuery.trim()
-        ? filterCityGroups(master, searchQuery.toLowerCase())
-        : master
-    );
-  }, [searchQuery, allEmployeesByCity]);
 
-  // ── Core fetch ─────────────────────────────────────────────────────────────
+    if (searchQuery.trim()) {
+      if (!allFetchedRef.current) {
+        // Trigger a background full fetch the first time the user searches
+        fetchAllEmployees();
+      }
+      // Filter from the cache (full list) if available, else from loaded pages
+      const master = allFetchedRef.current
+        ? allEmployeesCacheRef.current
+        : allEmployeesByCityRef.current;
+      setFilteredEmployeesByCity(filterCityGroups(master, searchQuery.toLowerCase()));
+    } else {
+      setFilteredEmployeesByCity(allEmployeesByCityRef.current);
+    }
+  }, [searchQuery, allEmployeesByCity, allFetched]);
+
+  // ── Core paginated fetch ───────────────────────────────────────────────────
   const fetchEmployees = useCallback(async (page: number, isReset: boolean) => {
     const tok = tokenRef.current;
     if (!tok) {
@@ -226,6 +245,50 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
     }
   }, []);
 
+  // ── FIX: full unpaginated fetch used exclusively for search ───────────────
+  // Sending no `page` key triggers the backend to return the complete list.
+  const fetchAllEmployees = useCallback(async () => {
+    if (fetchingAllRef.current || allFetchedRef.current) return;
+    fetchingAllRef.current = true;
+
+    const tok = tokenRef.current;
+    if (!tok) {
+      fetchingAllRef.current = false;
+      return;
+    }
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/manager/getAllEmployees`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        // Intentionally omit `page` so the backend returns the full list
+        body: JSON.stringify({ token: tok }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const all: CityGroup[] = data.employees_by_city || [];
+
+        allEmployeesCacheRef.current = all;
+        allFetchedRef.current = true;
+        setAllFetched(true);
+
+        // Also update the paginated list so the main view stays in sync
+        setAllEmployeesByCity(all);
+
+        // Re-apply any active search query now that we have the full data
+        const q = searchQueryRef.current;
+        if (q.trim()) {
+          setFilteredEmployeesByCity(filterCityGroups(all, q.toLowerCase()));
+        }
+      }
+    } catch (err) {
+      console.warn('fetchAllEmployees failed:', err);
+    } finally {
+      fetchingAllRef.current = false;
+    }
+  }, []);
+
   // ── Load next page ─────────────────────────────────────────────────────────
   const handleLoadMore = useCallback(() => {
     if (loadingMoreRef.current || loadingRef.current) return;
@@ -238,14 +301,29 @@ const HREmployeeManager: React.FC<EmployeeManagementProps> = ({ onBack }) => {
   // ── Pull-to-refresh ────────────────────────────────────────────────────────
   const onRefresh = async () => {
     setRefreshing(true);
+    // Reset all-fetch cache so refresh pulls fresh data for search too
+    allFetchedRef.current = false;
+    allEmployeesCacheRef.current = [];
+    setAllFetched(false);
     await fetchEmployees(1, true);
     setRefreshing(false);
   };
 
   const handleEmployeePress      = (employee: Employee) => setSelectedEmployee(employee);
   const handleBackFromDetails    = () => setSelectedEmployee(null);
-  const handleEmployeeDataChange = async () => fetchEmployees(1, true);
-  const handleEmployeeAdded      = () => fetchEmployees(1, true);
+  const handleEmployeeDataChange = async () => {
+    // Reset full cache on any data change so stale data is not shown in search
+    allFetchedRef.current = false;
+    allEmployeesCacheRef.current = [];
+    setAllFetched(false);
+    fetchEmployees(1, true);
+  };
+  const handleEmployeeAdded = () => {
+    allFetchedRef.current = false;
+    allEmployeesCacheRef.current = [];
+    setAllFetched(false);
+    fetchEmployees(1, true);
+  };
 
   // ── Attendance download ────────────────────────────────────────────────────
   const downloadAttendanceReport = async (month: number, year: number, employeeId?: string) => {
